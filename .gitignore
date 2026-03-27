@@ -1,0 +1,28 @@
+/vendor/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# PHPUnit / test artifacts
+.phpunit.cache/
+coverage/
+
+# Logs
+*.log
+logs/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Docker local overrides
+docker-compose.override.yml
+
+# Temporary files
+*.tmp
+*.swp
+*.swo

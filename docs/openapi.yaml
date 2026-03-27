@@ -1,0 +1,791 @@
+openapi: 3.0.3
+info:
+  title: ERP Clinic Stock API
+  version: 1.0.0
+servers:
+  - url: http://localhost:8080
+tags:
+  - name: System
+    description: Endpoints de salud y estado general.
+  - name: Auth
+    description: Autenticacion y contexto de usuario.
+  - name: Inventory
+    description: Gestion de inventario por clinica.
+  - name: EntryLogs
+    description: Registros de entrada de stock.
+  - name: ExitLogs
+    description: Registros de salida de stock.
+  - name: Incidents
+    description: Gestion de incidencias.
+  - name: Settings
+    description: Configuracion por clinica.
+  - name: Clinic
+    description: Datos y configuracion de clinica.
+  - name: Products
+    description: Productos por clinica.
+  - name: Users
+    description: Usuarios por clinica.
+  - name: Lockers
+    description: Lockers/armarios por clinica.
+  - name: Compartments
+    description: Compartimentos por clinica.
+  - name: Docs
+    description: Documentacion OpenAPI y UI.
+paths:
+  /up:
+    get:
+      summary: Health check
+      tags: [System]
+      responses:
+        '200':
+          description: OK
+  /api/v1/auth/login:
+    post:
+      summary: Login with access token
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+      responses:
+        '200':
+          description: Authenticated
+        '401':
+          description: Invalid credentials
+  /api/v1/auth/logout:
+    post:
+      summary: Logout (invalidate current token)
+      tags: [Auth]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Logged out
+        '401':
+          description: Unauthorized
+  /api/v1/me:
+    get:
+      summary: Current authenticated user
+      tags: [Auth]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Authenticated user context
+        '401':
+          description: Unauthorized
+  /api/v1/clinic:
+    get:
+      summary: Get current clinic
+      tags: [Clinic]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Clinic
+        '401':
+          description: Unauthorized
+        '404':
+          description: Not Found
+  /api/v1/clinic/settings:
+    patch:
+      summary: Patch clinic settings
+      tags: [Clinic]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                open_latency_ms:
+                  type: integer
+                  minimum: 0
+      responses:
+        '200':
+          description: Updated settings
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '422':
+          description: Validation error
+  /api/v1/inventory:
+    get:
+      summary: List inventory by clinic
+      tags: [Inventory]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Inventory list
+        '401':
+          description: Unauthorized
+  /api/v1/products:
+    get:
+      summary: List products
+      tags: [Products]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: active
+          required: false
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Products list
+        '401':
+          description: Unauthorized
+        '422':
+          description: Validation error
+    post:
+      summary: Create product
+      tags: [Products]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                is_active:
+                  type: boolean
+      responses:
+        '201':
+          description: Product created
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '422':
+          description: Validation error
+  /api/v1/products/{id}:
+    get:
+      summary: Get product
+      tags: [Products]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Product
+        '401':
+          description: Unauthorized
+        '404':
+          description: Not Found
+    patch:
+      summary: Patch product
+      tags: [Products]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                is_active:
+                  type: boolean
+      responses:
+        '200':
+          description: Product updated
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not Found
+        '422':
+          description: Validation error
+    delete:
+      summary: Soft delete product
+      tags: [Products]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Deleted
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not Found
+  /api/v1/users:
+    get:
+      summary: List clinic users
+      tags: [Users]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Users list
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+    post:
+      summary: Create user
+      tags: [Users]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email, password, role]
+              properties:
+                name:
+                  type: string
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                role:
+                  type: string
+                  enum: [ADMIN, TECHNICIAN, STAFF]
+                is_active:
+                  type: boolean
+      responses:
+        '201':
+          description: User created
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '422':
+          description: Validation error
+  /api/v1/users/{id}:
+    get:
+      summary: Get user
+      tags: [Users]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: User
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not Found
+    patch:
+      summary: Patch user
+      tags: [Users]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                role:
+                  type: string
+                  enum: [ADMIN, TECHNICIAN, STAFF]
+                is_active:
+                  type: boolean
+                password:
+                  type: string
+      responses:
+        '200':
+          description: User updated
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not Found
+        '422':
+          description: Validation error
+    delete:
+      summary: Soft delete user
+      tags: [Users]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Deleted
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not Found
+  /api/v1/lockers:
+    get:
+      summary: List lockers
+      tags: [Lockers]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: active
+          required: false
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Lockers list
+        '401':
+          description: Unauthorized
+    post:
+      summary: Create locker
+      tags: [Lockers]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                location:
+                  type: string
+                is_active:
+                  type: boolean
+      responses:
+        '201':
+          description: Locker created
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '422':
+          description: Validation error
+  /api/v1/lockers/{id}:
+    get:
+      summary: Get locker detail
+      tags: [Lockers]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Locker detail
+        '401':
+          description: Unauthorized
+        '404':
+          description: Not Found
+    patch:
+      summary: Patch locker
+      tags: [Lockers]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                location:
+                  type: string
+                is_active:
+                  type: boolean
+      responses:
+        '200':
+          description: Locker updated
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not Found
+        '422':
+          description: Validation error
+    delete:
+      summary: Soft delete locker
+      tags: [Lockers]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Deleted
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not Found
+  /api/v1/compartments:
+    get:
+      summary: List compartments
+      tags: [Compartments]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: locker_id
+          required: false
+          schema:
+            type: string
+        - in: query
+          name: active
+          required: false
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Compartments list
+        '401':
+          description: Unauthorized
+        '422':
+          description: Validation error
+    post:
+      summary: Create compartment
+      tags: [Compartments]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [locker_id, code]
+              properties:
+                locker_id:
+                  type: string
+                code:
+                  type: string
+                is_active:
+                  type: boolean
+      responses:
+        '201':
+          description: Compartment created
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '422':
+          description: Validation error
+  /api/v1/compartments/{id}:
+    get:
+      summary: Get compartment detail
+      tags: [Compartments]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Compartment detail
+        '401':
+          description: Unauthorized
+        '404':
+          description: Not Found
+    patch:
+      summary: Patch compartment
+      tags: [Compartments]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                code:
+                  type: string
+                is_active:
+                  type: boolean
+      responses:
+        '200':
+          description: Compartment updated
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not Found
+        '422':
+          description: Validation error
+    delete:
+      summary: Soft delete compartment
+      tags: [Compartments]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Deleted
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not Found
+  /api/v1/entry-logs:
+    get:
+      summary: List entry logs by clinic
+      tags: [EntryLogs]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Entry logs list
+        '401':
+          description: Unauthorized
+    post:
+      summary: Register stock entry and increase inventory
+      tags: [EntryLogs]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sku, quantity]
+              properties:
+                sku:
+                  type: string
+                name:
+                  type: string
+                quantity:
+                  type: integer
+                  minimum: 1
+                note:
+                  type: string
+      responses:
+        '201':
+          description: Entry log created
+        '401':
+          description: Unauthorized
+        '422':
+          description: Validation error
+  /api/v1/exit-logs:
+    get:
+      summary: List exit logs by clinic
+      tags: [ExitLogs]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Exit logs list
+        '401':
+          description: Unauthorized
+    post:
+      summary: Register stock exit and decrease inventory
+      tags: [ExitLogs]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sku, quantity]
+              properties:
+                sku:
+                  type: string
+                quantity:
+                  type: integer
+                  minimum: 1
+                note:
+                  type: string
+      responses:
+        '201':
+          description: Exit log created
+        '401':
+          description: Unauthorized
+        '422':
+          description: Validation error
+  /api/v1/incidents:
+    get:
+      summary: List incidents by clinic
+      tags: [Incidents]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Incidents list
+        '401':
+          description: Unauthorized
+    post:
+      summary: Create incident
+      tags: [Incidents]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title, description, severity]
+              properties:
+                title:
+                  type: string
+                description:
+                  type: string
+                severity:
+                  type: string
+                  enum: [LOW, MEDIUM, HIGH, CRITICAL]
+      responses:
+        '201':
+          description: Incident created
+        '401':
+          description: Unauthorized
+        '422':
+          description: Validation error
+  /api/v1/settings:
+    get:
+      summary: List settings by clinic
+      tags: [Settings]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Settings list
+        '401':
+          description: Unauthorized
+    post:
+      summary: Upsert setting by clinic
+      tags: [Settings]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [key, value]
+              properties:
+                key:
+                  type: string
+                value:
+                  type: string
+      responses:
+        '201':
+          description: Setting upserted
+        '401':
+          description: Unauthorized
+        '422':
+          description: Validation error
+  /docs:
+    get:
+      summary: OpenAPI YAML
+      tags: [Docs]
+      responses:
+        '200':
+          description: OK
+  /docs/ui:
+    get:
+      summary: Swagger UI
+      tags: [Docs]
+      responses:
+        '200':
+          description: OK
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: OpaqueToken
