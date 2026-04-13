@@ -54,9 +54,28 @@ services:
     networks:
       - erp_net
 
+  mosquitto:
+    image: eclipse-mosquitto:2
+    user: "0:0"
+    ports:
+      - "1883:1883"
+    environment:
+      MQTT_USERNAME: ${MQTT_USERNAME}
+      MQTT_PASSWORD: ${MQTT_PASSWORD}
+    entrypoint: ["/bin/sh", "/mosquitto-entrypoint.sh"]
+    volumes:
+      - ./docker/mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - ./docker/mosquitto/docker-entrypoint.sh:/mosquitto-entrypoint.sh:ro
+      - mosquitto_data:/mosquitto/data
+      - mosquitto_log:/mosquitto/log
+    networks:
+      - erp_net
+
 volumes:
   postgres_data:
   redis_data:
+  mosquitto_data:
+  mosquitto_log:
 
 networks:
   erp_net:

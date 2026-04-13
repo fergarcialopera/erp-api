@@ -48,6 +48,7 @@ Valores por defecto del proyecto:
 - APP URL: `http://localhost:8080`
 - PostgreSQL: `erp/erp`
 - Redis: `redis:6379`
+- Mosquitto: credenciales en `MQTT_USERNAME` / `MQTT_PASSWORD` (ver seccion 13); el API no las usa aun
 
 ## 4) Levantar contenedores
 
@@ -61,6 +62,7 @@ Servicios que se levantan:
 - `php` (FPM)
 - `postgres` (puerto `5432`)
 - `redis` (puerto `6379`)
+- `mosquitto` (broker MQTT, puerto `1883`; solo infraestructura, el backend no lo usa aun)
 
 ## 5) Ejecutar migraciones y seeders
 
@@ -180,7 +182,125 @@ Primero confirma que estas usando el puerto correcto del backend:
 - `docs/openapi.yaml` -> contrato API
 - `tests/Integration` -> tests HTTP/integracion
 
-## 13) Referencia del repositorio
+## 13) MQTT (Mosquitto) — desarrollo local con autenticacion
+
+**Eclipse Mosquitto** esta integrado como servicio Docker para pruebas y para conectar mas adelante el backend y dispositivos (por ejemplo un ESP32) con **usuario y contrasena**. **El codigo PHP del ERP no usa MQTT todavia**; las variables `MQTT_*` solo preparan la convencion para cuando se implemente.
+
+### Que hace la infraestructura
+
+- `allow_anonymous false` y contrasenas en un fichero **`passwd`** generado **solo dentro del volumen** `mosquitto_data` (no se sube al repositorio).
+- En el **primer arranque**, un script de entrada ejecuta `mosquitto_passwd` con los valores de `MQTT_USERNAME` y `MQTT_PASSWORD` que lee Docker Compose desde tu `.env`.
+- Sin TLS en esta fase (solo red local / laboratorio).
+
+### Archivos creados o relevantes
+
+| Archivo | Rol |
+|--------|-----|
+| `docker/mosquitto/mosquitto.conf` | Broker: puerto `1883`, sin anonimos, `password_file` en el volumen de datos. |
+| `docker/mosquitto/docker-entrypoint.sh` | Crea `/mosquitto/data/passwd` si no existe y arranca Mosquitto como usuario `mosquitto`. |
+| `.gitattributes` | Fuerza finales de linea LF en `*.sh` de Mosquitto (evita fallos en Windows). |
+
+### Archivos modificados
+
+| Archivo | Motivo |
+|--------|--------|
+| `docker-compose.yml` | Servicio `mosquitto`: variables `MQTT_USERNAME` / `MQTT_PASSWORD`, entrypoint, montaje del script; usuario root solo para generar `passwd` y hacer `su` al usuario del broker. |
+| `.env.example` | Plantilla `MQTT_HOST`, `MQTT_PORT`, `MQTT_USERNAME`, `MQTT_PASSWORD` para Compose y futura aplicacion (copiar a `.env` y personalizar). |
+
+### Variables de entorno (obligatorio para arrancar Mosquitto)
+
+En la raiz del proyecto, tu `.env` (creado desde `.env.example`) debe incluir al menos:
+
+- `MQTT_USERNAME`
+- `MQTT_PASSWORD`
+
+Docker Compose las inyecta en el contenedor `mosquitto`. El servicio `php` **no** recibe estas variables: el comportamiento del API no cambia.
+
+Valores orientativos para **otro contenedor** o **futuro Laravel**: `MQTT_HOST=mosquitto`, `MQTT_PORT=1883`. Para un ESP32 en la LAN: `MQTT_HOST` sera la IP del PC o del servidor Docker.
+
+### Arrancar Mosquitto con el resto del entorno
+
+```bash
+docker compose up -d --build
+```
+
+Solo Mosquitto:
+
+```bash
+docker compose up -d mosquitto
+```
+
+Si faltan `MQTT_USERNAME` o `MQTT_PASSWORD`, el contenedor saldra con error y un mensaje en logs.
+
+### Comprobacion manual
+
+1. **Puerto 1883** (PowerShell):
+
+   ```powershell
+   Test-NetConnection -ComputerName localhost -Port 1883
+   ```
+
+2. **Logs:**
+
+   ```bash
+   docker compose logs -f mosquitto
+   ```
+
+3. **Publicar / suscribir con credenciales** (sustituye usuario y contrasena por los de tu `.env`):
+
+   Terminal A:
+
+   ```bash
+   docker compose exec mosquitto mosquitto_sub -h 127.0.0.1 -p 1883 -u erp_mqtt -P 'tu_password' -t demo/test -C 1
+   ```
+
+   Terminal B:
+
+   ```bash
+   docker compose exec mosquitto mosquitto_pub -h 127.0.0.1 -p 1883 -u erp_mqtt -P 'tu_password' -t demo/test -m "hola"
+   ```
+
+   En A debe mostrarse `hola`.
+
+4. **Probar que la autenticacion es obligatoria** (sin usuario/contrasena deberia fallar o no recibir nada de forma fiable):
+
+   ```bash
+   docker compose exec mosquitto mosquitto_sub -h 127.0.0.1 -p 1883 -t demo/test -C 1 -W 3
+   ```
+
+   Con **contrasena incorrecta**:
+
+   ```bash
+   docker compose exec mosquitto mosquitto_sub -h 127.0.0.1 -p 1883 -u erp_mqtt -P incorrecta -t demo/test -C 1 -W 3
+   ```
+
+   En ambos casos no deberia completarse una suscripcion valida como con las credenciales buenas (mensajes de error en la salida o timeout `-W`).
+
+### Regenerar el fichero `passwd`
+
+Si cambias `MQTT_PASSWORD` (o `MQTT_USERNAME`) en `.env`, el fichero antiguo sigue en el volumen hasta que lo borres.
+
+```bash
+docker compose exec mosquitto sh -c "rm -f /mosquitto/data/passwd"
+docker compose restart mosquitto
+```
+
+En el siguiente arranque se vuelve a crear `passwd` con los valores actuales del entorno.
+
+### Persistencia y reversibilidad
+
+- Configuracion y script: en el repo, montados solo lectura.
+- `passwd` y datos persistentes del broker: volumen `mosquitto_data`; logs: volumen `mosquitto_log`.
+
+Para deshacer la integracion: quita el servicio y volumenes en `docker-compose.yml`, elimina `docker/mosquitto/` si quieres, y opcionalmente `docker volume rm` sobre los volumenes Mosquitto.
+
+### Nota de seguridad
+
+Usuario/contrasena sin TLS solo es aceptable en **desarrollo local**. En produccion usa TLS y politicas de red adecuadas.
+
+**Opcional (contenedor en la misma red Compose):** red por defecto con carpeta del proyecto `erp`: `erp_erp_net`; cliente efimero con `-h mosquitto -p 1883` y las mismas credenciales.
+
+## 14) Referencia del repositorio
 
 - GitHub: [fergarcialopera/erp-api](https://github.com/fergarcialopera/erp-api.git)
 
