@@ -411,6 +411,9 @@ paths:
                   type: string
                 is_active:
                   type: boolean
+                device_id:
+                  type: string
+                  description: MQTT device id for lock commands (lockers/{deviceId}/cmd)
       responses:
         '201':
           description: Locker created
@@ -463,6 +466,10 @@ paths:
                   type: string
                 is_active:
                   type: boolean
+                device_id:
+                  type: string
+                  nullable: true
+                  description: Set MQTT device id; send null to clear
       responses:
         '200':
           description: Locker updated
@@ -689,6 +696,9 @@ paths:
                   minimum: 1
                 note:
                   type: string
+                compartment_public_id:
+                  type: string
+                  description: Optional compartment (ULID) for physical pickup / lock open
       responses:
         '201':
           description: Exit log created
@@ -696,6 +706,52 @@ paths:
           description: Unauthorized
         '422':
           description: Validation error
+  /api/v1/exit-logs/{id}/open-lock:
+    post:
+      summary: Request remote lock open for exit log (MQTT command to device)
+      tags: [ExitLogs]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: Exit log id (numeric or UUID, depending on deployment)
+      responses:
+        '200':
+          description: Command accepted and published (or no-op if MQTT disabled)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+                      exit_log_id:
+                        type: string
+                      device_id:
+                        type: string
+                      topic:
+                        type: string
+                      payload:
+                        type: string
+                  meta:
+                    type: object
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Exit log not found
+        '422':
+          description: Exit log cannot open lock (e.g. no compartment or device)
+        '502':
+          description: MQTT publish failed
   /api/v1/incidents:
     get:
       summary: List incidents by clinic

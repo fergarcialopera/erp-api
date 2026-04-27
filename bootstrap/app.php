@@ -9,10 +9,14 @@ use App\Application\Http\Middleware\LoggingMiddleware;
 use App\Application\Http\Middleware\RequestIdMiddleware;
 use App\Application\Http\Middleware\RoleMiddleware;
 use App\Infrastructure\Auth\TokenService;
+use App\Application\ExitLogs\OpenExitLogLockAction;
 use App\Infrastructure\Config\Config;
 use App\Infrastructure\Database\Connection;
 use App\Infrastructure\Http\Router;
 use App\Infrastructure\Logging\LoggerFactory;
+use App\Infrastructure\Mqtt\NoOpLockCommandPublisher;
+use App\Infrastructure\Mqtt\PhpMqttLockCommandPublisher;
+use App\Infrastructure\Persistence\PdoExitLogLockPort;
 use App\Infrastructure\OpenAPI\OpenApiController;
 use App\Infrastructure\Redis\RedisClient;
 use App\Modules\Auth\Handlers\LoginHandler;
@@ -30,6 +34,7 @@ use App\Modules\EntryLogs\Services\EntryLogService;
 use App\Modules\EntryLogs\Validators\EntryLogValidator;
 use App\Modules\ExitLogs\Handlers\CreateExitLogHandler;
 use App\Modules\ExitLogs\Handlers\ListExitLogsHandler;
+use App\Modules\ExitLogs\Handlers\OpenExitLogLockHandler;
 use App\Modules\ExitLogs\Services\ExitLogService;
 use App\Modules\ExitLogs\Validators\ExitLogValidator;
 use App\Modules\Products\Handlers\CreateProductHandler;
@@ -90,6 +95,11 @@ $config = new Config([
     'db.password' => $_ENV['DB_PASSWORD'] ?? 'erp',
     'redis.host' => $_ENV['REDIS_HOST'] ?? 'redis',
     'redis.port' => (int) ($_ENV['REDIS_PORT'] ?? 6379),
+    'mqtt.host' => trim((string) ($_ENV['MQTT_HOST'] ?? '')),
+    'mqtt.port' => (int) ($_ENV['MQTT_PORT'] ?? 1883),
+    'mqtt.username' => $_ENV['MQTT_USERNAME'] ?? null,
+    'mqtt.password' => $_ENV['MQTT_PASSWORD'] ?? null,
+    'mqtt.client_id' => trim((string) ($_ENV['MQTT_CLIENT_ID'] ?? 'erp-backend')),
 ]);
 
 $pdo = Connection::create(
@@ -124,6 +134,14 @@ $exitLogService = new ExitLogService($pdo);
 $exitLogValidator = new ExitLogValidator();
 $createExitLogHandler = new CreateExitLogHandler($exitLogValidator, $exitLogService);
 $listExitLogsHandler = new ListExitLogsHandler($exitLogService);
+$exitLogLockPort = new PdoExitLogLockPort($pdo);
+$mqttDisabled = filter_var($_ENV['MQTT_DISABLED'] ?? 'false', FILTER_VALIDATE_BOOL);
+$mqttHost = (string) $config->get('mqtt.host', '');
+$lockCommandPublisher = ($mqttHost !== '' && !$mqttDisabled)
+    ? new PhpMqttLockCommandPublisher($config, $logger)
+    : new NoOpLockCommandPublisher();
+$openExitLogLockAction = new OpenExitLogLockAction($exitLogLockPort, $lockCommandPublisher, $logger);
+$openExitLogLockHandler = new OpenExitLogLockHandler($openExitLogLockAction);
 $incidentService = new IncidentService($pdo);
 $incidentValidator = new IncidentValidator();
 $createIncidentHandler = new CreateIncidentHandler($incidentValidator, $incidentService);
@@ -201,6 +219,7 @@ $router->addRoute('GET', '/api/v1/entry-logs', fn ($request) => $listEntryLogsHa
 $router->addRoute('POST', '/api/v1/entry-logs', fn ($request) => $createEntryLogHandler($request));
 $router->addRoute('GET', '/api/v1/exit-logs', fn ($request) => $listExitLogsHandler($request));
 $router->addRoute('POST', '/api/v1/exit-logs', fn ($request) => $createExitLogHandler($request));
+$router->addRoute('POST', '/api/v1/exit-logs/{id}/open-lock', fn ($request) => $openExitLogLockHandler($request));
 $router->addRoute('GET', '/api/v1/incidents', fn ($request) => $listIncidentsHandler($request));
 $router->addRoute('POST', '/api/v1/incidents', fn ($request) => $createIncidentHandler($request));
 $router->addRoute('GET', '/api/v1/settings', fn ($request) => $listSettingsHandler($request));
@@ -238,6 +257,7 @@ $roleRules = [
     'POST /api/v1/entry-logs' => ['TECHNICIAN'],
     'GET /api/v1/exit-logs' => ['STAFF'],
     'POST /api/v1/exit-logs' => ['TECHNICIAN'],
+    're:/^POST \\/api\\/v1\\/exit-logs\\/[^\\/]+\\/open-lock$/' => ['STAFF'],
     'GET /api/v1/incidents' => ['STAFF'],
     'POST /api/v1/incidents' => ['TECHNICIAN'],
     'GET /api/v1/settings' => ['STAFF'],

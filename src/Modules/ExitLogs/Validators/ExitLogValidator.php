@@ -21,6 +21,17 @@ final class ExitLogValidator
             throw new InvalidArgumentException('Invalid quantity');
         }
 
-        return new CreateExitLogDTO($sku, (int) $quantity, $note !== '' ? $note : null);
+        $compartmentPublicId = null;
+        if (array_key_exists('compartment_public_id', $payload)) {
+            $raw = $payload['compartment_public_id'];
+            if ($raw !== null && $raw !== '') {
+                $compartmentPublicId = trim((string) $raw);
+                if ($compartmentPublicId === '' || strlen($compartmentPublicId) !== 26) {
+                    throw new InvalidArgumentException('Invalid compartment_public_id');
+                }
+            }
+        }
+
+        return new CreateExitLogDTO($sku, (int) $quantity, $note !== '' ? $note : null, $compartmentPublicId);
     }
 }

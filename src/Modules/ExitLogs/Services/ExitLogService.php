@@ -35,6 +35,19 @@ final class ExitLogService
                 throw new RuntimeException('Insufficient stock');
             }
 
+            if ($dto->compartmentPublicId !== null && $dto->compartmentPublicId !== '') {
+                $compStmt = $this->pdo->prepare(
+                    'SELECT 1 FROM compartments WHERE public_id = :public_id AND clinic_id = :clinic_id LIMIT 1'
+                );
+                $compStmt->execute([
+                    'public_id' => $dto->compartmentPublicId,
+                    'clinic_id' => $clinicId,
+                ]);
+                if (!$compStmt->fetch()) {
+                    throw new RuntimeException('Compartment not found');
+                }
+            }
+
             $newQuantity = $currentQuantity - $dto->quantity;
             $updateStmt = $this->pdo->prepare(
                 'UPDATE inventory_items SET quantity = :quantity, updated_at = NOW() WHERE id = :id'
@@ -45,15 +58,16 @@ final class ExitLogService
             ]);
 
             $logStmt = $this->pdo->prepare(
-                'INSERT INTO exit_logs (clinic_id, sku, quantity, note, created_by)
-                 VALUES (:clinic_id, :sku, :quantity, :note, :created_by)
-                 RETURNING id, clinic_id, sku, quantity, note, created_by, created_at'
+                'INSERT INTO exit_logs (clinic_id, sku, quantity, note, compartment_public_id, created_by)
+                 VALUES (:clinic_id, :sku, :quantity, :note, :compartment_public_id, :created_by)
+                 RETURNING id, clinic_id, sku, quantity, note, compartment_public_id, created_by, created_at'
             );
             $logStmt->execute([
                 'clinic_id' => $clinicId,
                 'sku' => $dto->sku,
                 'quantity' => $dto->quantity,
                 'note' => $dto->note,
+                'compartment_public_id' => $dto->compartmentPublicId,
                 'created_by' => $userId,
             ]);
 
@@ -78,7 +92,7 @@ final class ExitLogService
     public function list(string $clinicId): array
     {
         $stmt = $this->pdo->prepare(
-            'SELECT id, clinic_id, sku, quantity, note, created_by, created_at
+            'SELECT id, clinic_id, sku, quantity, note, compartment_public_id, created_by, created_at
              FROM exit_logs
              WHERE clinic_id = :clinic_id
              ORDER BY id DESC'

@@ -23,7 +23,18 @@ final class LockerValidator
             throw new InvalidArgumentException('Invalid is_active');
         }
 
-        return new CreateLockerDTO($name, $location !== '' ? $location : null, (bool) $isActive);
+        $deviceId = null;
+        if (array_key_exists('device_id', $payload)) {
+            $rawDevice = $payload['device_id'];
+            if ($rawDevice !== null && $rawDevice !== '') {
+                $deviceId = trim((string) $rawDevice);
+                if ($deviceId === '' || strlen($deviceId) > 128 || !preg_match('/^[A-Za-z0-9._-]+$/', $deviceId)) {
+                    throw new InvalidArgumentException('Invalid device_id');
+                }
+            }
+        }
+
+        return new CreateLockerDTO($name, $location !== '' ? $location : null, (bool) $isActive, $deviceId);
     }
 
     public function validatePatch(array $payload): PatchLockerDTO
@@ -43,11 +54,25 @@ final class LockerValidator
         if (array_key_exists('is_active', $payload) && $isActive === null) {
             throw new InvalidArgumentException('Invalid is_active');
         }
-        if ($name === null && $location === null && $isActive === null) {
+        $deviceIdTouched = array_key_exists('device_id', $payload);
+        $deviceId = null;
+        if ($deviceIdTouched) {
+            $rawDevice = $payload['device_id'];
+            if ($rawDevice === null || $rawDevice === '') {
+                $deviceId = null;
+            } else {
+                $deviceId = trim((string) $rawDevice);
+                if ($deviceId === '' || strlen($deviceId) > 128 || !preg_match('/^[A-Za-z0-9._-]+$/', $deviceId)) {
+                    throw new InvalidArgumentException('Invalid device_id');
+                }
+            }
+        }
+
+        if ($name === null && $location === null && $isActive === null && !$deviceIdTouched) {
             throw new InvalidArgumentException('No fields to update');
         }
 
-        return new PatchLockerDTO($name, $location !== '' ? $location : $location, $isActive);
+        return new PatchLockerDTO($name, $location !== '' ? $location : $location, $isActive, $deviceIdTouched, $deviceId);
     }
 }
 
