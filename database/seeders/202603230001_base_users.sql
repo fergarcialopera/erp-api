@@ -29,4 +29,3 @@ WHERE NOT EXISTS (SELECT 1 FROM users WHERE email = 'tech2@clinic.local');
 INSERT INTO users (id, public_id, clinic_id, email, name, password_hash, role, is_active, created_at, updated_at)
 SELECT '77777777-7777-7777-7777-777777777777', '01J0000000000000000000006', '99999999-9999-9999-9999-999999999999', 'staff2@clinic.local', 'Staff Clinic B', '$2y$12$MhBJgI6jq1uXk0y6zB9VGu4IjOGVx4Bb.cSK9BoV0mpkgYSHSJcKy', 'STAFF', TRUE, NOW(), NOW()
 WHERE NOT EXISTS (SELECT 1 FROM users WHERE email = 'staff2@clinic.local');
-

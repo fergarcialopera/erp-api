@@ -763,6 +763,8 @@ paths:
           description: Incidents list
         '401':
           description: Unauthorized
+        '403':
+          description: Forbidden
     post:
       summary: Create incident
       tags: [Incidents]
@@ -774,7 +776,7 @@ paths:
           application/json:
             schema:
               type: object
-              required: [title, description, severity]
+              required: [title, description, severity, source]
               properties:
                 title:
                   type: string
@@ -783,11 +785,16 @@ paths:
                 severity:
                   type: string
                   enum: [LOW, MEDIUM, HIGH, CRITICAL]
+                source:
+                  type: string
+                  enum: [ERP, LOCKER]
       responses:
         '201':
           description: Incident created
         '401':
           description: Unauthorized
+        '403':
+          description: Forbidden
         '422':
           description: Validation error
   /api/v1/settings:

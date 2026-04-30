@@ -1,0 +1,9 @@
+ALTER TABLE incidents
+ADD COLUMN IF NOT EXISTS source VARCHAR(32);
+
+UPDATE incidents
+SET source = 'ERP'
+WHERE source IS NULL;
+
+ALTER TABLE incidents
+ALTER COLUMN source SET NOT NULL;
