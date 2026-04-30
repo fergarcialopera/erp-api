@@ -188,10 +188,16 @@ $router = new Router();
 $router->addRoute('GET', '/up', fn ($request) => \App\Application\Http\ApiResponse::success($request, ['status' => 'up']));
 $router->addRoute('POST', '/api/v1/auth/login', fn ($request) => $loginHandler($request));
 $router->addRoute('POST', '/api/v1/auth/logout', fn ($request) => $logoutHandler($request));
-$router->addRoute('GET', '/api/v1/me', fn ($request) => new JsonResponse([
-    'data' => $request->getAttribute('user'),
-    'meta' => (object) [],
-]));
+$router->addRoute('GET', '/api/v1/me', function ($request) {
+    $user = (array) $request->getAttribute('user', []);
+
+    return \App\Application\Http\ApiResponse::success($request, [
+        'id' => (string) ($user['user_id'] ?? $user['id'] ?? ''),
+        'clinic_id' => (string) ($user['clinic_id'] ?? ''),
+        'role' => (string) ($user['role'] ?? ''),
+        'email' => (string) ($user['email'] ?? ''),
+    ]);
+});
 $router->addRoute('GET', '/api/v1/clinic', fn ($request) => $getClinicHandler($request));
 $router->addRoute('PATCH', '/api/v1/clinic/settings', fn ($request) => $patchClinicSettingsHandler($request));
 $router->addRoute('GET', '/api/v1/products', fn ($request) => $listProductsHandler($request));
