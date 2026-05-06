@@ -32,9 +32,13 @@ use App\Modules\EntryLogs\Handlers\CreateEntryLogHandler;
 use App\Modules\EntryLogs\Handlers\ListEntryLogsHandler;
 use App\Modules\EntryLogs\Services\EntryLogService;
 use App\Modules\EntryLogs\Validators\EntryLogValidator;
+use App\Modules\ExitLogs\Handlers\CancelExitLogHandler;
+use App\Modules\ExitLogs\Handlers\ConfirmExitLogHandler;
 use App\Modules\ExitLogs\Handlers\CreateExitLogHandler;
+use App\Modules\ExitLogs\Handlers\GetExitLogHandler;
 use App\Modules\ExitLogs\Handlers\ListExitLogsHandler;
 use App\Modules\ExitLogs\Handlers\OpenExitLogLockHandler;
+use App\Modules\ExitLogs\Handlers\PatchExitLogItemsHandler;
 use App\Modules\ExitLogs\Services\ExitLogService;
 use App\Modules\ExitLogs\Validators\ExitLogValidator;
 use App\Modules\Products\Handlers\CreateProductHandler;
@@ -134,6 +138,10 @@ $exitLogService = new ExitLogService($pdo);
 $exitLogValidator = new ExitLogValidator();
 $createExitLogHandler = new CreateExitLogHandler($exitLogValidator, $exitLogService);
 $listExitLogsHandler = new ListExitLogsHandler($exitLogService);
+$getExitLogHandler = new GetExitLogHandler($exitLogService);
+$patchExitLogItemsHandler = new PatchExitLogItemsHandler($exitLogValidator, $exitLogService);
+$confirmExitLogHandler = new ConfirmExitLogHandler($exitLogService);
+$cancelExitLogHandler = new CancelExitLogHandler($exitLogService);
 $exitLogLockPort = new PdoExitLogLockPort($pdo);
 $mqttDisabled = filter_var($_ENV['MQTT_DISABLED'] ?? 'false', FILTER_VALIDATE_BOOL);
 $mqttHost = (string) $config->get('mqtt.host', '');
@@ -225,6 +233,10 @@ $router->addRoute('GET', '/api/v1/entry-logs', fn ($request) => $listEntryLogsHa
 $router->addRoute('POST', '/api/v1/entry-logs', fn ($request) => $createEntryLogHandler($request));
 $router->addRoute('GET', '/api/v1/exit-logs', fn ($request) => $listExitLogsHandler($request));
 $router->addRoute('POST', '/api/v1/exit-logs', fn ($request) => $createExitLogHandler($request));
+$router->addRoute('GET', '/api/v1/exit-logs/{id}', fn ($request) => $getExitLogHandler($request));
+$router->addRoute('PATCH', '/api/v1/exit-logs/{id}', fn ($request) => $patchExitLogItemsHandler($request));
+$router->addRoute('POST', '/api/v1/exit-logs/{id}/confirm', fn ($request) => $confirmExitLogHandler($request));
+$router->addRoute('POST', '/api/v1/exit-logs/{id}/cancel', fn ($request) => $cancelExitLogHandler($request));
 $router->addRoute('POST', '/api/v1/exit-logs/{id}/open-lock', fn ($request) => $openExitLogLockHandler($request));
 $router->addRoute('GET', '/api/v1/incidents', fn ($request) => $listIncidentsHandler($request));
 $router->addRoute('POST', '/api/v1/incidents', fn ($request) => $createIncidentHandler($request));
@@ -262,7 +274,11 @@ $roleRules = [
     'GET /api/v1/entry-logs' => ['STAFF'],
     'POST /api/v1/entry-logs' => ['TECHNICIAN'],
     'GET /api/v1/exit-logs' => ['STAFF'],
-    'POST /api/v1/exit-logs' => ['TECHNICIAN'],
+    'POST /api/v1/exit-logs' => ['STAFF'],
+    're:/^GET \\/api\\/v1\\/exit-logs\\/[^\\/]+$/' => ['STAFF'],
+    're:/^PATCH \\/api\\/v1\\/exit-logs\\/[^\\/]+$/' => ['STAFF'],
+    're:/^POST \\/api\\/v1\\/exit-logs\\/[^\\/]+\\/confirm$/' => ['STAFF'],
+    're:/^POST \\/api\\/v1\\/exit-logs\\/[^\\/]+\\/cancel$/' => ['STAFF'],
     're:/^POST \\/api\\/v1\\/exit-logs\\/[^\\/]+\\/open-lock$/' => ['STAFF'],
     'GET /api/v1/incidents' => ['TECHNICIAN'],
     'POST /api/v1/incidents' => ['TECHNICIAN'],

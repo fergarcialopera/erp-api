@@ -13,6 +13,13 @@ final class ExitLogLockPolicy
      */
     public static function assertCanOpenLock(array $context): void
     {
+        $status = strtoupper(trim((string) ($context['status'] ?? '')));
+        if ($status !== ExitLogStatus::CONFIRMED) {
+            throw new ExitLogLockDeniedException(
+                'The lock can only be opened after the exit log has been confirmed.'
+            );
+        }
+
         $compartmentId = $context['compartment_public_id'] ?? null;
         if ($compartmentId === null || $compartmentId === '') {
             throw new ExitLogLockDeniedException('Exit log has no compartment linked; lock cannot be opened.');

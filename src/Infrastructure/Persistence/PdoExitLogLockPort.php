@@ -15,25 +15,51 @@ final class PdoExitLogLockPort implements ExitLogLockPort
 
     public function findContextForOpenLock(string $clinicId, string $exitLogId): ?array
     {
-        $stmt = $this->pdo->prepare(
-            'SELECT
-                el.id AS exit_log_id,
-                el.compartment_public_id,
-                (c.public_id IS NOT NULL) AS compartment_resolved,
-                COALESCE(c.is_active, FALSE) AS compartment_is_active,
-                (l.public_id IS NOT NULL) AS locker_resolved,
-                COALESCE(l.is_active, FALSE) AS locker_is_active,
-                l.device_id
-             FROM exit_logs el
-             LEFT JOIN compartments c
-                ON c.public_id = el.compartment_public_id AND c.clinic_id = el.clinic_id
-             LEFT JOIN lockers l
-                ON l.public_id = c.locker_public_id AND l.clinic_id = el.clinic_id
-             WHERE el.id = :id AND el.clinic_id = :clinic_id
-             LIMIT 1'
-        );
-        $stmt->execute(['id' => $exitLogId, 'clinic_id' => $clinicId]);
+        $sql = <<<'SQL'
+WITH resolved AS (
+    SELECT
+        el.id AS exit_log_id,
+        el.status,
+        COALESCE(
+            NULLIF(TRIM(el.compartment_public_id), ''),
+            (
+                SELECT ei.compartment_public_id
+                FROM exit_log_items ei
+                WHERE ei.exit_log_id = el.id
+                  AND ei.confirmed_quantity IS NOT NULL
+                  AND ei.confirmed_quantity > 0
+                  AND ei.compartment_public_id IS NOT NULL
+                ORDER BY ei.id ASC
+                LIMIT 1
+            )
+        ) AS compartment_public_id
+    FROM exit_logs el
+    WHERE el.id::text = :id AND el.clinic_id = CAST(:clinic_id AS UUID)
+    LIMIT 1
+)
+SELECT
+    r.exit_log_id,
+    r.status,
+    r.compartment_public_id,
+    (c.public_id IS NOT NULL) AS compartment_resolved,
+    COALESCE(c.is_active, FALSE) AS compartment_is_active,
+    (l.public_id IS NOT NULL) AS locker_resolved,
+    COALESCE(l.is_active, FALSE) AS locker_is_active,
+    l.device_id
+FROM resolved r
+LEFT JOIN compartments c
+    ON c.public_id = r.compartment_public_id AND c.clinic_id = :clinic_id
+LEFT JOIN lockers l
+    ON l.public_id = c.locker_public_id AND l.clinic_id = :clinic_id
+SQL;
+
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute([
+            'id' => $exitLogId,
+            'clinic_id' => $clinicId,
+        ]);
         $row = $stmt->fetch();
+
         return is_array($row) ? $row : null;
     }
 

@@ -4,19 +4,18 @@ declare(strict_types=1);
 
 namespace App\Modules\ExitLogs\Handlers;
 
-use App\Application\ExitLogs\OpenExitLogLockAction;
 use App\Application\Http\ApiResponse;
 use App\Application\Http\Request;
 use App\Application\Http\Response;
-use App\Domain\ExitLogs\Exception\ExitLogLockDeniedException;
+use App\Domain\ExitLogs\Exception\ExitLogBusinessRuleException;
 use App\Domain\ExitLogs\Exception\ExitLogNotFoundException;
-use App\Domain\Mqtt\Exception\MqttPublishFailedException;
+use App\Modules\ExitLogs\Services\ExitLogService;
 use App\Modules\ExitLogs\Support\ExitLogIdParser;
 use Throwable;
 
-final class OpenExitLogLockHandler
+final class CancelExitLogHandler
 {
-    public function __construct(private readonly OpenExitLogLockAction $action)
+    public function __construct(private readonly ExitLogService $service)
     {
     }
 
@@ -25,9 +24,8 @@ final class OpenExitLogLockHandler
         try {
             $user = (array) $request->getAttribute('user', []);
             $clinicId = (string) ($user['clinic_id'] ?? '');
-            $requestedBy = (string) ($user['user_id'] ?? '');
-            if ($clinicId === '' || $requestedBy === '') {
-                return ApiResponse::error($request, 403, 'Forbidden', 'Invalid user context');
+            if ($clinicId === '') {
+                return ApiResponse::error($request, 403, 'Forbidden', 'Missing clinic_id in user context');
             }
 
             $rawId = (string) $request->getAttribute('id', '');
@@ -36,15 +34,11 @@ final class OpenExitLogLockHandler
                 return ApiResponse::error($request, 400, 'Bad Request', 'Invalid exit log id');
             }
 
-            $result = $this->action->execute($clinicId, $exitLogId, $requestedBy);
-
-            return ApiResponse::success($request, $result->toApiData());
+            return ApiResponse::success($request, $this->service->cancel($clinicId, $exitLogId));
         } catch (ExitLogNotFoundException $e) {
             return ApiResponse::error($request, 404, 'Not Found', $e->getMessage());
-        } catch (ExitLogLockDeniedException $e) {
+        } catch (ExitLogBusinessRuleException $e) {
             return ApiResponse::error($request, 422, 'Unprocessable Entity', $e->getMessage());
-        } catch (MqttPublishFailedException $e) {
-            return ApiResponse::error($request, 502, 'Bad Gateway', $e->getMessage());
         } catch (Throwable $throwable) {
             return ApiResponse::error($request, 500, 'Internal Server Error', $throwable->getMessage());
         }

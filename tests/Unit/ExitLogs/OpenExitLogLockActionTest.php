@@ -22,6 +22,7 @@ final class OpenExitLogLockActionTest extends TestCase
     private function validContext(): array
     {
         return [
+            'status' => 'CONFIRMED',
             'compartment_public_id' => '01HZABCDEFGHIJKMNOPQRSTUV',
             'compartment_resolved' => true,
             'compartment_is_active' => true,
@@ -77,10 +78,24 @@ final class OpenExitLogLockActionTest extends TestCase
         $action->execute(self::CLINIC, '99', 'user-1');
     }
 
+    public function testThrowsWhenExitLogNotConfirmed(): void
+    {
+        $port = $this->createMock(ExitLogLockPort::class);
+        $port->method('findContextForOpenLock')->willReturn(array_merge($this->validContext(), ['status' => 'DRAFT']));
+        $publisher = $this->createMock(LockCommandPublisher::class);
+        $publisher->expects($this->never())->method('publishOpenCommand');
+
+        $action = new OpenExitLogLockAction($port, $publisher, $this->createStub(LoggerInterface::class));
+
+        $this->expectException(ExitLogLockDeniedException::class);
+        $action->execute(self::CLINIC, '1', 'user-1');
+    }
+
     public function testThrowsWhenCompartmentMissing(): void
     {
         $port = $this->createMock(ExitLogLockPort::class);
         $port->method('findContextForOpenLock')->willReturn([
+            'status' => 'CONFIRMED',
             'compartment_public_id' => null,
             'compartment_resolved' => false,
             'compartment_is_active' => false,
@@ -108,7 +123,7 @@ final class OpenExitLogLockActionTest extends TestCase
         $publisher->method('publishOpenCommand')->willThrowException(new MqttPublishFailedException('broker down'));
 
         $port->expects($this->once())->method('recordLockCommandAttempt')->with(
-            7,
+            '7',
             self::CLINIC,
             'DEVICE-UNIT-TEST',
             'lockers/DEVICE-UNIT-TEST/cmd',

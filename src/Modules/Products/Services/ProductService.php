@@ -16,7 +16,7 @@ final class ProductService
 
     public function list(string $clinicId, ?bool $active): array
     {
-        $sql = 'SELECT public_id AS id, clinic_id, name, is_active, created_at, updated_at
+        $sql = 'SELECT public_id AS id, clinic_id, sku, name, is_active, created_at, updated_at
                 FROM products
                 WHERE clinic_id = :clinic_id';
         $params = ['clinic_id' => $clinicId];
@@ -36,7 +36,7 @@ final class ProductService
     public function get(string $clinicId, string $publicId): ?array
     {
         $stmt = $this->pdo->prepare(
-            'SELECT public_id AS id, clinic_id, name, is_active, created_at, updated_at
+            'SELECT public_id AS id, clinic_id, sku, name, is_active, created_at, updated_at
              FROM products
              WHERE clinic_id = :clinic_id AND public_id = :public_id
              LIMIT 1'
