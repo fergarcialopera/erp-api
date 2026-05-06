@@ -93,5 +93,29 @@ final class ProductsEndpointTest extends BaseApiTestCase
         $deleteAdmin = $this->request('DELETE', '/api/v1/products/' . $id, null, $this->authHeaderFor('admin@clinic.local'));
         $this->assertSame(200, $deleteAdmin['status']);
     }
+
+    public function testPatchProductCanSetIsActiveFalse(): void
+    {
+        $created = $this->request(
+            'POST',
+            '/api/v1/products',
+            ['name' => 'BoolPatch-' . bin2hex(random_bytes(2)), 'is_active' => true],
+            $this->authHeaderFor('admin@clinic.local')
+        );
+        $this->assertSame(201, $created['status']);
+        $id = (string) ($created['json']['data']['id'] ?? '');
+        $this->assertNotSame('', $id);
+
+        $patched = $this->request(
+            'PATCH',
+            '/api/v1/products/' . $id,
+            ['is_active' => false],
+            $this->authHeaderFor('tech@clinic.local')
+        );
+        $this->assertSame(200, $patched['status']);
+        $this->assertIsArray($patched['json']);
+        $this->assertArrayHasKey('data', $patched['json']);
+        $this->assertFalse((bool) ($patched['json']['data']['is_active'] ?? true));
+    }
 }
 

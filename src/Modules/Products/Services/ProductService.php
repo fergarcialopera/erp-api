@@ -55,13 +55,12 @@ final class ProductService
              VALUES (:id, :public_id, :clinic_id, :name, :is_active, NOW())
              RETURNING public_id AS id, clinic_id, name, is_active, created_at, updated_at'
         );
-        $stmt->execute([
-            'id' => $id,
-            'public_id' => $publicId,
-            'clinic_id' => $clinicId,
-            'name' => $dto->name,
-            'is_active' => $dto->isActive,
-        ]);
+        $stmt->bindValue(':id', $id);
+        $stmt->bindValue(':public_id', $publicId);
+        $stmt->bindValue(':clinic_id', $clinicId);
+        $stmt->bindValue(':name', $dto->name);
+        $stmt->bindValue(':is_active', $dto->isActive, PDO::PARAM_BOOL);
+        $stmt->execute();
         return (array) $stmt->fetch();
     }
 
@@ -81,12 +80,11 @@ final class ProductService
              WHERE clinic_id = :clinic_id AND public_id = :public_id
              RETURNING public_id AS id, clinic_id, name, is_active, created_at, updated_at'
         );
-        $stmt->execute([
-            'clinic_id' => $clinicId,
-            'public_id' => $publicId,
-            'name' => $name,
-            'is_active' => $isActive,
-        ]);
+        $stmt->bindValue(':clinic_id', $clinicId);
+        $stmt->bindValue(':public_id', $publicId);
+        $stmt->bindValue(':name', $name);
+        $stmt->bindValue(':is_active', $isActive, PDO::PARAM_BOOL);
+        $stmt->execute();
 
         $row = $stmt->fetch();
         return is_array($row) ? $row : null;
