@@ -8,7 +8,7 @@ use Tests\Integration\Support\BaseApiTestCase;
 
 final class ExitLogsEndpointTest extends BaseApiTestCase
 {
-    private const PRODUCT_A1 = '01KBASELINEPRODA0000000001';
+    private const PRODUCT_A1 = '10000000-0000-4000-8000-000000000001';
 
     public function testCreateExitLogWithoutTokenReturns401(): void
     {
@@ -87,7 +87,7 @@ final class ExitLogsEndpointTest extends BaseApiTestCase
         $patch = $this->request(
             'PATCH',
             '/api/v1/exit-logs/' . $exitId,
-            ['items' => [['item_id' => (int) $itemId, 'quantity' => 0]]],
+            ['items' => [['item_id' => $itemId, 'quantity' => 0]]],
             $this->authHeaderFor('tech@clinic.local')
         );
         $this->assertSame(200, $patch['status'], $patch['raw'] ?? '');

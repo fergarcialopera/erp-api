@@ -27,7 +27,7 @@ final class ExitLogValidator
                 throw new InvalidArgumentException('Each item must be an object');
             }
             $productId = trim((string) ($row['product_id'] ?? ''));
-            if ($productId === '' || strlen($productId) !== 26) {
+            if ($productId === '') {
                 throw new InvalidArgumentException('Invalid product_id at index ' . (int) $idx);
             }
             if (isset($seenProducts[$productId])) {
@@ -40,25 +40,25 @@ final class ExitLogValidator
                 throw new InvalidArgumentException('Invalid quantity at index ' . (int) $idx);
             }
 
-            $compartmentPublicId = null;
+            $compartmentId = null;
             if (array_key_exists('compartment_id', $row)) {
                 $raw = $row['compartment_id'];
                 if ($raw !== null && $raw !== '') {
-                    $compartmentPublicId = trim((string) $raw);
-                    if ($compartmentPublicId === '' || strlen($compartmentPublicId) !== 26) {
+                    $compartmentId = trim((string) $raw);
+                    if ($compartmentId === '') {
                         throw new InvalidArgumentException('Invalid compartment_id at index ' . (int) $idx);
                     }
                 }
             }
 
-            $lines[] = new ExitLogLineInputDTO($productId, (int) $quantity, $compartmentPublicId);
+            $lines[] = new ExitLogLineInputDTO($productId, (int) $quantity, $compartmentId);
         }
 
         return new CreateExitLogDTO($lines, $note);
     }
 
     /**
-     * @return list<array{item_id: int, quantity: int}>
+     * @return list<array{item_id: string, quantity: int}>
      */
     public function validatePatchItems(array $payload): array
     {
@@ -72,15 +72,15 @@ final class ExitLogValidator
             if (!is_array($row)) {
                 throw new InvalidArgumentException('Each item must be an object');
             }
-            $itemId = filter_var($row['item_id'] ?? null, FILTER_VALIDATE_INT);
-            if ($itemId === false || $itemId < 1) {
+            $itemId = trim((string) ($row['item_id'] ?? ''));
+            if ($itemId === '') {
                 throw new InvalidArgumentException('Invalid item_id at index ' . (int) $idx);
             }
             $quantity = filter_var($row['quantity'] ?? null, FILTER_VALIDATE_INT);
             if ($quantity === false || $quantity < 0) {
                 throw new InvalidArgumentException('Invalid quantity at index ' . (int) $idx);
             }
-            $out[] = ['item_id' => (int) $itemId, 'quantity' => (int) $quantity];
+            $out[] = ['item_id' => $itemId, 'quantity' => (int) $quantity];
         }
 
         return $out;

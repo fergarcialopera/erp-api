@@ -8,6 +8,20 @@ use Tests\Integration\Support\BaseApiTestCase;
 
 final class EntryLogsEndpointTest extends BaseApiTestCase
 {
+    private function createProductSkuForClinicA(): string
+    {
+        $created = $this->request(
+            'POST',
+            '/api/v1/products',
+            ['name' => 'Producto ' . bin2hex(random_bytes(2))],
+            $this->authHeaderFor('tech@clinic.local')
+        );
+        $this->assertSame(201, $created['status']);
+        $sku = (string) ($created['json']['data']['sku'] ?? '');
+        $this->assertNotSame('', $sku);
+        return $sku;
+    }
+
     public function testCreateEntryLogWithoutTokenReturns401(): void
     {
         $res = $this->request('POST', '/api/v1/entry-logs', ['sku' => 'X', 'quantity' => 1]);
@@ -16,7 +30,7 @@ final class EntryLogsEndpointTest extends BaseApiTestCase
 
     public function testCreateEntryLogRequiresTechnicianOrAdmin(): void
     {
-        $sku = $this->uniqueSku();
+        $sku = $this->createProductSkuForClinicA();
 
         $staff = $this->request('POST', '/api/v1/entry-logs', ['sku' => $sku, 'name' => 'Base', 'quantity' => 3], $this->authHeaderFor('staff@clinic.local'));
         $this->assertSame(403, $staff['status']);
@@ -39,7 +53,7 @@ final class EntryLogsEndpointTest extends BaseApiTestCase
 
     public function testEntryLogsAreIsolatedByClinic(): void
     {
-        $sku = $this->uniqueSku();
+        $sku = $this->createProductSkuForClinicA();
         $this->request('POST', '/api/v1/entry-logs', ['sku' => $sku, 'name' => 'Tenant A', 'quantity' => 5], $this->authHeaderFor('admin@clinic.local'));
 
         $listA = $this->request('GET', '/api/v1/entry-logs', null, $this->authHeaderFor('staff@clinic.local'));

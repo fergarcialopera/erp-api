@@ -16,7 +16,7 @@
         <env name="TEST_BASE_URL" value="http://nginx"/>
         <env name="TEST_DB_HOST" value="postgres"/>
         <env name="TEST_DB_PORT" value="5432"/>
-        <env name="TEST_DB_DATABASE" value="erp"/>
+        <env name="TEST_DB_DATABASE" value="erp_test"/>
         <env name="TEST_DB_USERNAME" value="erp"/>
         <env name="TEST_DB_PASSWORD" value="erp"/>
     </php>

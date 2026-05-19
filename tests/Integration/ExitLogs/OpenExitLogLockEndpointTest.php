@@ -8,7 +8,7 @@ use Tests\Integration\Support\BaseApiTestCase;
 
 final class OpenExitLogLockEndpointTest extends BaseApiTestCase
 {
-    private const PRODUCT_A1 = '01KBASELINEPRODA0000000001';
+    private const PRODUCT_A1 = '10000000-0000-4000-8000-000000000001';
 
     public function testOpenLockRequiresAuth(): void
     {

@@ -130,6 +130,63 @@ paths:
       responses:
         '200':
           description: Inventory list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        product:
+                          type: object
+                          properties:
+                            id: { type: string }
+                            sku: { type: string }
+                            name: { type: string }
+                        quantity_total: { type: integer }
+                        updated_at:
+                          type: string
+                          nullable: true
+                        locations:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              quantity: { type: integer }
+                              compartment:
+                                nullable: true
+                                oneOf:
+                                  - type: 'null'
+                                  - type: object
+                                    properties:
+                                      id: { type: string }
+                                      code: { type: string }
+                              locker:
+                                nullable: true
+                                oneOf:
+                                  - type: 'null'
+                                  - type: object
+                                    properties:
+                                      id: { type: string }
+                                      name: { type: string }
+                  meta:
+                    type: object
+              example:
+                data:
+                  - product: { id: "10000000-0000-4000-8000-000000000001", sku: "SR-GLV-001", name: "Guantes de nitrilo talla M" }
+                    quantity_total: 165
+                    updated_at: "2026-05-07T08:00:00+02:00"
+                    locations:
+                      - quantity: 120
+                        compartment: { id: "50000000-0000-4000-8000-000000000001", code: "A1-C1" }
+                        locker: { id: "40000000-0000-4000-8000-000000000001", name: "Locker Urgencias A1" }
+                      - quantity: 45
+                        compartment: null
+                        locker: null
+                meta: {}
         '401':
           description: Unauthorized
   /api/v1/products:

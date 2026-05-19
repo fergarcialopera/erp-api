@@ -6,7 +6,6 @@ use App\Modules\Compartments\DTOs\CreateCompartmentDTO;
 use App\Modules\Compartments\DTOs\PatchCompartmentDTO;
 use PDO;
 use RuntimeException;
-use Symfony\Component\Uid\Ulid;
 use Symfony\Component\Uid\Uuid;
 
 final class CompartmentService
@@ -17,12 +16,12 @@ final class CompartmentService
 
     public function list(string $clinicId, ?string $lockerId, ?bool $active): array
     {
-        $sql = 'SELECT public_id AS id, clinic_id, locker_public_id AS locker_id, code, is_active, created_at, updated_at
+        $sql = 'SELECT id, clinic_id, locker_id, code, is_active, created_at, updated_at
                 FROM compartments
                 WHERE clinic_id = :clinic_id';
         $params = ['clinic_id' => $clinicId];
         if ($lockerId !== null) {
-            $sql .= ' AND locker_public_id = :locker_id';
+            $sql .= ' AND locker_id = :locker_id';
             $params['locker_id'] = $lockerId;
         }
         if ($active !== null) {
@@ -35,15 +34,15 @@ final class CompartmentService
         return $stmt->fetchAll() ?: [];
     }
 
-    public function get(string $clinicId, string $publicId): ?array
+    public function get(string $clinicId, string $compartmentId): ?array
     {
         $stmt = $this->pdo->prepare(
-            'SELECT public_id AS id, clinic_id, locker_public_id AS locker_id, code, is_active, created_at, updated_at
+            'SELECT id, clinic_id, locker_id, code, is_active, created_at, updated_at
              FROM compartments
-             WHERE clinic_id = :clinic_id AND public_id = :public_id
+             WHERE clinic_id = :clinic_id AND id::text = :id
              LIMIT 1'
         );
-        $stmt->execute(['clinic_id' => $clinicId, 'public_id' => $publicId]);
+        $stmt->execute(['clinic_id' => $clinicId, 'id' => $compartmentId]);
         $row = $stmt->fetch();
         return is_array($row) ? $row : null;
     }
@@ -51,34 +50,32 @@ final class CompartmentService
     public function create(string $clinicId, CreateCompartmentDTO $dto): array
     {
         $locker = $this->pdo->prepare(
-            'SELECT public_id FROM lockers WHERE clinic_id = :clinic_id AND public_id = :public_id LIMIT 1'
+            'SELECT id FROM lockers WHERE clinic_id = :clinic_id AND id::text = :id LIMIT 1'
         );
-        $locker->execute(['clinic_id' => $clinicId, 'public_id' => $dto->lockerId]);
+        $locker->execute(['clinic_id' => $clinicId, 'id' => $dto->lockerId]);
         if (!$locker->fetch()) {
             throw new RuntimeException('Locker not found');
         }
 
         $id = Uuid::v4()->toRfc4122();
-        $publicId = (string) new Ulid();
         $stmt = $this->pdo->prepare(
-            'INSERT INTO compartments (id, public_id, clinic_id, locker_public_id, code, is_active, created_at, updated_at)
-             VALUES (:id, :public_id, :clinic_id, :locker_public_id, :code, :is_active, NOW(), NOW())
-             RETURNING public_id AS id, clinic_id, locker_public_id AS locker_id, code, is_active, created_at, updated_at'
+            'INSERT INTO compartments (id, clinic_id, locker_id, code, is_active, created_at, updated_at)
+             VALUES (:id, :clinic_id, :locker_id, :code, :is_active, NOW(), NOW())
+             RETURNING id, clinic_id, locker_id, code, is_active, created_at, updated_at'
         );
         $stmt->execute([
             'id' => $id,
-            'public_id' => $publicId,
             'clinic_id' => $clinicId,
-            'locker_public_id' => $dto->lockerId,
+            'locker_id' => $dto->lockerId,
             'code' => $dto->code,
             'is_active' => $dto->isActive,
         ]);
         return (array) $stmt->fetch();
     }
 
-    public function patch(string $clinicId, string $publicId, PatchCompartmentDTO $dto): ?array
+    public function patch(string $clinicId, string $compartmentId, PatchCompartmentDTO $dto): ?array
     {
-        $current = $this->get($clinicId, $publicId);
+        $current = $this->get($clinicId, $compartmentId);
         if ($current === null) {
             return null;
         }
@@ -86,12 +83,12 @@ final class CompartmentService
         $stmt = $this->pdo->prepare(
             'UPDATE compartments
              SET code = :code, is_active = :is_active, updated_at = NOW()
-             WHERE clinic_id = :clinic_id AND public_id = :public_id
-             RETURNING public_id AS id, clinic_id, locker_public_id AS locker_id, code, is_active, created_at, updated_at'
+             WHERE clinic_id = :clinic_id AND id::text = :id
+             RETURNING id, clinic_id, locker_id, code, is_active, created_at, updated_at'
         );
         $stmt->execute([
             'clinic_id' => $clinicId,
-            'public_id' => $publicId,
+            'id' => $compartmentId,
             'code' => $dto->code ?? $current['code'],
             'is_active' => $dto->isActive ?? $current['is_active'],
         ]);
@@ -99,13 +96,13 @@ final class CompartmentService
         return is_array($row) ? $row : null;
     }
 
-    public function softDelete(string $clinicId, string $publicId): bool
+    public function softDelete(string $clinicId, string $compartmentId): bool
     {
         $stmt = $this->pdo->prepare(
             'UPDATE compartments SET is_active = FALSE, updated_at = NOW()
-             WHERE clinic_id = :clinic_id AND public_id = :public_id'
+             WHERE clinic_id = :clinic_id AND id::text = :id'
         );
-        $stmt->execute(['clinic_id' => $clinicId, 'public_id' => $publicId]);
+        $stmt->execute(['clinic_id' => $clinicId, 'id' => $compartmentId]);
         return $stmt->rowCount() > 0;
     }
 }

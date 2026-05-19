@@ -14,32 +14,111 @@ final class InventoryService
     public function listByClinic(string $clinicId): array
     {
         $stmt = $this->pdo->prepare(
-            'SELECT id, clinic_id, sku, name, quantity, updated_at
-             FROM inventory_items
-             WHERE clinic_id = :clinic_id
-             ORDER BY id DESC'
+            'SELECT
+                ii.product_id::text AS product_id,
+                p.sku,
+                p.name,
+                ii.compartment_id::text AS compartment_id,
+                c.code AS compartment_code,
+                l.id::text AS locker_id,
+                l.name AS locker_name,
+                COALESCE(SUM(ii.quantity), 0)::int AS quantity,
+                MAX(ii.updated_at) AS updated_at
+             FROM inventory_items ii
+             INNER JOIN products p ON p.id = ii.product_id
+             LEFT JOIN compartments c ON c.id = ii.compartment_id
+             LEFT JOIN lockers l ON l.id = c.locker_id
+             WHERE ii.clinic_id = :clinic_id
+             GROUP BY ii.product_id, p.sku, p.name, ii.compartment_id, c.code, l.id, l.name
+             ORDER BY MAX(ii.updated_at) DESC'
         );
         $stmt->execute(['clinic_id' => $clinicId]);
-        return $stmt->fetchAll() ?: [];
+        /** @var list<array<string,mixed>> $rows */
+        $rows = $stmt->fetchAll() ?: [];
+
+        $byProduct = [];
+        foreach ($rows as $row) {
+            $productId = (string) ($row['product_id'] ?? '');
+            if ($productId === '') {
+                continue;
+            }
+
+            if (!isset($byProduct[$productId])) {
+                $byProduct[$productId] = [
+                    'product' => [
+                        'id' => $productId,
+                        'sku' => (string) ($row['sku'] ?? ''),
+                        'name' => (string) ($row['name'] ?? ''),
+                    ],
+                    'quantity_total' => 0,
+                    'updated_at' => $row['updated_at'] ?? null,
+                    'locations' => [],
+                ];
+            }
+
+            $quantity = (int) ($row['quantity'] ?? 0);
+            $byProduct[$productId]['quantity_total'] += $quantity;
+
+            $updatedAt = $row['updated_at'] ?? null;
+            if ($updatedAt !== null) {
+                $currentUpdatedAt = $byProduct[$productId]['updated_at'];
+                if ($currentUpdatedAt === null || (string) $updatedAt > (string) $currentUpdatedAt) {
+                    $byProduct[$productId]['updated_at'] = $updatedAt;
+                }
+            }
+
+            $compartmentId = $row['compartment_id'] !== null ? (string) $row['compartment_id'] : null;
+            $lockerId = $row['locker_id'] !== null ? (string) $row['locker_id'] : null;
+
+            $byProduct[$productId]['locations'][] = [
+                'quantity' => $quantity,
+                'compartment' => $compartmentId !== null ? [
+                    'id' => $compartmentId,
+                    'code' => $row['compartment_code'] !== null ? (string) $row['compartment_code'] : '',
+                ] : null,
+                'locker' => $lockerId !== null ? [
+                    'id' => $lockerId,
+                    'name' => $row['locker_name'] !== null ? (string) $row['locker_name'] : '',
+                ] : null,
+            ];
+        }
+
+        $result = array_values($byProduct);
+        usort(
+            $result,
+            static fn (array $a, array $b): int => strcmp((string) ($b['updated_at'] ?? ''), (string) ($a['updated_at'] ?? ''))
+        );
+
+        return $result;
     }
 
     public function upsertByClinic(string $clinicId, UpsertInventoryItemDTO $dto): array
     {
         $stmt = $this->pdo->prepare(
-            'INSERT INTO inventory_items (clinic_id, sku, name, quantity)
-             VALUES (:clinic_id, :sku, :name, :quantity)
-             ON CONFLICT (clinic_id, sku)
+            'INSERT INTO inventory_items (clinic_id, product_id, quantity)
+             VALUES (:clinic_id, :product_id, :quantity)
+             ON CONFLICT (clinic_id, product_id) WHERE compartment_id IS NULL
              DO UPDATE SET
-                name = EXCLUDED.name,
                 quantity = EXCLUDED.quantity,
                 updated_at = NOW()
-             RETURNING id, clinic_id, sku, name, quantity, updated_at'
+             RETURNING id::text AS id, clinic_id, product_id, quantity, updated_at'
         );
+
+        $productStmt = $this->pdo->prepare(
+            'SELECT id FROM products WHERE clinic_id = :clinic_id AND sku = :sku LIMIT 1'
+        );
+        $productStmt->execute([
+            'clinic_id' => $clinicId,
+            'sku' => $dto->sku,
+        ]);
+        $product = $productStmt->fetch();
+        if (!is_array($product) || !isset($product['id'])) {
+            return [];
+        }
 
         $stmt->execute([
             'clinic_id' => $clinicId,
-            'sku' => $dto->sku,
-            'name' => $dto->name,
+            'product_id' => $product['id'],
             'quantity' => $dto->quantity,
         ]);
 

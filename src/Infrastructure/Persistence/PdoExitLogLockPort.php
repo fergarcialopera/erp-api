@@ -21,18 +21,18 @@ WITH resolved AS (
         el.id AS exit_log_id,
         el.status,
         COALESCE(
-            NULLIF(TRIM(el.compartment_public_id), ''),
+            el.compartment_id,
             (
-                SELECT ei.compartment_public_id
+                SELECT ei.compartment_id
                 FROM exit_log_items ei
                 WHERE ei.exit_log_id = el.id
                   AND ei.confirmed_quantity IS NOT NULL
                   AND ei.confirmed_quantity > 0
-                  AND ei.compartment_public_id IS NOT NULL
+                  AND ei.compartment_id IS NOT NULL
                 ORDER BY ei.id ASC
                 LIMIT 1
             )
-        ) AS compartment_public_id
+        ) AS compartment_id
     FROM exit_logs el
     WHERE el.id::text = :id AND el.clinic_id = CAST(:clinic_id AS UUID)
     LIMIT 1
@@ -40,17 +40,17 @@ WITH resolved AS (
 SELECT
     r.exit_log_id,
     r.status,
-    r.compartment_public_id,
-    (c.public_id IS NOT NULL) AS compartment_resolved,
+    r.compartment_id,
+    (c.id IS NOT NULL) AS compartment_resolved,
     COALESCE(c.is_active, FALSE) AS compartment_is_active,
-    (l.public_id IS NOT NULL) AS locker_resolved,
+    (l.id IS NOT NULL) AS locker_resolved,
     COALESCE(l.is_active, FALSE) AS locker_is_active,
     l.device_id
 FROM resolved r
 LEFT JOIN compartments c
-    ON c.public_id = r.compartment_public_id AND c.clinic_id = :clinic_id
+    ON c.id = r.compartment_id AND c.clinic_id = :clinic_id
 LEFT JOIN lockers l
-    ON l.public_id = c.locker_public_id AND l.clinic_id = :clinic_id
+    ON l.id = c.locker_id AND l.clinic_id = :clinic_id
 SQL;
 
         $stmt = $this->pdo->prepare($sql);
@@ -75,16 +75,16 @@ SQL;
     ): void {
         $stmt = $this->pdo->prepare(
             'INSERT INTO exit_log_lock_commands
-                (exit_log_id, clinic_id, device_id, topic, payload, requested_by, success, error_message)
+                (exit_log_id, clinic_id, device_id, topic, payload, requested_by_user_id, success, error_message)
              VALUES
-                (:exit_log_id, :clinic_id, :device_id, :topic, :payload, :requested_by, :success, :error_message)'
+                (:exit_log_id, :clinic_id, :device_id, :topic, :payload, :requested_by_user_id, :success, :error_message)'
         );
         $stmt->bindValue(':exit_log_id', $exitLogId);
         $stmt->bindValue(':clinic_id', $clinicId);
         $stmt->bindValue(':device_id', $deviceId);
         $stmt->bindValue(':topic', $topic);
         $stmt->bindValue(':payload', $payload);
-        $stmt->bindValue(':requested_by', $requestedBy);
+        $stmt->bindValue(':requested_by_user_id', $requestedBy);
         $stmt->bindValue(':success', $success, PDO::PARAM_BOOL);
         if ($errorMessage === null) {
             $stmt->bindValue(':error_message', null, PDO::PARAM_NULL);

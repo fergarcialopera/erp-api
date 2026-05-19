@@ -14,9 +14,9 @@ final class IncidentService
     public function create(string $clinicId, string $createdBy, CreateIncidentDTO $dto): array
     {
         $stmt = $this->pdo->prepare(
-            'INSERT INTO incidents (clinic_id, title, description, severity, source, status, created_by)
-             VALUES (:clinic_id, :title, :description, :severity, :source, :status, :created_by)
-             RETURNING id, clinic_id, title, description, severity, source, status, created_by, created_at'
+            'INSERT INTO incidents (clinic_id, title, description, severity, source, status, created_by_user_id)
+             VALUES (:clinic_id, :title, :description, :severity, :source, :status, :created_by_user_id)
+             RETURNING id, clinic_id, title, description, severity, source, status, created_by_user_id AS created_by, created_at'
         );
         $stmt->execute([
             'clinic_id' => $clinicId,
@@ -25,7 +25,7 @@ final class IncidentService
             'severity' => $dto->severity,
             'source' => $dto->source,
             'status' => 'OPEN',
-            'created_by' => $createdBy,
+            'created_by_user_id' => $createdBy,
         ]);
 
         $incident = $stmt->fetch();
@@ -35,7 +35,7 @@ final class IncidentService
     public function list(string $clinicId): array
     {
         $stmt = $this->pdo->prepare(
-            'SELECT id, clinic_id, title, description, severity, source, status, created_by, created_at
+            'SELECT id, clinic_id, title, description, severity, source, status, created_by_user_id AS created_by, created_at
              FROM incidents
              WHERE clinic_id = :clinic_id
              ORDER BY created_at DESC'

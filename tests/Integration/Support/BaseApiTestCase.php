@@ -27,6 +27,9 @@ abstract class BaseApiTestCase extends TestCase
         $username = (string) getenv('TEST_DB_USERNAME') ?: 'erp';
         $password = (string) getenv('TEST_DB_PASSWORD') ?: 'erp';
 
+        self::assertSafeTestDatabase($database);
+        self::ensureTestDatabaseExists($host, $port, $database, $username, $password);
+
         self::$pdo = new PDO(
             sprintf('pgsql:host=%s;port=%s;dbname=%s', $host, $port, $database),
             $username,
@@ -37,8 +40,145 @@ abstract class BaseApiTestCase extends TestCase
             ]
         );
 
+        self::ensureSchemaUpToDate();
         self::ensureUsers();
         self::$bootstrapped = true;
+    }
+
+    private static function assertSafeTestDatabase(string $testDatabase): void
+    {
+        $prodLikeDb = (string) ($_ENV['DB_DATABASE'] ?? getenv('DB_DATABASE') ?: '');
+
+        if ($prodLikeDb !== '' && $testDatabase === $prodLikeDb) {
+            throw new \RuntimeException(
+                sprintf('Unsafe test DB: TEST_DB_DATABASE=%s matches DB_DATABASE', $testDatabase)
+            );
+        }
+
+        if (!str_ends_with($testDatabase, '_test')) {
+            throw new \RuntimeException(
+                sprintf('Unsafe test DB: TEST_DB_DATABASE=%s (expected suffix _test)', $testDatabase)
+            );
+        }
+    }
+
+    private static function ensureTestDatabaseExists(
+        string $host,
+        string $port,
+        string $database,
+        string $username,
+        string $password
+    ): void {
+        try {
+            $probe = new PDO(
+                sprintf('pgsql:host=%s;port=%s;dbname=%s', $host, $port, $database),
+                $username,
+                $password,
+                [
+                    PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                    PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+                ]
+            );
+            $probe = null;
+            return;
+        } catch (\Throwable) {
+            // Continuar: puede que la BD no exista aún (p.ej. volumen persistente ya creado).
+        }
+
+        $admin = new PDO(
+            sprintf('pgsql:host=%s;port=%s;dbname=postgres', $host, $port),
+            $username,
+            $password,
+            [
+                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+            ]
+        );
+
+        $stmt = $admin->prepare('SELECT 1 FROM pg_database WHERE datname = :db');
+        $stmt->execute(['db' => $database]);
+        if (!$stmt->fetchColumn()) {
+            $admin->exec('CREATE DATABASE ' . self::quoteIdentifier($database));
+        }
+        $admin = null;
+
+        $testDb = new PDO(
+            sprintf('pgsql:host=%s;port=%s;dbname=%s', $host, $port, $database),
+            $username,
+            $password,
+            [
+                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+            ]
+        );
+        $testDb->exec('CREATE EXTENSION IF NOT EXISTS "uuid-ossp"');
+        $testDb = null;
+    }
+
+    private static function quoteIdentifier(string $identifier): string
+    {
+        return '"' . str_replace('"', '""', $identifier) . '"';
+    }
+
+    private static function ensureSchemaUpToDate(): void
+    {
+        $root = dirname(__DIR__, 3);
+        $migrationsDir = $root . '/database/migrations';
+        if (!is_dir($migrationsDir)) {
+            return;
+        }
+
+        self::$pdo->exec(
+            'CREATE TABLE IF NOT EXISTS schema_migrations (
+                version VARCHAR(32) PRIMARY KEY,
+                filename VARCHAR(255) NOT NULL UNIQUE,
+                executed_at TIMESTAMP WITH TIME ZONE NOT NULL
+            )'
+        );
+
+        $appliedStmt = self::$pdo->query('SELECT filename FROM schema_migrations');
+        $appliedRows = $appliedStmt ? $appliedStmt->fetchAll(PDO::FETCH_ASSOC) : [];
+        $applied = [];
+        foreach ($appliedRows as $row) {
+            $applied[(string) $row['filename']] = true;
+        }
+
+        $files = glob($migrationsDir . '/*.sql') ?: [];
+        sort($files, SORT_STRING);
+        foreach ($files as $file) {
+            $filename = basename($file);
+            if (isset($applied[$filename])) {
+                continue;
+            }
+
+            $sql = file_get_contents($file);
+            if ($sql === false) {
+                throw new \RuntimeException('Cannot read migration file: ' . $filename);
+            }
+
+            $version = self::versionFromName($filename);
+            self::$pdo->beginTransaction();
+            try {
+                self::$pdo->exec($sql);
+                $ins = self::$pdo->prepare(
+                    'INSERT INTO schema_migrations (version, filename, executed_at)
+                     VALUES (:version, :filename, NOW())'
+                );
+                $ins->execute(['version' => $version, 'filename' => $filename]);
+                self::$pdo->commit();
+            } catch (\Throwable $e) {
+                if (self::$pdo->inTransaction()) {
+                    self::$pdo->rollBack();
+                }
+                throw $e;
+            }
+        }
+    }
+
+    private static function versionFromName(string $filename): string
+    {
+        $parts = explode('_', $filename, 2);
+        return preg_replace('/[^0-9]/', '', $parts[0]) ?: (string) time();
     }
 
     protected static function ensureUsers(): void
@@ -82,32 +222,37 @@ abstract class BaseApiTestCase extends TestCase
     {
         $columns = self::tableColumns('users');
         $hasIsActive = in_array('is_active', $columns, true);
+        $hasUpdatedAt = in_array('updated_at', $columns, true);
 
         $checkStmt = self::$pdo->prepare('SELECT id FROM users WHERE email = :email LIMIT 1');
         $checkStmt->execute(['email' => $email]);
         $existing = $checkStmt->fetch();
 
         if ($existing) {
+            $setUpdatedAt = $hasUpdatedAt ? ', updated_at = NOW()' : '';
             if ($hasIsActive) {
                 $stmt = self::$pdo->prepare(
                     'UPDATE users
-                     SET clinic_id = :clinic_id, password_hash = :password_hash, role = :role, is_active = TRUE
+                     SET clinic_id = :clinic_id, password_hash = :password_hash, role = :role, is_active = TRUE'
+                    . $setUpdatedAt . '
                      WHERE email = :email'
                 );
             } else {
                 $stmt = self::$pdo->prepare(
                     'UPDATE users
-                     SET clinic_id = :clinic_id, password_hash = :password_hash, role = :role
+                     SET clinic_id = :clinic_id, password_hash = :password_hash, role = :role'
+                    . $setUpdatedAt . '
                      WHERE email = :email'
                 );
             }
 
-            $stmt->execute([
+            $params = [
                 'clinic_id' => $clinicId,
                 'password_hash' => $hash,
                 'role' => $role,
                 'email' => $email,
-            ]);
+            ];
+            $stmt->execute($params);
             return;
         }
 
@@ -123,13 +268,16 @@ abstract class BaseApiTestCase extends TestCase
             );
         }
 
-        $stmt->execute([
+        $params = [
             'id' => $id,
+        ];
+        $params += [
             'clinic_id' => $clinicId,
             'email' => $email,
             'password_hash' => $hash,
             'role' => $role,
-        ]);
+        ];
+        $stmt->execute($params);
     }
 
     /**

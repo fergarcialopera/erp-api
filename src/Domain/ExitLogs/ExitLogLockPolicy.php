@@ -20,7 +20,7 @@ final class ExitLogLockPolicy
             );
         }
 
-        $compartmentId = $context['compartment_public_id'] ?? null;
+        $compartmentId = $context['compartment_id'] ?? null;
         if ($compartmentId === null || $compartmentId === '') {
             throw new ExitLogLockDeniedException('Exit log has no compartment linked; lock cannot be opened.');
         }

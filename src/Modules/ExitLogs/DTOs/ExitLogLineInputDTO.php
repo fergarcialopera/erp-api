@@ -7,9 +7,9 @@ namespace App\Modules\ExitLogs\DTOs;
 final class ExitLogLineInputDTO
 {
     public function __construct(
-        public readonly string $productPublicId,
+        public readonly string $productId,
         public readonly int $quantity,
-        public readonly ?string $compartmentPublicId
+        public readonly ?string $compartmentId
     ) {
     }
 }

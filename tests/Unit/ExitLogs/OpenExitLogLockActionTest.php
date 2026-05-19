@@ -23,7 +23,7 @@ final class OpenExitLogLockActionTest extends TestCase
     {
         return [
             'status' => 'CONFIRMED',
-            'compartment_public_id' => '01HZABCDEFGHIJKMNOPQRSTUV',
+            'compartment_id' => '00000000-0000-4000-8000-000000000001',
             'compartment_resolved' => true,
             'compartment_is_active' => true,
             'locker_resolved' => true,
@@ -96,7 +96,7 @@ final class OpenExitLogLockActionTest extends TestCase
         $port = $this->createMock(ExitLogLockPort::class);
         $port->method('findContextForOpenLock')->willReturn([
             'status' => 'CONFIRMED',
-            'compartment_public_id' => null,
+            'compartment_id' => null,
             'compartment_resolved' => false,
             'compartment_is_active' => false,
             'locker_resolved' => false,
