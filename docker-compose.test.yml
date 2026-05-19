@@ -1,0 +1,10 @@
+# Override para tests de integración: la API (PHP-FPM) debe usar la misma BD que phpunit.
+# Uso:
+#   docker compose -f docker-compose.yml -f docker-compose.test.yml up -d php
+#   docker compose -f docker-compose.yml -f docker-compose.test.yml exec php vendor/bin/phpunit
+services:
+  php:
+    environment:
+      APP_ENV: testing
+      DB_DATABASE: erp_test
+      MQTT_DISABLED: "true"

@@ -122,8 +122,27 @@ Payload:
 
 ## 9) Ejecutar tests
 
+Los tests de integración usan la base de datos **`erp_test`**, no la principal (`erp`). La API (contenedor `php`) debe levantarse con el override de tests para que las peticiones HTTP no escriban en producción/desarrollo.
+
 ```bash
-docker compose exec php vendor/bin/phpunit
+# Opción recomendada (recrea PHP con DB de tests y ejecuta phpunit)
+docker compose exec php composer test:docker
+
+# Equivalente manual
+docker compose -f docker-compose.yml -f docker-compose.test.yml up -d php
+docker compose -f docker-compose.yml -f docker-compose.test.yml exec php vendor/bin/phpunit
+```
+
+Solo tests unitarios (sin HTTP):
+
+```bash
+docker compose exec php vendor/bin/phpunit --testsuite Unit
+```
+
+Tras los tests, vuelve a levantar PHP con la BD normal si sigues desarrollando:
+
+```bash
+docker compose up -d php
 ```
 
 ## 10) Flujo diario recomendado
@@ -147,10 +166,10 @@ docker compose exec php vendor/bin/phpunit
    docker compose exec php composer db:seed
    ```
 
-4. Ejecutar tests:
+4. Ejecutar tests (con BD `erp_test`, ver sección 9):
 
    ```bash
-   docker compose exec php vendor/bin/phpunit
+   docker compose exec php composer test:docker
    ```
 
 ## 11) Problemas comunes (y solucion)

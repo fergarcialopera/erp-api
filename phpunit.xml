@@ -19,5 +19,6 @@
         <env name="TEST_DB_DATABASE" value="erp_test"/>
         <env name="TEST_DB_USERNAME" value="erp"/>
         <env name="TEST_DB_PASSWORD" value="erp"/>
+        <env name="APP_ENV" value="testing"/>
     </php>
 </phpunit>

@@ -9,6 +9,10 @@ use PHPUnit\Framework\TestCase;
 
 abstract class BaseApiTestCase extends TestCase
 {
+    private const PROBE_USER_ID = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+    private const PROBE_EMAIL = '__phpunit_probe__@test.invalid';
+    private const PROBE_PASSWORD = 'probe-only';
+
     protected static PDO $pdo;
     protected static string $baseUrl;
     protected static bool $bootstrapped = false;
@@ -23,7 +27,7 @@ abstract class BaseApiTestCase extends TestCase
 
         $host = (string) getenv('TEST_DB_HOST') ?: 'postgres';
         $port = (string) getenv('TEST_DB_PORT') ?: '5432';
-        $database = (string) getenv('TEST_DB_DATABASE') ?: 'erp';
+        $database = (string) getenv('TEST_DB_DATABASE') ?: 'erp_test';
         $username = (string) getenv('TEST_DB_USERNAME') ?: 'erp';
         $password = (string) getenv('TEST_DB_PASSWORD') ?: 'erp';
 
@@ -42,22 +46,61 @@ abstract class BaseApiTestCase extends TestCase
 
         self::ensureSchemaUpToDate();
         self::ensureUsers();
+        self::assertApiUsesTestDatabase();
         self::$bootstrapped = true;
+    }
+
+    protected static function testPdo(): PDO
+    {
+        return self::$pdo;
+    }
+
+    private static function assertApiUsesTestDatabase(): void
+    {
+        $hash = password_hash(self::PROBE_PASSWORD, PASSWORD_BCRYPT);
+        self::upsertUser(
+            self::PROBE_USER_ID,
+            '11111111-1111-1111-1111-111111111111',
+            self::PROBE_EMAIL,
+            'ADMIN',
+            $hash
+        );
+
+        $res = self::staticRequest('POST', '/api/v1/auth/login', [
+            'email' => self::PROBE_EMAIL,
+            'password' => self::PROBE_PASSWORD,
+        ]);
+
+        if ($res['status'] !== 200) {
+            throw new \RuntimeException(
+                'La API HTTP no está usando la base de datos de tests (erp_test). '
+                . 'Reinicia el contenedor PHP con docker-compose.test.yml antes de ejecutar phpunit. '
+                . 'HTTP status del probe: ' . $res['status']
+            );
+        }
     }
 
     private static function assertSafeTestDatabase(string $testDatabase): void
     {
-        $prodLikeDb = (string) ($_ENV['DB_DATABASE'] ?? getenv('DB_DATABASE') ?: '');
-
-        if ($prodLikeDb !== '' && $testDatabase === $prodLikeDb) {
-            throw new \RuntimeException(
-                sprintf('Unsafe test DB: TEST_DB_DATABASE=%s matches DB_DATABASE', $testDatabase)
-            );
-        }
-
         if (!str_ends_with($testDatabase, '_test')) {
             throw new \RuntimeException(
                 sprintf('Unsafe test DB: TEST_DB_DATABASE=%s (expected suffix _test)', $testDatabase)
+            );
+        }
+
+        $appEnv = (string) ($_ENV['APP_ENV'] ?? getenv('APP_ENV') ?: '');
+        if ($appEnv === 'testing') {
+            return;
+        }
+
+        $prodLikeDb = (string) ($_ENV['DB_DATABASE'] ?? getenv('DB_DATABASE') ?: '');
+        if ($prodLikeDb !== '' && $testDatabase === $prodLikeDb && !str_ends_with($prodLikeDb, '_test')) {
+            throw new \RuntimeException(
+                sprintf(
+                    'Unsafe test DB: TEST_DB_DATABASE=%s matches DB_DATABASE=%s (use erp_test and docker-compose.test.yml)',
+                    $testDatabase,
+                    $prodLikeDb
+                )
             );
         }
     }
@@ -283,7 +326,7 @@ abstract class BaseApiTestCase extends TestCase
     /**
      * @return array{status:int,headers:array<string,string>,json:array<string,mixed>|null,raw:string}
      */
-    protected function request(string $method, string $path, ?array $body = null, array $headers = []): array
+    private static function staticRequest(string $method, string $path, ?array $body = null, array $headers = []): array
     {
         $ch = curl_init(self::$baseUrl . $path);
         $normalizedHeaders = ['Accept: application/json'];
@@ -322,6 +365,14 @@ abstract class BaseApiTestCase extends TestCase
             'json' => is_array($json) ? $json : null,
             'raw' => $raw,
         ];
+    }
+
+    /**
+     * @return array{status:int,headers:array<string,string>,json:array<string,mixed>|null,raw:string}
+     */
+    protected function request(string $method, string $path, ?array $body = null, array $headers = []): array
+    {
+        return self::staticRequest($method, $path, $body, $headers);
     }
 
     protected function login(string $email, string $password = 'admin123'): array

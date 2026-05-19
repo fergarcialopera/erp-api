@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Tests\Integration\Inventory;
 
-use PDO;
 use Tests\Integration\Support\BaseApiTestCase;
 
 final class InventoryEndpointTest extends BaseApiTestCase
@@ -23,22 +22,9 @@ final class InventoryEndpointTest extends BaseApiTestCase
         return $sku;
     }
 
-    private function apiPdo(): PDO
-    {
-        return new PDO(
-            'pgsql:host=postgres;port=5432;dbname=erp',
-            'erp',
-            'erp',
-            [
-                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-                PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-            ]
-        );
-    }
-
     private function productIdForSku(string $clinicId, string $sku): string
     {
-        $pdo = $this->apiPdo();
+        $pdo = self::testPdo();
         $stmt = $pdo->prepare('SELECT id::text AS id FROM products WHERE clinic_id = :clinic_id AND sku = :sku LIMIT 1');
         $stmt->execute(['clinic_id' => $clinicId, 'sku' => $sku]);
         $row = $stmt->fetch();
@@ -99,7 +85,7 @@ final class InventoryEndpointTest extends BaseApiTestCase
 
         $productId = $this->productIdForSku($clinicAId, $sku);
 
-        $pdo = $this->apiPdo();
+        $pdo = self::testPdo();
         $lockerStmt = $pdo->prepare(
             'INSERT INTO lockers (clinic_id, name, location, device_id, is_active, created_at, updated_at)
              VALUES (:clinic_id, :name, :location, :device_id, TRUE, NOW(), NOW())

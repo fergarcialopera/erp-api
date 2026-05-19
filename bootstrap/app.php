@@ -91,6 +91,17 @@ if (is_file(dirname(__DIR__) . '/.env')) {
     }
 }
 
+$appEnv = (string) ($_ENV['APP_ENV'] ?? getenv('APP_ENV') ?: '');
+if ($appEnv === 'testing') {
+    $testDatabase = (string) ($_ENV['TEST_DB_DATABASE'] ?? getenv('TEST_DB_DATABASE') ?: 'erp_test');
+    if ($testDatabase === '' || !str_ends_with($testDatabase, '_test')) {
+        throw new \RuntimeException(
+            'APP_ENV=testing requires TEST_DB_DATABASE with suffix _test (got: ' . $testDatabase . ')'
+        );
+    }
+    $_ENV['DB_DATABASE'] = $testDatabase;
+}
+
 $config = new Config([
     'db.host' => $_ENV['DB_HOST'] ?? 'postgres',
     'db.port' => $_ENV['DB_PORT'] ?? '5432',
