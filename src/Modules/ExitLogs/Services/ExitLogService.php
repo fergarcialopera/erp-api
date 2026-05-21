@@ -81,11 +81,11 @@ final class ExitLogService
     /**
      * @param list<array{item_id:string, quantity:int}> $updates
      */
-    public function patchItems(string $clinicId, string $exitLogId, array $updates): array
+    public function patchItems(string $clinicId, string $exitLogId, array $updates, ?string $createdByUserId = null): array
     {
         $this->pdo->beginTransaction();
         try {
-            $row = $this->lockExitLogHeader($clinicId, $exitLogId);
+            $row = $this->lockExitLogHeader($clinicId, $exitLogId, $createdByUserId);
             if ($row === null) {
                 throw new ExitLogNotFoundException('Exit log not found');
             }
@@ -121,15 +121,15 @@ final class ExitLogService
             throw $e;
         }
 
-        return $this->getDetail($clinicId, $exitLogId)
+        return $this->getDetail($clinicId, $exitLogId, $createdByUserId)
             ?? throw new RuntimeException('Exit log not found after update');
     }
 
-    public function confirm(string $clinicId, string $exitLogId): array
+    public function confirm(string $clinicId, string $exitLogId, ?string $createdByUserId = null): array
     {
         $this->pdo->beginTransaction();
         try {
-            $row = $this->lockExitLogHeader($clinicId, $exitLogId);
+            $row = $this->lockExitLogHeader($clinicId, $exitLogId, $createdByUserId);
             if ($row === null) {
                 throw new ExitLogNotFoundException('Exit log not found');
             }
@@ -138,7 +138,7 @@ final class ExitLogService
             if (ExitLogStatus::isConfirmed($status)) {
                 $this->pdo->commit();
 
-                return $this->getDetail($clinicId, $exitLogId)
+                return $this->getDetail($clinicId, $exitLogId, $createdByUserId)
                     ?? throw new RuntimeException('Exit log not found');
             }
 
@@ -163,7 +163,7 @@ final class ExitLogService
                 $this->markCancelled($exitLogId);
                 $this->pdo->commit();
 
-                return $this->getDetail($clinicId, $exitLogId)
+                return $this->getDetail($clinicId, $exitLogId, $createdByUserId)
                     ?? throw new RuntimeException('Exit log not found');
             }
 
@@ -214,15 +214,15 @@ final class ExitLogService
             throw $e;
         }
 
-        return $this->getDetail($clinicId, $exitLogId)
+        return $this->getDetail($clinicId, $exitLogId, $createdByUserId)
             ?? throw new RuntimeException('Exit log not found after confirm');
     }
 
-    public function cancel(string $clinicId, string $exitLogId): array
+    public function cancel(string $clinicId, string $exitLogId, ?string $createdByUserId = null): array
     {
         $this->pdo->beginTransaction();
         try {
-            $row = $this->lockExitLogHeader($clinicId, $exitLogId);
+            $row = $this->lockExitLogHeader($clinicId, $exitLogId, $createdByUserId);
             if ($row === null) {
                 throw new ExitLogNotFoundException('Exit log not found');
             }
@@ -238,21 +238,26 @@ final class ExitLogService
             throw $e;
         }
 
-        return $this->getDetail($clinicId, $exitLogId)
+        return $this->getDetail($clinicId, $exitLogId, $createdByUserId)
             ?? throw new RuntimeException('Exit log not found after cancel');
     }
 
-    public function list(string $clinicId): array
+    public function list(string $clinicId, ?string $createdByUserId = null): array
     {
-        $stmt = $this->pdo->prepare(
-            'SELECT el.id, el.clinic_id, el.status, el.note, el.compartment_id,
+        $sql = 'SELECT el.id, el.clinic_id, el.status, el.note, el.compartment_id,
                     el.created_by_user_id, el.created_at, el.confirmed_at, el.cancelled_at,
                     (SELECT COUNT(*)::int FROM exit_log_items ei WHERE ei.exit_log_id = el.id) AS items_count
              FROM exit_logs el
-             WHERE el.clinic_id = :clinic_id
-             ORDER BY el.id DESC'
-        );
-        $stmt->execute(['clinic_id' => $clinicId]);
+             WHERE el.clinic_id = :clinic_id';
+        $params = ['clinic_id' => $clinicId];
+        if ($createdByUserId !== null) {
+            $sql .= ' AND el.created_by_user_id::text = :created_by_user_id';
+            $params['created_by_user_id'] = $createdByUserId;
+        }
+        $sql .= ' ORDER BY el.id DESC';
+
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute($params);
         $rows = $stmt->fetchAll() ?: [];
 
         $out = [];
@@ -288,18 +293,23 @@ final class ExitLogService
         return $out;
     }
 
-    public function getDetail(string $clinicId, string $exitLogId): ?array
+    public function getDetail(string $clinicId, string $exitLogId, ?string $createdByUserId = null): ?array
     {
-        $stmt = $this->pdo->prepare(
-            'SELECT el.id, el.clinic_id, el.status, el.note, el.compartment_id,
+        $sql = 'SELECT el.id, el.clinic_id, el.status, el.note, el.compartment_id,
                     el.created_by_user_id, el.created_at, el.confirmed_at, el.cancelled_at,
                     u.id AS creator_id, u.email AS creator_email, u.name AS creator_name
              FROM exit_logs el
              LEFT JOIN users u ON u.id = el.created_by_user_id
-             WHERE el.id::text = :id AND el.clinic_id = :clinic_id
-             LIMIT 1'
-        );
-        $stmt->execute(['id' => $exitLogId, 'clinic_id' => $clinicId]);
+             WHERE el.id::text = :id AND el.clinic_id = :clinic_id';
+        $params = ['id' => $exitLogId, 'clinic_id' => $clinicId];
+        if ($createdByUserId !== null) {
+            $sql .= ' AND el.created_by_user_id::text = :created_by_user_id';
+            $params['created_by_user_id'] = $createdByUserId;
+        }
+        $sql .= ' LIMIT 1';
+
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute($params);
         $header = $stmt->fetch();
         if (!is_array($header)) {
             return null;
@@ -397,12 +407,18 @@ final class ExitLogService
     /**
      * @return array<string, mixed>|null
      */
-    private function lockExitLogHeader(string $clinicId, string $exitLogId): ?array
+    private function lockExitLogHeader(string $clinicId, string $exitLogId, ?string $createdByUserId = null): ?array
     {
-        $stmt = $this->pdo->prepare(
-            'SELECT id, clinic_id, status FROM exit_logs WHERE id::text = :id AND clinic_id = :clinic_id FOR UPDATE'
-        );
-        $stmt->execute(['id' => $exitLogId, 'clinic_id' => $clinicId]);
+        $sql = 'SELECT id, clinic_id, status FROM exit_logs WHERE id::text = :id AND clinic_id = :clinic_id';
+        $params = ['id' => $exitLogId, 'clinic_id' => $clinicId];
+        if ($createdByUserId !== null) {
+            $sql .= ' AND created_by_user_id::text = :created_by_user_id';
+            $params['created_by_user_id'] = $createdByUserId;
+        }
+        $sql .= ' FOR UPDATE';
+
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute($params);
         $row = $stmt->fetch();
 
         return is_array($row) ? $row : null;

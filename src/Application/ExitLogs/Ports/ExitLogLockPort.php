@@ -13,7 +13,7 @@ interface ExitLogLockPort
      *
      * @return array<string, mixed>|null
      */
-    public function findContextForOpenLock(string $clinicId, string $exitLogId): ?array;
+    public function findContextForOpenLock(string $clinicId, string $exitLogId, ?string $createdByUserId = null): ?array;
 
     public function recordLockCommandAttempt(
         string $exitLogId,

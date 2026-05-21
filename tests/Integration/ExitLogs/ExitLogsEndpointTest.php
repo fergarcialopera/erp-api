@@ -64,14 +64,69 @@ final class ExitLogsEndpointTest extends BaseApiTestCase
         $this->assertSame(201, $created['status']);
         $exitId = (string) ($created['json']['data']['exit_log']['id'] ?? '');
 
-        $listA = $this->request('GET', '/api/v1/exit-logs', null, $this->authHeaderFor('staff@clinic.local'));
+        $listAdmin = $this->request('GET', '/api/v1/exit-logs', null, $this->authHeaderFor('admin@clinic.local'));
         $listB = $this->request('GET', '/api/v1/exit-logs', null, $this->authHeaderFor('staff2@clinic.local'));
 
-        $idsA = array_map(static fn (array $r): string => (string) ($r['id'] ?? ''), $listA['json']['data'] ?? []);
+        $idsAdmin = array_map(static fn (array $r): string => (string) ($r['id'] ?? ''), $listAdmin['json']['data'] ?? []);
         $idsB = array_map(static fn (array $r): string => (string) ($r['id'] ?? ''), $listB['json']['data'] ?? []);
 
-        $this->assertContains($exitId, $idsA);
+        $this->assertContains($exitId, $idsAdmin);
         $this->assertNotContains($exitId, $idsB);
+    }
+
+    public function testStaffListExitLogsOnlyOwnRecords(): void
+    {
+        $adminCreated = $this->request(
+            'POST',
+            '/api/v1/exit-logs',
+            ['items' => [['product_id' => self::PRODUCT_A1, 'quantity' => 1]]],
+            $this->authHeaderFor('admin@clinic.local')
+        );
+        $this->assertSame(201, $adminCreated['status']);
+        $adminExitId = (string) ($adminCreated['json']['data']['exit_log']['id'] ?? '');
+
+        $staffCreated = $this->request(
+            'POST',
+            '/api/v1/exit-logs',
+            ['items' => [['product_id' => self::PRODUCT_A1, 'quantity' => 1]]],
+            $this->authHeaderFor('staff@clinic.local')
+        );
+        $this->assertSame(201, $staffCreated['status']);
+        $staffExitId = (string) ($staffCreated['json']['data']['exit_log']['id'] ?? '');
+
+        $listStaff = $this->request('GET', '/api/v1/exit-logs', null, $this->authHeaderFor('staff@clinic.local'));
+        $this->assertSame(200, $listStaff['status']);
+        $ids = array_map(static fn (array $r): string => (string) ($r['id'] ?? ''), $listStaff['json']['data'] ?? []);
+
+        $this->assertContains($staffExitId, $ids);
+        $this->assertNotContains($adminExitId, $ids);
+
+        foreach ($listStaff['json']['data'] ?? [] as $row) {
+            $this->assertSame(
+                '44444444-4444-4444-4444-444444444444',
+                (string) ($row['created_by_user_id'] ?? '')
+            );
+        }
+    }
+
+    public function testStaffCannotGetOtherUserExitLog(): void
+    {
+        $created = $this->request(
+            'POST',
+            '/api/v1/exit-logs',
+            ['items' => [['product_id' => self::PRODUCT_A1, 'quantity' => 1]]],
+            $this->authHeaderFor('tech@clinic.local')
+        );
+        $this->assertSame(201, $created['status']);
+        $exitId = (string) ($created['json']['data']['exit_log']['id'] ?? '');
+
+        $res = $this->request(
+            'GET',
+            '/api/v1/exit-logs/' . $exitId,
+            null,
+            $this->authHeaderFor('staff@clinic.local')
+        );
+        $this->assertSame(404, $res['status']);
     }
 
     public function testPatchAllQuantitiesToZeroCancelsExitLog(): void
@@ -106,7 +161,7 @@ final class ExitLogsEndpointTest extends BaseApiTestCase
         );
         $exitId = (string) ($created['json']['data']['exit_log']['id'] ?? '');
 
-        $get = $this->request('GET', '/api/v1/exit-logs/' . $exitId, null, $this->authHeaderFor('staff@clinic.local'));
+        $get = $this->request('GET', '/api/v1/exit-logs/' . $exitId, null, $this->authHeaderFor('admin@clinic.local'));
         $this->assertSame(200, $get['status']);
         $item = $get['json']['data']['items'][0] ?? null;
         $this->assertIsArray($item);
@@ -136,7 +191,7 @@ final class ExitLogsEndpointTest extends BaseApiTestCase
         $this->assertSame(self::COMPARTMENT_A1, $item['compartment']['id'] ?? null);
         $this->assertSame(self::LOCKER_A1, $item['locker']['id'] ?? null);
 
-        $list = $this->request('GET', '/api/v1/exit-logs', null, $this->authHeaderFor('staff@clinic.local'));
+        $list = $this->request('GET', '/api/v1/exit-logs', null, $this->authHeaderFor('admin@clinic.local'));
         $row = null;
         foreach (($list['json']['data'] ?? []) as $r) {
             if (($r['id'] ?? '') === $exitId) {
@@ -147,7 +202,7 @@ final class ExitLogsEndpointTest extends BaseApiTestCase
         $this->assertIsArray($row);
         $this->assertSame(self::COMPARTMENT_A1, $row['location']['compartment']['id'] ?? null);
 
-        $get = $this->request('GET', '/api/v1/exit-logs/' . $exitId, null, $this->authHeaderFor('staff@clinic.local'));
+        $get = $this->request('GET', '/api/v1/exit-logs/' . $exitId, null, $this->authHeaderFor('admin@clinic.local'));
         $this->assertSame(200, $get['status']);
         $this->assertSame(self::COMPARTMENT_A1, $get['json']['data']['exit_log']['location']['compartment']['id'] ?? null);
     }

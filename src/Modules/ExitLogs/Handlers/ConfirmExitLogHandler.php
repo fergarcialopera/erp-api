@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\ExitLogs\Handlers;
 
+use App\Application\ExitLogs\ExitLogUserScope;
 use App\Application\Http\ApiResponse;
 use App\Application\Http\Request;
 use App\Application\Http\Response;
@@ -34,7 +35,9 @@ final class ConfirmExitLogHandler
                 return ApiResponse::error($request, 400, 'Bad Request', 'Invalid exit log id');
             }
 
-            return ApiResponse::success($request, $this->service->confirm($clinicId, $exitLogId));
+            $scope = ExitLogUserScope::restrictToCreatorForStaff($user);
+
+            return ApiResponse::success($request, $this->service->confirm($clinicId, $exitLogId, $scope));
         } catch (ExitLogNotFoundException $e) {
             return ApiResponse::error($request, 404, 'Not Found', $e->getMessage());
         } catch (ExitLogBusinessRuleException $e) {

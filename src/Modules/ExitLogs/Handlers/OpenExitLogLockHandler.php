@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\ExitLogs\Handlers;
 
+use App\Application\ExitLogs\ExitLogUserScope;
 use App\Application\ExitLogs\OpenExitLogLockAction;
 use App\Application\Http\ApiResponse;
 use App\Application\Http\Request;
@@ -36,7 +37,8 @@ final class OpenExitLogLockHandler
                 return ApiResponse::error($request, 400, 'Bad Request', 'Invalid exit log id');
             }
 
-            $result = $this->action->execute($clinicId, $exitLogId, $requestedBy);
+            $scope = ExitLogUserScope::restrictToCreatorForStaff($user);
+            $result = $this->action->execute($clinicId, $exitLogId, $requestedBy, $scope);
 
             return ApiResponse::success($request, $result->toApiData());
         } catch (ExitLogNotFoundException $e) {

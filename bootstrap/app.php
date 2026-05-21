@@ -297,7 +297,7 @@ $roleRules = [
     're:/^POST \\/api\\/v1\\/exit-logs\\/[^\\/]+\\/open-lock$/' => ['STAFF'],
     'GET /api/v1/incidents' => ['TECHNICIAN'],
     'POST /api/v1/incidents' => ['TECHNICIAN'],
-    'GET /api/v1/settings' => ['STAFF'],
+    'GET /api/v1/settings' => ['ADMIN'],
     'POST /api/v1/settings' => ['ADMIN'],
 ];
 

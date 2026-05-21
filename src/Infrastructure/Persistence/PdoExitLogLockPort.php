@@ -13,9 +13,13 @@ final class PdoExitLogLockPort implements ExitLogLockPort
     {
     }
 
-    public function findContextForOpenLock(string $clinicId, string $exitLogId): ?array
+    public function findContextForOpenLock(string $clinicId, string $exitLogId, ?string $createdByUserId = null): ?array
     {
-        $sql = <<<'SQL'
+        $creatorFilter = $createdByUserId !== null
+            ? ' AND el.created_by_user_id::text = :created_by_user_id'
+            : '';
+
+        $sql = <<<SQL
 WITH resolved AS (
     SELECT
         el.id AS exit_log_id,
@@ -34,7 +38,7 @@ WITH resolved AS (
             )
         ) AS compartment_id
     FROM exit_logs el
-    WHERE el.id::text = :id AND el.clinic_id = CAST(:clinic_id AS UUID)
+    WHERE el.id::text = :id AND el.clinic_id = CAST(:clinic_id AS UUID){$creatorFilter}
     LIMIT 1
 )
 SELECT
@@ -54,10 +58,14 @@ LEFT JOIN lockers l
 SQL;
 
         $stmt = $this->pdo->prepare($sql);
-        $stmt->execute([
+        $params = [
             'id' => $exitLogId,
             'clinic_id' => $clinicId,
-        ]);
+        ];
+        if ($createdByUserId !== null) {
+            $params['created_by_user_id'] = $createdByUserId;
+        }
+        $stmt->execute($params);
         $row = $stmt->fetch();
 
         return is_array($row) ? $row : null;

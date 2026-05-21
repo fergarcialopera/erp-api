@@ -2,6 +2,7 @@
 
 namespace App\Modules\ExitLogs\Handlers;
 
+use App\Application\ExitLogs\ExitLogUserScope;
 use App\Application\Http\ApiResponse;
 use App\Application\Http\Request;
 use App\Application\Http\Response;
@@ -23,7 +24,9 @@ final class ListExitLogsHandler
                 return ApiResponse::error($request, 403, 'Forbidden', 'Missing clinic_id in user context');
             }
 
-            return ApiResponse::success($request, $this->service->list($clinicId));
+            $scope = ExitLogUserScope::restrictToCreatorForStaff($user);
+
+            return ApiResponse::success($request, $this->service->list($clinicId, $scope));
         } catch (Throwable $throwable) {
             return ApiResponse::error($request, 500, 'Internal Server Error', $throwable->getMessage());
         }

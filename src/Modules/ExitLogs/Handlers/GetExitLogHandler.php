@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\ExitLogs\Handlers;
 
+use App\Application\ExitLogs\ExitLogUserScope;
 use App\Application\Http\ApiResponse;
 use App\Application\Http\Request;
 use App\Application\Http\Response;
@@ -33,7 +34,8 @@ final class GetExitLogHandler
                 return ApiResponse::error($request, 400, 'Bad Request', 'Invalid exit log id');
             }
 
-            $detail = $this->service->getDetail($clinicId, $exitLogId);
+            $scope = ExitLogUserScope::restrictToCreatorForStaff($user);
+            $detail = $this->service->getDetail($clinicId, $exitLogId, $scope);
             if ($detail === null) {
                 throw new ExitLogNotFoundException('Exit log not found');
             }

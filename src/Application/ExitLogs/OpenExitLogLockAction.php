@@ -22,9 +22,13 @@ final class OpenExitLogLockAction
     ) {
     }
 
-    public function execute(string $clinicId, string $exitLogId, string $requestedBy): OpenExitLogLockResult
-    {
-        $row = $this->exitLogLockPort->findContextForOpenLock($clinicId, $exitLogId);
+    public function execute(
+        string $clinicId,
+        string $exitLogId,
+        string $requestedBy,
+        ?string $createdByUserId = null
+    ): OpenExitLogLockResult {
+        $row = $this->exitLogLockPort->findContextForOpenLock($clinicId, $exitLogId, $createdByUserId);
         if ($row === null) {
             throw new ExitLogNotFoundException('Exit log not found.');
         }

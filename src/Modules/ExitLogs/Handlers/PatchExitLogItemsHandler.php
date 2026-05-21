@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\ExitLogs\Handlers;
 
+use App\Application\ExitLogs\ExitLogUserScope;
 use App\Application\Http\ApiResponse;
 use App\Application\Http\Request;
 use App\Application\Http\Response;
@@ -40,7 +41,9 @@ final class PatchExitLogItemsHandler
 
             $updates = $this->validator->validatePatchItems($request->getParsedBody());
 
-            return ApiResponse::success($request, $this->service->patchItems($clinicId, $exitLogId, $updates));
+            $scope = ExitLogUserScope::restrictToCreatorForStaff($user);
+
+            return ApiResponse::success($request, $this->service->patchItems($clinicId, $exitLogId, $updates, $scope));
         } catch (InvalidArgumentException $e) {
             return ApiResponse::error($request, 422, 'Unprocessable Entity', $e->getMessage());
         } catch (ExitLogNotFoundException $e) {
