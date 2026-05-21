@@ -46,6 +46,7 @@ use App\Modules\ExitLogs\Validators\ExitLogValidator;
 use App\Modules\Products\Handlers\CreateProductHandler;
 use App\Modules\Products\Handlers\DeleteProductHandler;
 use App\Modules\Products\Handlers\GetProductHandler;
+use App\Modules\Products\Handlers\GetProductStockLocationsHandler;
 use App\Modules\Products\Handlers\ListProductsHandler;
 use App\Modules\Products\Handlers\PatchProductHandler;
 use App\Modules\Products\Services\ProductService;
@@ -171,6 +172,7 @@ $productService = new ProductService($pdo);
 $productValidator = new ProductValidator();
 $listProductsHandler = new ListProductsHandler($productService);
 $getProductHandler = new GetProductHandler($productService);
+$getProductStockLocationsHandler = new GetProductStockLocationsHandler($inventoryService);
 $createProductHandler = new CreateProductHandler($productValidator, $productService);
 $patchProductHandler = new PatchProductHandler($productValidator, $productService);
 $deleteProductHandler = new DeleteProductHandler($productService);
@@ -214,6 +216,7 @@ $router->addRoute('GET', '/api/v1/me', function ($request) {
 $router->addRoute('GET', '/api/v1/clinic', fn ($request) => $getClinicHandler($request));
 $router->addRoute('PATCH', '/api/v1/clinic/settings', fn ($request) => $patchClinicSettingsHandler($request));
 $router->addRoute('GET', '/api/v1/products', fn ($request) => $listProductsHandler($request));
+$router->addRoute('GET', '/api/v1/products/{product_id}/stock-locations', fn ($request) => $getProductStockLocationsHandler($request));
 $router->addRoute('GET', '/api/v1/products/{product_id}', fn ($request) => $getProductHandler($request));
 $router->addRoute('POST', '/api/v1/products', fn ($request) => $createProductHandler($request));
 $router->addRoute('PATCH', '/api/v1/products/{product_id}', fn ($request) => $patchProductHandler($request));
@@ -256,6 +259,7 @@ $roleRules = [
     'GET /api/v1/clinic' => ['STAFF'],
     'PATCH /api/v1/clinic/settings' => ['ADMIN'],
     'GET /api/v1/products' => ['STAFF'],
+    're:/^GET \\/api\\/v1\\/products\\/[^\\/]+\\/stock-locations$/' => ['STAFF'],
     're:/^GET \\/api\\/v1\\/products\\/[^\\/]+$/' => ['STAFF'],
     'POST /api/v1/products' => ['TECHNICIAN'],
     're:/^PATCH \\/api\\/v1\\/products\\/[^\\/]+$/' => ['TECHNICIAN'],
