@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Modules\Users\DTOs;
 
 final class CreateUserDTO
@@ -9,8 +11,8 @@ final class CreateUserDTO
         public readonly string $email,
         public readonly string $password,
         public readonly string $role,
-        public readonly bool $isActive
+        public readonly bool $isActive,
+        public readonly ?string $pin = null
     ) {
     }
 }
-

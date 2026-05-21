@@ -38,7 +38,7 @@ final class LoginEndpointTest extends BaseApiTestCase
     public function testLoginWithInvalidPayloadFails(): void
     {
         $res = $this->request('POST', '/api/v1/auth/login', ['email' => 'not-an-email']);
-        $this->assertSame(401, $res['status']);
+        $this->assertSame(422, $res['status']);
         $this->assertIsArray($res['json']);
     }
 }

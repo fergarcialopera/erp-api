@@ -11,6 +11,14 @@ services:
     networks:
       - erp_net
 
+  mailpit:
+    image: axllent/mailpit:latest
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+    networks:
+      - erp_net
+
   php:
     build:
       context: .
@@ -20,6 +28,7 @@ services:
     depends_on:
       - postgres
       - redis
+      - mailpit
     environment:
       DB_HOST: ${DB_HOST}
       DB_PORT: ${DB_PORT}
@@ -34,6 +43,15 @@ services:
       MQTT_PASSWORD: ${MQTT_PASSWORD:-}
       MQTT_CLIENT_ID: ${MQTT_CLIENT_ID:-erp-backend}
       MQTT_DISABLED: ${MQTT_DISABLED:-}
+      APP_PUBLIC_URL: ${APP_PUBLIC_URL:-http://localhost:8080}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+      MAIL_HOST: ${MAIL_HOST:-mailpit}
+      MAIL_PORT: ${MAIL_PORT:-1025}
+      MAIL_FROM: ${MAIL_FROM:-noreply@erp.local}
+      MAIL_FROM_NAME: ${MAIL_FROM_NAME:-ERP Clinic}
+      AUTH_USER_TTL: ${AUTH_USER_TTL:-1800}
+      AUTH_CLINIC_TTL: ${AUTH_CLINIC_TTL:-28800}
+      RECOVERY_TTL_MINUTES: ${RECOVERY_TTL_MINUTES:-60}
     networks:
       - erp_net
 

@@ -102,11 +102,16 @@ Debe responder `200` con un JSON similar a:
 
 ## 7) Login de prueba
 
-Endpoint:
+### Kiosk (clínica + PIN)
+
+1. `GET /api/v1/auth/clinics`
+2. `POST /api/v1/auth/clinic/login` — `{ "clinic_id": "11111111-1111-1111-1111-111111111111", "password": "clinic123" }`
+3. `GET /api/v1/auth/staff` — header `Authorization: Bearer <clinic_access_token>`
+4. `POST /api/v1/auth/login/pin` — `{ "user_id": "...", "pin": "1234" }` con el mismo header de clínica
+
+### Clásico (email + contraseña)
 
 - `POST http://localhost:8080/api/v1/auth/login`
-
-Payload:
 
 ```json
 {
@@ -114,6 +119,10 @@ Payload:
   "password": "admin123"
 }
 ```
+
+### Email local (recuperación)
+
+- Mailpit UI: `http://localhost:8025` (SMTP en puerto 1025)
 
 ## 8) Documentacion API
 

@@ -215,94 +215,135 @@ abstract class BaseApiTestCase extends TestCase
         $adminClinic = '11111111-1111-1111-1111-111111111111';
         $otherClinic = '99999999-9999-9999-9999-999999999999';
         $passwordHash = password_hash('admin123', PASSWORD_BCRYPT);
+        $pinHash = password_hash('1234', PASSWORD_BCRYPT);
+        $clinicPasswordHash = password_hash('clinic123', PASSWORD_BCRYPT);
 
-        self::ensureClinic($adminClinic, 'Clinic A');
-        self::ensureClinic($otherClinic, 'Clinic B');
+        self::ensureClinic($adminClinic, 'Clinic A', $clinicPasswordHash);
+        self::ensureClinic($otherClinic, 'Clinic B', $clinicPasswordHash);
 
-        self::upsertUser('22222222-2222-2222-2222-222222222222', $adminClinic, 'admin@clinic.local', 'ADMIN', $passwordHash);
-        self::upsertUser('33333333-3333-3333-3333-333333333333', $adminClinic, 'tech@clinic.local', 'TECHNICIAN', $passwordHash);
-        self::upsertUser('44444444-4444-4444-4444-444444444444', $adminClinic, 'staff@clinic.local', 'STAFF', $passwordHash);
+        self::upsertUser('22222222-2222-2222-2222-222222222222', $adminClinic, 'admin@clinic.local', 'ADMIN', $passwordHash, $pinHash);
+        self::upsertUser('33333333-3333-3333-3333-333333333333', $adminClinic, 'tech@clinic.local', 'TECHNICIAN', $passwordHash, $pinHash);
+        self::upsertUser('44444444-4444-4444-4444-444444444444', $adminClinic, 'staff@clinic.local', 'STAFF', $passwordHash, $pinHash);
 
-        self::upsertUser('55555555-5555-5555-5555-555555555555', $otherClinic, 'admin2@clinic.local', 'ADMIN', $passwordHash);
-        self::upsertUser('66666666-6666-6666-6666-666666666666', $otherClinic, 'tech2@clinic.local', 'TECHNICIAN', $passwordHash);
-        self::upsertUser('77777777-7777-7777-7777-777777777777', $otherClinic, 'staff2@clinic.local', 'STAFF', $passwordHash);
+        self::upsertUser('55555555-5555-5555-5555-555555555555', $otherClinic, 'admin2@clinic.local', 'ADMIN', $passwordHash, $pinHash);
+        self::upsertUser('66666666-6666-6666-6666-666666666666', $otherClinic, 'tech2@clinic.local', 'TECHNICIAN', $passwordHash, $pinHash);
+        self::upsertUser('77777777-7777-7777-7777-777777777777', $otherClinic, 'staff2@clinic.local', 'STAFF', $passwordHash, $pinHash);
     }
 
-    protected static function ensureClinic(string $id, string $name): void
+    protected static function ensureClinic(string $id, string $name, string $passwordHash): void
     {
         $columns = self::tableColumns('clinics');
         if ($columns === []) {
             return;
         }
 
+        $hasVisible = in_array('visible', $columns, true);
+        $hasPassword = in_array('password_hash', $columns, true);
+
         $check = self::$pdo->prepare('SELECT id FROM clinics WHERE id = :id LIMIT 1');
         $check->execute(['id' => $id]);
         if ($check->fetch()) {
-            $upd = self::$pdo->prepare('UPDATE clinics SET name = :name WHERE id = :id');
-            $upd->execute(['id' => $id, 'name' => $name]);
+            $sets = ['name = :name'];
+            $params = ['id' => $id, 'name' => $name];
+            if ($hasVisible) {
+                $sets[] = 'visible = TRUE';
+            }
+            if ($hasPassword) {
+                $sets[] = 'password_hash = :password_hash';
+                $params['password_hash'] = $passwordHash;
+            }
+            $upd = self::$pdo->prepare('UPDATE clinics SET ' . implode(', ', $sets) . ' WHERE id = :id');
+            $upd->execute($params);
+
             return;
         }
 
-        $ins = self::$pdo->prepare('INSERT INTO clinics (id, name, created_at) VALUES (:id, :name, NOW())');
-        $ins->execute(['id' => $id, 'name' => $name]);
+        if ($hasVisible && $hasPassword) {
+            $ins = self::$pdo->prepare(
+                'INSERT INTO clinics (id, name, visible, password_hash, created_at)
+                 VALUES (:id, :name, TRUE, :password_hash, NOW())'
+            );
+            $ins->execute(['id' => $id, 'name' => $name, 'password_hash' => $passwordHash]);
+        } else {
+            $ins = self::$pdo->prepare('INSERT INTO clinics (id, name, created_at) VALUES (:id, :name, NOW())');
+            $ins->execute(['id' => $id, 'name' => $name]);
+        }
     }
 
-    protected static function upsertUser(string $id, string $clinicId, string $email, string $role, string $hash): void
-    {
+    protected static function upsertUser(
+        string $id,
+        string $clinicId,
+        string $email,
+        string $role,
+        string $hash,
+        ?string $pinHash = null
+    ): void {
         $columns = self::tableColumns('users');
         $hasIsActive = in_array('is_active', $columns, true);
         $hasUpdatedAt = in_array('updated_at', $columns, true);
+        $hasPinHash = in_array('pin_hash', $columns, true);
+        $hasLocked = in_array('is_locked', $columns, true);
 
         $checkStmt = self::$pdo->prepare('SELECT id FROM users WHERE email = :email LIMIT 1');
         $checkStmt->execute(['email' => $email]);
         $existing = $checkStmt->fetch();
 
         if ($existing) {
-            $setUpdatedAt = $hasUpdatedAt ? ', updated_at = NOW()' : '';
-            if ($hasIsActive) {
-                $stmt = self::$pdo->prepare(
-                    'UPDATE users
-                     SET clinic_id = :clinic_id, password_hash = :password_hash, role = :role, is_active = TRUE'
-                    . $setUpdatedAt . '
-                     WHERE email = :email'
-                );
-            } else {
-                $stmt = self::$pdo->prepare(
-                    'UPDATE users
-                     SET clinic_id = :clinic_id, password_hash = :password_hash, role = :role'
-                    . $setUpdatedAt . '
-                     WHERE email = :email'
-                );
-            }
-
-            $stmt->execute([
+            $sets = ['clinic_id = :clinic_id', 'password_hash = :password_hash', 'role = :role'];
+            $params = [
                 'clinic_id' => $clinicId,
                 'password_hash' => $hash,
                 'role' => $role,
                 'email' => $email,
-            ]);
+            ];
+            if ($hasIsActive) {
+                $sets[] = 'is_active = TRUE';
+            }
+            if ($hasPinHash && $pinHash !== null) {
+                $sets[] = 'pin_hash = :pin_hash';
+                $params['pin_hash'] = $pinHash;
+            }
+            if ($hasLocked) {
+                $sets[] = 'is_locked = FALSE';
+                $sets[] = 'locked_at = NULL';
+            }
+            if ($hasUpdatedAt) {
+                $sets[] = 'updated_at = NOW()';
+            }
+
+            $stmt = self::$pdo->prepare(
+                'UPDATE users SET ' . implode(', ', $sets) . ' WHERE email = :email'
+            );
+            $stmt->execute($params);
+
             return;
         }
 
-        if ($hasIsActive) {
-            $stmt = self::$pdo->prepare(
-                'INSERT INTO users (id, clinic_id, email, password_hash, role, is_active, created_at)
-                 VALUES (:id, :clinic_id, :email, :password_hash, :role, TRUE, NOW())'
-            );
-        } else {
-            $stmt = self::$pdo->prepare(
-                'INSERT INTO users (id, clinic_id, email, password_hash, role, created_at)
-                 VALUES (:id, :clinic_id, :email, :password_hash, :role, NOW())'
-            );
-        }
-
-        $stmt->execute([
+        $fields = ['id', 'clinic_id', 'email', 'password_hash', 'role'];
+        $values = [':id', ':clinic_id', ':email', ':password_hash', ':role'];
+        $params = [
             'id' => $id,
             'clinic_id' => $clinicId,
             'email' => $email,
             'password_hash' => $hash,
             'role' => $role,
-        ]);
+        ];
+        if ($hasPinHash && $pinHash !== null) {
+            $fields[] = 'pin_hash';
+            $values[] = ':pin_hash';
+            $params['pin_hash'] = $pinHash;
+        }
+        if ($hasIsActive) {
+            $fields[] = 'is_active';
+            $values[] = 'TRUE';
+        }
+        $fields[] = 'created_at';
+        $values[] = 'NOW()';
+
+        $stmt = self::$pdo->prepare(
+            'INSERT INTO users (' . implode(', ', $fields) . ') VALUES (' . implode(', ', $values) . ')'
+        );
+        $stmt->execute($params);
     }
 
     /**

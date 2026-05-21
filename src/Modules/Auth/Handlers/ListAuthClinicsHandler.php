@@ -1,13 +1,16 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Modules\Auth\Handlers;
 
 use App\Application\Http\ApiResponse;
 use App\Application\Http\Request;
 use App\Application\Http\Response;
 use App\Modules\Auth\Services\AuthService;
+use Throwable;
 
-final class LogoutHandler
+final class ListAuthClinicsHandler
 {
     public function __construct(private readonly AuthService $service)
     {
@@ -15,12 +18,10 @@ final class LogoutHandler
 
     public function __invoke(Request $request): Response
     {
-        $token = (string) $request->getAttribute('access_token', '');
-        if ($token !== '') {
-            $this->service->logoutUser($token);
+        try {
+            return ApiResponse::success($request, $this->service->listVisibleClinics());
+        } catch (Throwable $throwable) {
+            return ApiResponse::error($request, 500, 'Internal Server Error', $throwable->getMessage());
         }
-
-        return ApiResponse::success($request, ['logged_out' => true]);
     }
 }
-

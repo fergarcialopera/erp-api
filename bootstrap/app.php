@@ -20,15 +20,36 @@ use App\Infrastructure\Mqtt\PhpMqttLockCommandPublisher;
 use App\Infrastructure\Persistence\PdoExitLogLockPort;
 use App\Infrastructure\OpenAPI\OpenApiController;
 use App\Infrastructure\Redis\RedisClient;
+use App\Application\Support\PublicUrlBuilder;
+use App\Infrastructure\Auth\LoginAttemptService;
+use App\Infrastructure\Mail\SmtpMailer;
+use App\Infrastructure\Storage\LocalImageStorage;
+use App\Modules\Auth\Handlers\ClinicLoginHandler;
+use App\Modules\Auth\Handlers\ClinicLogoutHandler;
+use App\Modules\Auth\Handlers\ConfirmRecoveryHandler;
+use App\Modules\Auth\Handlers\ListAuthClinicsHandler;
+use App\Modules\Auth\Handlers\ListAuthStaffHandler;
 use App\Modules\Auth\Handlers\LoginHandler;
 use App\Modules\Auth\Handlers\LogoutHandler;
+use App\Modules\Auth\Handlers\PinLoginHandler;
+use App\Modules\Auth\Handlers\RequestRecoveryClinicHandler;
+use App\Modules\Auth\Handlers\RequestRecoveryUserHandler;
 use App\Modules\Auth\Mappers\AuthMapper;
 use App\Modules\Auth\Services\AuthService;
+use App\Modules\Auth\Services\RecoveryService;
+use App\Modules\Auth\Validators\ClinicLoginValidator;
 use App\Modules\Auth\Validators\LoginValidator;
+use App\Modules\Auth\Validators\PinLoginValidator;
+use App\Modules\Auth\Validators\RecoveryValidator;
+use App\Modules\Clinic\Handlers\DeleteClinicImageHandler;
 use App\Modules\Clinic\Handlers\GetClinicHandler;
+use App\Modules\Clinic\Handlers\PatchClinicHandler;
 use App\Modules\Clinic\Handlers\PatchClinicSettingsHandler;
+use App\Modules\Clinic\Handlers\RequestClinicRecoveryHandler;
+use App\Modules\Clinic\Handlers\UploadClinicImageHandler;
 use App\Modules\Clinic\Services\ClinicService;
 use App\Modules\Clinic\Validators\ClinicSettingsValidator;
+use App\Modules\Clinic\Validators\ClinicValidator;
 use App\Application\Stock\LocationValidator;
 use App\Modules\EntryLogs\Handlers\CreateEntryLogHandler;
 use App\Modules\EntryLogs\Handlers\ListEntryLogsHandler;
@@ -80,9 +101,12 @@ use App\Modules\Settings\Services\SettingService;
 use App\Modules\Settings\Validators\SettingValidator;
 use App\Modules\Users\Handlers\CreateUserHandler;
 use App\Modules\Users\Handlers\DeleteUserHandler;
+use App\Modules\Users\Handlers\DeleteUserImageHandler;
 use App\Modules\Users\Handlers\GetUserHandler;
 use App\Modules\Users\Handlers\ListUsersHandler;
 use App\Modules\Users\Handlers\PatchUserHandler;
+use App\Modules\Users\Handlers\SendUserRecoveryHandler;
+use App\Modules\Users\Handlers\UploadUserImageHandler;
 use App\Modules\Users\Services\UserService;
 use App\Modules\Users\Validators\UserValidator;
 
@@ -126,12 +150,47 @@ $redis = new RedisClient(
 );
 
 $logger = LoggerFactory::create('erp-api');
-$tokenService = new TokenService($redis, 1800);
-$authMapper = new AuthMapper();
-$authService = new AuthService($pdo, $tokenService, $authMapper);
+$projectRoot = dirname(__DIR__);
+$publicBaseUrl = rtrim((string) ($_ENV['APP_PUBLIC_URL'] ?? 'http://localhost:8080'), '/');
+$frontendBaseUrl = rtrim((string) ($_ENV['FRONTEND_URL'] ?? 'http://localhost:3000'), '/');
+$publicUrls = new PublicUrlBuilder($publicBaseUrl);
+$userTtl = (int) ($_ENV['AUTH_USER_TTL'] ?? 1800);
+$clinicTtl = (int) ($_ENV['AUTH_CLINIC_TTL'] ?? 28800);
+$tokenService = new TokenService($redis, $userTtl, $clinicTtl);
+$loginAttempts = new LoginAttemptService($redis);
+$authMapper = new AuthMapper($publicUrls);
+$authService = new AuthService($pdo, $tokenService, $loginAttempts, $authMapper);
+$mailer = null;
+$mailHost = trim((string) ($_ENV['MAIL_HOST'] ?? ''));
+if ($mailHost !== '') {
+    $mailer = new SmtpMailer(
+        $mailHost,
+        (int) ($_ENV['MAIL_PORT'] ?? 1025),
+        (string) ($_ENV['MAIL_FROM'] ?? 'noreply@erp.local'),
+        (string) ($_ENV['MAIL_FROM_NAME'] ?? 'ERP Clinic')
+    );
+}
+$recoveryService = new RecoveryService(
+    $pdo,
+    $mailer,
+    $frontendBaseUrl,
+    (int) ($_ENV['RECOVERY_TTL_MINUTES'] ?? 60)
+);
+$imageStorage = new LocalImageStorage($projectRoot);
 $loginValidator = new LoginValidator();
+$clinicLoginValidator = new ClinicLoginValidator();
+$pinLoginValidator = new PinLoginValidator();
+$recoveryValidator = new RecoveryValidator();
 $loginHandler = new LoginHandler($loginValidator, $authService);
 $logoutHandler = new LogoutHandler($authService);
+$listAuthClinicsHandler = new ListAuthClinicsHandler($authService);
+$clinicLoginHandler = new ClinicLoginHandler($clinicLoginValidator, $authService);
+$clinicLogoutHandler = new ClinicLogoutHandler($authService);
+$listAuthStaffHandler = new ListAuthStaffHandler($authService);
+$pinLoginHandler = new PinLoginHandler($pinLoginValidator, $authService);
+$requestRecoveryClinicHandler = new RequestRecoveryClinicHandler($recoveryValidator, $recoveryService);
+$requestRecoveryUserHandler = new RequestRecoveryUserHandler($recoveryValidator, $recoveryService);
+$confirmRecoveryHandler = new ConfirmRecoveryHandler($recoveryValidator, $recoveryService);
 $locationValidator = new LocationValidator($pdo);
 $inventoryService = new InventoryService($pdo);
 $inventoryValidator = new InventoryValidator($locationValidator);
@@ -165,8 +224,13 @@ $settingService = new SettingService($pdo);
 $settingValidator = new SettingValidator();
 $upsertSettingHandler = new UpsertSettingHandler($settingValidator, $settingService);
 $listSettingsHandler = new ListSettingsHandler($settingService);
-$clinicService = new ClinicService($pdo);
+$clinicService = new ClinicService($pdo, $publicUrls);
 $getClinicHandler = new GetClinicHandler($clinicService);
+$clinicValidator = new ClinicValidator();
+$patchClinicHandler = new PatchClinicHandler($clinicValidator, $clinicService);
+$uploadClinicImageHandler = new UploadClinicImageHandler($clinicService, $imageStorage);
+$deleteClinicImageHandler = new DeleteClinicImageHandler($clinicService, $imageStorage);
+$requestClinicRecoveryHandler = new RequestClinicRecoveryHandler($recoveryValidator, $recoveryService);
 $clinicSettingsValidator = new ClinicSettingsValidator();
 $patchClinicSettingsHandler = new PatchClinicSettingsHandler($clinicSettingsValidator, $settingService);
 $productService = new ProductService($pdo);
@@ -177,13 +241,16 @@ $getProductStockLocationsHandler = new GetProductStockLocationsHandler($inventor
 $createProductHandler = new CreateProductHandler($productValidator, $productService);
 $patchProductHandler = new PatchProductHandler($productValidator, $productService);
 $deleteProductHandler = new DeleteProductHandler($productService);
-$userService = new UserService($pdo);
+$userService = new UserService($pdo, $publicUrls, $loginAttempts);
 $userValidator = new UserValidator();
 $listUsersHandler = new ListUsersHandler($userService);
 $getUserHandler = new GetUserHandler($userService);
 $createUserHandler = new CreateUserHandler($userValidator, $userService);
 $patchUserHandler = new PatchUserHandler($userValidator, $userService);
 $deleteUserHandler = new DeleteUserHandler($userService);
+$sendUserRecoveryHandler = new SendUserRecoveryHandler($userValidator, $recoveryService);
+$uploadUserImageHandler = new UploadUserImageHandler($userService, $imageStorage);
+$deleteUserImageHandler = new DeleteUserImageHandler($userService, $imageStorage);
 $lockerService = new LockerService($pdo);
 $lockerValidator = new LockerValidator();
 $listLockersHandler = new ListLockersHandler($lockerService);
@@ -203,8 +270,16 @@ $openApiController = new OpenApiController();
 
 $router = new Router();
 $router->addRoute('GET', '/up', fn ($request) => \App\Application\Http\ApiResponse::success($request, ['status' => 'up']));
+$router->addRoute('GET', '/api/v1/auth/clinics', fn ($request) => $listAuthClinicsHandler($request));
+$router->addRoute('POST', '/api/v1/auth/clinic/login', fn ($request) => $clinicLoginHandler($request));
+$router->addRoute('POST', '/api/v1/auth/clinic/logout', fn ($request) => $clinicLogoutHandler($request));
+$router->addRoute('GET', '/api/v1/auth/staff', fn ($request) => $listAuthStaffHandler($request));
+$router->addRoute('POST', '/api/v1/auth/login/pin', fn ($request) => $pinLoginHandler($request));
 $router->addRoute('POST', '/api/v1/auth/login', fn ($request) => $loginHandler($request));
 $router->addRoute('POST', '/api/v1/auth/logout', fn ($request) => $logoutHandler($request));
+$router->addRoute('POST', '/api/v1/auth/recovery/clinic', fn ($request) => $requestRecoveryClinicHandler($request));
+$router->addRoute('POST', '/api/v1/auth/recovery/user', fn ($request) => $requestRecoveryUserHandler($request));
+$router->addRoute('POST', '/api/v1/auth/recovery/confirm', fn ($request) => $confirmRecoveryHandler($request));
 $router->addRoute('GET', '/api/v1/me', function ($request) {
     $user = (array) $request->getAttribute('user', []);
 
@@ -216,6 +291,10 @@ $router->addRoute('GET', '/api/v1/me', function ($request) {
     ]);
 });
 $router->addRoute('GET', '/api/v1/clinic', fn ($request) => $getClinicHandler($request));
+$router->addRoute('PATCH', '/api/v1/clinic', fn ($request) => $patchClinicHandler($request));
+$router->addRoute('POST', '/api/v1/clinic/image', fn ($request) => $uploadClinicImageHandler($request));
+$router->addRoute('DELETE', '/api/v1/clinic/image', fn ($request) => $deleteClinicImageHandler($request));
+$router->addRoute('POST', '/api/v1/clinic/recovery', fn ($request) => $requestClinicRecoveryHandler($request));
 $router->addRoute('PATCH', '/api/v1/clinic/settings', fn ($request) => $patchClinicSettingsHandler($request));
 $router->addRoute('GET', '/api/v1/products', fn ($request) => $listProductsHandler($request));
 $router->addRoute('GET', '/api/v1/products/{product_id}/stock-locations', fn ($request) => $getProductStockLocationsHandler($request));
@@ -227,6 +306,9 @@ $router->addRoute('GET', '/api/v1/users', fn ($request) => $listUsersHandler($re
 $router->addRoute('GET', '/api/v1/users/{user_id}', fn ($request) => $getUserHandler($request));
 $router->addRoute('POST', '/api/v1/users', fn ($request) => $createUserHandler($request));
 $router->addRoute('PATCH', '/api/v1/users/{user_id}', fn ($request) => $patchUserHandler($request));
+$router->addRoute('POST', '/api/v1/users/{user_id}/recovery', fn ($request) => $sendUserRecoveryHandler($request));
+$router->addRoute('POST', '/api/v1/users/{user_id}/image', fn ($request) => $uploadUserImageHandler($request));
+$router->addRoute('DELETE', '/api/v1/users/{user_id}/image', fn ($request) => $deleteUserImageHandler($request));
 $router->addRoute('DELETE', '/api/v1/users/{user_id}', fn ($request) => $deleteUserHandler($request));
 $router->addRoute('GET', '/api/v1/lockers', fn ($request) => $listLockersHandler($request));
 $router->addRoute('GET', '/api/v1/lockers/tree', fn ($request) => $listLockersWithCompartmentsHandler($request));
@@ -261,6 +343,10 @@ $roleRules = [
     'GET /api/v1/me' => ['STAFF'],
     'POST /api/v1/auth/logout' => ['STAFF'],
     'GET /api/v1/clinic' => ['STAFF'],
+    'PATCH /api/v1/clinic' => ['ADMIN'],
+    'POST /api/v1/clinic/image' => ['ADMIN'],
+    'DELETE /api/v1/clinic/image' => ['ADMIN'],
+    'POST /api/v1/clinic/recovery' => ['ADMIN'],
     'PATCH /api/v1/clinic/settings' => ['ADMIN'],
     'GET /api/v1/products' => ['STAFF'],
     're:/^GET \\/api\\/v1\\/products\\/[^\\/]+\\/stock-locations$/' => ['STAFF'],
@@ -272,6 +358,9 @@ $roleRules = [
     're:/^GET \\/api\\/v1\\/users\\/[^\\/]+$/' => ['ADMIN'],
     'POST /api/v1/users' => ['ADMIN'],
     're:/^PATCH \\/api\\/v1\\/users\\/[^\\/]+$/' => ['ADMIN'],
+    're:/^POST \\/api\\/v1\\/users\\/[^\\/]+\\/recovery$/' => ['ADMIN'],
+    're:/^POST \\/api\\/v1\\/users\\/[^\\/]+\\/image$/' => ['ADMIN'],
+    're:/^DELETE \\/api\\/v1\\/users\\/[^\\/]+\\/image$/' => ['ADMIN'],
     're:/^DELETE \\/api\\/v1\\/users\\/[^\\/]+$/' => ['ADMIN'],
     'GET /api/v1/lockers' => ['STAFF'],
     'GET /api/v1/lockers/tree' => ['STAFF'],
@@ -306,7 +395,10 @@ $dispatcher = new ApiDispatcher(
     [
     new RequestIdMiddleware(),
     new LoggingMiddleware($logger),
-    new AuthMiddleware(fn (string $token): ?array => $authService->validateToken($token)),
+    new AuthMiddleware(
+        fn (string $token): ?array => $authService->validateUserToken($token),
+        fn (string $token): ?array => $authService->validateClinicToken($token)
+    ),
     new RoleMiddleware($roleRules),
 ]
 );

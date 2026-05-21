@@ -5,19 +5,19 @@
 -- - 10 productos
 -- - inventario para 8 productos (2 sin inventario)
 
-INSERT INTO clinics (id, name, created_at)
+INSERT INTO clinics (id, name, visible, password_hash, created_at)
 VALUES
-    ('11111111-1111-1111-1111-111111111111', 'Clinica San Rafael', NOW()),
-    ('22222222-2222-2222-2222-222222222222', 'Clinica Nuestra Senora del Pilar', NOW());
+    ('11111111-1111-1111-1111-111111111111', 'Clinica San Rafael', TRUE, '$2y$12$yS0LHMJkwu4fu9WEQudASuHpRRhjDMneb.ZtsV6q6ebMAV7US4vkG', NOW()),
+    ('22222222-2222-2222-2222-222222222222', 'Clinica Nuestra Senora del Pilar', TRUE, '$2y$12$yS0LHMJkwu4fu9WEQudASuHpRRhjDMneb.ZtsV6q6ebMAV7US4vkG', NOW());
 
-INSERT INTO users (id, clinic_id, name, email, password_hash, role, is_active, created_at, updated_at)
+INSERT INTO users (id, clinic_id, name, email, password_hash, pin_hash, role, is_active, created_at, updated_at)
 VALUES
-    ('22222222-2222-2222-2222-222222222222', '11111111-1111-1111-1111-111111111111', 'Marta Lopez', 'admin@clinic.local', '$2y$12$MhBJgI6jq1uXk0y6zB9VGu4IjOGVx4Bb.cSK9BoV0mpkgYSHSJcKy', 'ADMIN', TRUE, NOW(), NOW()),
-    ('33333333-3333-3333-3333-333333333333', '11111111-1111-1111-1111-111111111111', 'Javier Ruiz', 'tech@clinic.local', '$2y$12$MhBJgI6jq1uXk0y6zB9VGu4IjOGVx4Bb.cSK9BoV0mpkgYSHSJcKy', 'TECHNICIAN', TRUE, NOW(), NOW()),
-    ('44444444-4444-4444-4444-444444444444', '11111111-1111-1111-1111-111111111111', 'Elena Martin', 'staff@clinic.local', '$2y$12$MhBJgI6jq1uXk0y6zB9VGu4IjOGVx4Bb.cSK9BoV0mpkgYSHSJcKy', 'STAFF', TRUE, NOW(), NOW()),
-    ('55555555-5555-5555-5555-555555555555', '22222222-2222-2222-2222-222222222222', 'Carlos Gomez', 'admin2@clinic.local', '$2y$12$MhBJgI6jq1uXk0y6zB9VGu4IjOGVx4Bb.cSK9BoV0mpkgYSHSJcKy', 'ADMIN', TRUE, NOW(), NOW()),
-    ('66666666-6666-6666-6666-666666666666', '22222222-2222-2222-2222-222222222222', 'Irene Santos', 'tech2@clinic.local', '$2y$12$MhBJgI6jq1uXk0y6zB9VGu4IjOGVx4Bb.cSK9BoV0mpkgYSHSJcKy', 'TECHNICIAN', TRUE, NOW(), NOW()),
-    ('77777777-7777-7777-7777-777777777777', '22222222-2222-2222-2222-222222222222', 'Pablo Navarro', 'staff2@clinic.local', '$2y$12$MhBJgI6jq1uXk0y6zB9VGu4IjOGVx4Bb.cSK9BoV0mpkgYSHSJcKy', 'STAFF', TRUE, NOW(), NOW());
+    ('22222222-2222-2222-2222-222222222222', '11111111-1111-1111-1111-111111111111', 'Marta Lopez', 'admin@clinic.local', '$2y$12$MhBJgI6jq1uXk0y6zB9VGu4IjOGVx4Bb.cSK9BoV0mpkgYSHSJcKy', '$2y$12$RbsVeHPKR7zIocUy41.SYem1k1Ay7OoZakwlBtmWVaCc6R1DRMwfK', 'ADMIN', TRUE, NOW(), NOW()),
+    ('33333333-3333-3333-3333-333333333333', '11111111-1111-1111-1111-111111111111', 'Javier Ruiz', 'tech@clinic.local', '$2y$12$MhBJgI6jq1uXk0y6zB9VGu4IjOGVx4Bb.cSK9BoV0mpkgYSHSJcKy', '$2y$12$RbsVeHPKR7zIocUy41.SYem1k1Ay7OoZakwlBtmWVaCc6R1DRMwfK', 'TECHNICIAN', TRUE, NOW(), NOW()),
+    ('44444444-4444-4444-4444-444444444444', '11111111-1111-1111-1111-111111111111', 'Elena Martin', 'staff@clinic.local', '$2y$12$MhBJgI6jq1uXk0y6zB9VGu4IjOGVx4Bb.cSK9BoV0mpkgYSHSJcKy', '$2y$12$RbsVeHPKR7zIocUy41.SYem1k1Ay7OoZakwlBtmWVaCc6R1DRMwfK', 'STAFF', TRUE, NOW(), NOW()),
+    ('55555555-5555-5555-5555-555555555555', '22222222-2222-2222-2222-222222222222', 'Carlos Gomez', 'admin2@clinic.local', '$2y$12$MhBJgI6jq1uXk0y6zB9VGu4IjOGVx4Bb.cSK9BoV0mpkgYSHSJcKy', '$2y$12$RbsVeHPKR7zIocUy41.SYem1k1Ay7OoZakwlBtmWVaCc6R1DRMwfK', 'ADMIN', TRUE, NOW(), NOW()),
+    ('66666666-6666-6666-6666-666666666666', '22222222-2222-2222-2222-222222222222', 'Irene Santos', 'tech2@clinic.local', '$2y$12$MhBJgI6jq1uXk0y6zB9VGu4IjOGVx4Bb.cSK9BoV0mpkgYSHSJcKy', '$2y$12$RbsVeHPKR7zIocUy41.SYem1k1Ay7OoZakwlBtmWVaCc6R1DRMwfK', 'TECHNICIAN', TRUE, NOW(), NOW()),
+    ('77777777-7777-7777-7777-777777777777', '22222222-2222-2222-2222-222222222222', 'Pablo Navarro', 'staff2@clinic.local', '$2y$12$MhBJgI6jq1uXk0y6zB9VGu4IjOGVx4Bb.cSK9BoV0mpkgYSHSJcKy', '$2y$12$RbsVeHPKR7zIocUy41.SYem1k1Ay7OoZakwlBtmWVaCc6R1DRMwfK', 'STAFF', TRUE, NOW(), NOW());
 
 INSERT INTO products (id, clinic_id, sku, name, is_active, created_at, updated_at)
 VALUES
