@@ -63,6 +63,7 @@ use App\Modules\Lockers\Handlers\CreateLockerHandler;
 use App\Modules\Lockers\Handlers\DeleteLockerHandler;
 use App\Modules\Lockers\Handlers\GetLockerHandler;
 use App\Modules\Lockers\Handlers\ListLockersHandler;
+use App\Modules\Lockers\Handlers\ListLockersWithCompartmentsHandler;
 use App\Modules\Lockers\Handlers\PatchLockerHandler;
 use App\Modules\Lockers\Services\LockerService;
 use App\Modules\Lockers\Validators\LockerValidator;
@@ -186,6 +187,7 @@ $deleteUserHandler = new DeleteUserHandler($userService);
 $lockerService = new LockerService($pdo);
 $lockerValidator = new LockerValidator();
 $listLockersHandler = new ListLockersHandler($lockerService);
+$listLockersWithCompartmentsHandler = new ListLockersWithCompartmentsHandler($lockerService);
 $getLockerHandler = new GetLockerHandler($lockerService);
 $createLockerHandler = new CreateLockerHandler($lockerValidator, $lockerService);
 $patchLockerHandler = new PatchLockerHandler($lockerValidator, $lockerService);
@@ -227,6 +229,7 @@ $router->addRoute('POST', '/api/v1/users', fn ($request) => $createUserHandler($
 $router->addRoute('PATCH', '/api/v1/users/{user_id}', fn ($request) => $patchUserHandler($request));
 $router->addRoute('DELETE', '/api/v1/users/{user_id}', fn ($request) => $deleteUserHandler($request));
 $router->addRoute('GET', '/api/v1/lockers', fn ($request) => $listLockersHandler($request));
+$router->addRoute('GET', '/api/v1/lockers/tree', fn ($request) => $listLockersWithCompartmentsHandler($request));
 $router->addRoute('GET', '/api/v1/lockers/{locker_id}', fn ($request) => $getLockerHandler($request));
 $router->addRoute('POST', '/api/v1/lockers', fn ($request) => $createLockerHandler($request));
 $router->addRoute('PATCH', '/api/v1/lockers/{locker_id}', fn ($request) => $patchLockerHandler($request));
@@ -270,6 +273,7 @@ $roleRules = [
     're:/^PATCH \\/api\\/v1\\/users\\/[^\\/]+$/' => ['ADMIN'],
     're:/^DELETE \\/api\\/v1\\/users\\/[^\\/]+$/' => ['ADMIN'],
     'GET /api/v1/lockers' => ['STAFF'],
+    'GET /api/v1/lockers/tree' => ['STAFF'],
     're:/^GET \\/api\\/v1\\/lockers\\/[^\\/]+$/' => ['STAFF'],
     'POST /api/v1/lockers' => ['TECHNICIAN'],
     're:/^PATCH \\/api\\/v1\\/lockers\\/[^\\/]+$/' => ['TECHNICIAN'],

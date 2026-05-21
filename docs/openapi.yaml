@@ -473,6 +473,77 @@ paths:
           description: Forbidden
         '404':
           description: Not Found
+  /api/v1/lockers/tree:
+    get:
+      summary: List lockers with nested compartments (UI catalog)
+      tags: [Lockers]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: active
+          required: false
+          schema:
+            type: boolean
+          description: When set, filters both lockers and compartments by is_active
+      responses:
+        '200':
+          description: Lockers each with a compartments array
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        name:
+                          type: string
+                        location:
+                          type: string
+                          nullable: true
+                        device_id:
+                          type: string
+                          nullable: true
+                        is_active:
+                          type: boolean
+                        compartments:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              id:
+                                type: string
+                              locker_id:
+                                type: string
+                              code:
+                                type: string
+                              is_active:
+                                type: boolean
+              example:
+                data:
+                  - id: "40000000-0000-4000-8000-000000000001"
+                    name: "Locker Urgencias A1"
+                    location: "Planta 1 - Urgencias"
+                    device_id: "SR-A1-LOCK"
+                    is_active: true
+                    compartments:
+                      - id: "50000000-0000-4000-8000-000000000001"
+                        locker_id: "40000000-0000-4000-8000-000000000001"
+                        code: "A1-C1"
+                        is_active: true
+                      - id: "50000000-0000-4000-8000-000000000002"
+                        locker_id: "40000000-0000-4000-8000-000000000001"
+                        code: "A1-C2"
+                        is_active: true
+        '401':
+          description: Unauthorized
+        '422':
+          description: Invalid active filter
   /api/v1/lockers:
     get:
       summary: List lockers

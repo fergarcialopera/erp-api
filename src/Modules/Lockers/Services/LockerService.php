@@ -28,6 +28,54 @@ final class LockerService
         return $stmt->fetchAll() ?: [];
     }
 
+    /**
+     * @return list<array<string, mixed>>
+     */
+    public function listWithCompartments(string $clinicId, ?bool $active): array
+    {
+        $lockers = $this->list($clinicId, $active);
+        if ($lockers === []) {
+            return [];
+        }
+
+        $sql = 'SELECT id, locker_id, code, is_active, created_at, updated_at
+                FROM compartments
+                WHERE clinic_id = :clinic_id';
+        $params = ['clinic_id' => $clinicId];
+        if ($active !== null) {
+            $sql .= ' AND is_active = :is_active';
+            $params['is_active'] = $active ? 'true' : 'false';
+        }
+        $sql .= ' ORDER BY created_at ASC';
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute($params);
+        $compartments = $stmt->fetchAll() ?: [];
+
+        $byLockerId = [];
+        foreach ($compartments as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $lockerId = (string) ($row['locker_id'] ?? '');
+            if ($lockerId === '') {
+                continue;
+            }
+            $byLockerId[$lockerId][] = $row;
+        }
+
+        $result = [];
+        foreach ($lockers as $locker) {
+            if (!is_array($locker)) {
+                continue;
+            }
+            $lockerId = (string) ($locker['id'] ?? '');
+            $locker['compartments'] = $byLockerId[$lockerId] ?? [];
+            $result[] = $locker;
+        }
+
+        return $result;
+    }
+
     public function get(string $clinicId, string $lockerId): ?array
     {
         $stmt = $this->pdo->prepare(
