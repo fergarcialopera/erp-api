@@ -2,8 +2,10 @@
 
 namespace App\Modules\Inventory\Services;
 
+use App\Modules\Inventory\DTOs\AdjustInventoryLocationDTO;
 use App\Modules\Inventory\DTOs\UpsertInventoryItemDTO;
 use PDO;
+use RuntimeException;
 
 final class InventoryService
 {
@@ -70,6 +72,43 @@ final class InventoryService
         ];
     }
 
+    /**
+     * @param list<AdjustInventoryLocationDTO> $locations
+     * @return array{product: array{id: string, sku: string, name: string}, quantity_total: int, locations: list<array<string, mixed>>}|null
+     */
+    public function adjustProductQuantities(string $clinicId, string $productId, array $locations): ?array
+    {
+        $productStmt = $this->pdo->prepare(
+            'SELECT id FROM products WHERE clinic_id = :clinic_id AND id::text = :product_id LIMIT 1'
+        );
+        $productStmt->execute(['clinic_id' => $clinicId, 'product_id' => $productId]);
+        if (!$productStmt->fetch()) {
+            return null;
+        }
+
+        $this->pdo->beginTransaction();
+
+        try {
+            foreach ($locations as $location) {
+                $this->setInventoryQuantity(
+                    $clinicId,
+                    $productId,
+                    $location->compartmentId,
+                    $location->quantity
+                );
+            }
+
+            $this->pdo->commit();
+        } catch (\Throwable $throwable) {
+            if ($this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
+            throw $throwable;
+        }
+
+        return $this->stockLocationsForProduct($clinicId, $productId);
+    }
+
     public function upsertByClinic(string $clinicId, UpsertInventoryItemDTO $dto): array
     {
         $stmt = $this->pdo->prepare(
@@ -102,6 +141,112 @@ final class InventoryService
 
         $item = $stmt->fetch();
         return is_array($item) ? $item : [];
+    }
+
+    private function setInventoryQuantity(
+        string $clinicId,
+        string $productId,
+        ?string $compartmentId,
+        int $quantity
+    ): void {
+        if ($compartmentId !== null) {
+            $compartmentStmt = $this->pdo->prepare(
+                'SELECT is_active FROM compartments WHERE id = :id AND clinic_id = :clinic_id LIMIT 1'
+            );
+            $compartmentStmt->execute(['id' => $compartmentId, 'clinic_id' => $clinicId]);
+            $compartment = $compartmentStmt->fetch();
+            if (!is_array($compartment)) {
+                throw new RuntimeException('Compartment not found in clinic');
+            }
+            if (!(bool) $compartment['is_active']) {
+                throw new RuntimeException('Compartment is inactive');
+            }
+        }
+
+        $inventoryItem = $this->findOrCreateInventoryRow($clinicId, $productId, $compartmentId);
+
+        $updateStmt = $this->pdo->prepare(
+            'UPDATE inventory_items SET quantity = :quantity, updated_at = NOW() WHERE id = :id'
+        );
+        $updateStmt->execute([
+            'quantity' => $quantity,
+            'id' => $inventoryItem['id'],
+        ]);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function findOrCreateInventoryRow(string $clinicId, string $productId, ?string $compartmentId): array
+    {
+        if ($compartmentId !== null) {
+            $inventoryStmt = $this->pdo->prepare(
+                'SELECT id, quantity
+                 FROM inventory_items
+                 WHERE clinic_id = :clinic_id
+                   AND product_id = :product_id
+                   AND compartment_id = :compartment_id
+                 LIMIT 1'
+            );
+            $inventoryStmt->execute([
+                'clinic_id' => $clinicId,
+                'product_id' => $productId,
+                'compartment_id' => $compartmentId,
+            ]);
+            $inventoryItem = $inventoryStmt->fetch();
+
+            if (!$inventoryItem) {
+                $insStmt = $this->pdo->prepare(
+                    'INSERT INTO inventory_items (clinic_id, product_id, compartment_id, quantity, updated_at)
+                     VALUES (:clinic_id, :product_id, :compartment_id, 0, NOW())
+                     RETURNING id, quantity'
+                );
+                $insStmt->execute([
+                    'clinic_id' => $clinicId,
+                    'product_id' => $productId,
+                    'compartment_id' => $compartmentId,
+                ]);
+                $inventoryItem = $insStmt->fetch();
+            }
+        } else {
+            $inventoryStmt = $this->pdo->prepare(
+                'SELECT id, quantity
+                 FROM inventory_items
+                 WHERE clinic_id = :clinic_id
+                   AND product_id = :product_id
+                   AND compartment_id IS NULL
+                 LIMIT 1'
+            );
+            $inventoryStmt->execute([
+                'clinic_id' => $clinicId,
+                'product_id' => $productId,
+            ]);
+            $inventoryItem = $inventoryStmt->fetch();
+
+            if (!$inventoryItem) {
+                $insStmt = $this->pdo->prepare(
+                    'INSERT INTO inventory_items (clinic_id, product_id, quantity, updated_at)
+                     VALUES (:clinic_id, :product_id, 0, NOW())
+                     ON CONFLICT (clinic_id, product_id) WHERE compartment_id IS NULL DO NOTHING'
+                );
+                $insStmt->execute([
+                    'clinic_id' => $clinicId,
+                    'product_id' => $productId,
+                ]);
+
+                $inventoryStmt->execute([
+                    'clinic_id' => $clinicId,
+                    'product_id' => $productId,
+                ]);
+                $inventoryItem = $inventoryStmt->fetch();
+            }
+        }
+
+        if (!is_array($inventoryItem)) {
+            throw new RuntimeException('Inventory item not found');
+        }
+
+        return $inventoryItem;
     }
 
     /**

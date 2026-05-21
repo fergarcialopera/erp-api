@@ -52,7 +52,7 @@ use App\Modules\Products\Handlers\PatchProductHandler;
 use App\Modules\Products\Services\ProductService;
 use App\Modules\Products\Validators\ProductValidator;
 use App\Modules\Inventory\Handlers\ListInventoryHandler;
-use App\Modules\Inventory\Handlers\UpsertInventoryHandler;
+use App\Modules\Inventory\Handlers\PatchInventoryProductHandler;
 use App\Modules\Inventory\Services\InventoryService;
 use App\Modules\Inventory\Validators\InventoryValidator;
 use App\Modules\Incidents\Handlers\CreateIncidentHandler;
@@ -132,11 +132,11 @@ $authService = new AuthService($pdo, $tokenService, $authMapper);
 $loginValidator = new LoginValidator();
 $loginHandler = new LoginHandler($loginValidator, $authService);
 $logoutHandler = new LogoutHandler($authService);
-$inventoryService = new InventoryService($pdo);
-$inventoryValidator = new InventoryValidator();
-$listInventoryHandler = new ListInventoryHandler($inventoryService);
-$upsertInventoryHandler = new UpsertInventoryHandler($inventoryValidator, $inventoryService);
 $locationValidator = new LocationValidator($pdo);
+$inventoryService = new InventoryService($pdo);
+$inventoryValidator = new InventoryValidator($locationValidator);
+$listInventoryHandler = new ListInventoryHandler($inventoryService);
+$patchInventoryProductHandler = new PatchInventoryProductHandler($inventoryValidator, $inventoryService);
 $entryLogService = new EntryLogService($pdo, $locationValidator);
 $entryLogValidator = new EntryLogValidator($locationValidator);
 $createEntryLogHandler = new CreateEntryLogHandler($entryLogValidator, $entryLogService);
@@ -240,6 +240,7 @@ $router->addRoute('POST', '/api/v1/compartments', fn ($request) => $createCompar
 $router->addRoute('PATCH', '/api/v1/compartments/{compartment_id}', fn ($request) => $patchCompartmentHandler($request));
 $router->addRoute('DELETE', '/api/v1/compartments/{compartment_id}', fn ($request) => $deleteCompartmentHandler($request));
 $router->addRoute('GET', '/api/v1/inventory', fn ($request) => $listInventoryHandler($request));
+$router->addRoute('PATCH', '/api/v1/inventory/products/{product_id}', fn ($request) => $patchInventoryProductHandler($request));
 $router->addRoute('GET', '/api/v1/entry-logs', fn ($request) => $listEntryLogsHandler($request));
 $router->addRoute('POST', '/api/v1/entry-logs', fn ($request) => $createEntryLogHandler($request));
 $router->addRoute('GET', '/api/v1/exit-logs', fn ($request) => $listExitLogsHandler($request));
@@ -284,6 +285,7 @@ $roleRules = [
     're:/^PATCH \\/api\\/v1\\/compartments\\/[^\\/]+$/' => ['TECHNICIAN'],
     're:/^DELETE \\/api\\/v1\\/compartments\\/[^\\/]+$/' => ['ADMIN'],
     'GET /api/v1/inventory' => ['STAFF'],
+    're:/^PATCH \\/api\\/v1\\/inventory\\/products\\/[^\\/]+$/' => ['ADMIN'],
     'GET /api/v1/entry-logs' => ['STAFF'],
     'POST /api/v1/entry-logs' => ['TECHNICIAN'],
     'GET /api/v1/exit-logs' => ['STAFF'],
