@@ -31,6 +31,42 @@ final class Request
         );
     }
 
+    /**
+     * @param array<string, string> $headers
+     * @param array<string, mixed>|null $body
+     */
+    public static function fromTest(string $method, string $path, ?array $body = null, array $headers = []): self
+    {
+        $normalized = [];
+        foreach ($headers as $key => $value) {
+            $normalized[strtolower((string) $key)] = (string) $value;
+        }
+
+        $rawBody = $body !== null
+            ? (json_encode($body, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '{}')
+            : '';
+
+        $uri = $path;
+        $queryParams = [];
+        $questionPos = strpos($path, '?');
+        if ($questionPos !== false) {
+            $uri = substr($path, 0, $questionPos) ?: '/';
+            $queryString = substr($path, $questionPos + 1);
+            if ($queryString !== '') {
+                parse_str($queryString, $queryParams);
+            }
+        }
+
+        return new self(
+            method: strtoupper($method),
+            uri: $uri,
+            headers: $normalized,
+            queryParams: $queryParams,
+            parsedBody: $body ?? [],
+            rawBody: $rawBody
+        );
+    }
+
     public function getMethod(): string
     {
         return $this->method;

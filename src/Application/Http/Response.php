@@ -11,6 +11,24 @@ class Response
     ) {
     }
 
+    public function getStatusCode(): int
+    {
+        return $this->statusCode;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function getHeaders(): array
+    {
+        return $this->headers;
+    }
+
+    public function getBody(): string
+    {
+        return $this->body;
+    }
+
     public function send(): void
     {
         http_response_code($this->statusCode);

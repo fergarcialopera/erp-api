@@ -47,6 +47,7 @@ abstract class BaseApiTestCase extends TestCase
         self::ensureSchemaUpToDate();
         self::ensureUsers();
         self::assertApiUsesTestDatabase();
+
         self::$bootstrapped = true;
     }
 
@@ -74,7 +75,8 @@ abstract class BaseApiTestCase extends TestCase
         if ($res['status'] !== 200) {
             throw new \RuntimeException(
                 'La API HTTP no está usando la base de datos de tests (erp_test). '
-                . 'Reinicia el contenedor PHP con docker-compose.test.yml antes de ejecutar phpunit. '
+                . 'Ejecuta los tests con: composer test:docker (o php bin/run-tests-docker.php). '
+                . 'Si la API quedó en modo test, restaura con: composer test:docker:restore. '
                 . 'HTTP status del probe: ' . $res['status']
             );
         }
@@ -85,22 +87,6 @@ abstract class BaseApiTestCase extends TestCase
         if (!str_ends_with($testDatabase, '_test')) {
             throw new \RuntimeException(
                 sprintf('Unsafe test DB: TEST_DB_DATABASE=%s (expected suffix _test)', $testDatabase)
-            );
-        }
-
-        $appEnv = (string) ($_ENV['APP_ENV'] ?? getenv('APP_ENV') ?: '');
-        if ($appEnv === 'testing') {
-            return;
-        }
-
-        $prodLikeDb = (string) ($_ENV['DB_DATABASE'] ?? getenv('DB_DATABASE') ?: '');
-        if ($prodLikeDb !== '' && $testDatabase === $prodLikeDb && !str_ends_with($prodLikeDb, '_test')) {
-            throw new \RuntimeException(
-                sprintf(
-                    'Unsafe test DB: TEST_DB_DATABASE=%s matches DB_DATABASE=%s (use erp_test and docker-compose.test.yml)',
-                    $testDatabase,
-                    $prodLikeDb
-                )
             );
         }
     }
@@ -125,7 +111,7 @@ abstract class BaseApiTestCase extends TestCase
             $probe = null;
             return;
         } catch (\Throwable) {
-            // Continuar: puede que la BD no exista aún (p.ej. volumen persistente ya creado).
+            // Continuar: puede que la BD no exista aún.
         }
 
         $admin = new PDO(
@@ -289,13 +275,12 @@ abstract class BaseApiTestCase extends TestCase
                 );
             }
 
-            $params = [
+            $stmt->execute([
                 'clinic_id' => $clinicId,
                 'password_hash' => $hash,
                 'role' => $role,
                 'email' => $email,
-            ];
-            $stmt->execute($params);
+            ]);
             return;
         }
 
@@ -311,19 +296,17 @@ abstract class BaseApiTestCase extends TestCase
             );
         }
 
-        $params = [
+        $stmt->execute([
             'id' => $id,
-        ];
-        $params += [
             'clinic_id' => $clinicId,
             'email' => $email,
             'password_hash' => $hash,
             'role' => $role,
-        ];
-        $stmt->execute($params);
+        ]);
     }
 
     /**
+     * @param array<string, string> $headers
      * @return array{status:int,headers:array<string,string>,json:array<string,mixed>|null,raw:string}
      */
     private static function staticRequest(string $method, string $path, ?array $body = null, array $headers = []): array
@@ -368,6 +351,7 @@ abstract class BaseApiTestCase extends TestCase
     }
 
     /**
+     * @param array<string, string> $headers
      * @return array{status:int,headers:array<string,string>,json:array<string,mixed>|null,raw:string}
      */
     protected function request(string $method, string $path, ?array $body = null, array $headers = []): array
@@ -377,11 +361,10 @@ abstract class BaseApiTestCase extends TestCase
 
     protected function login(string $email, string $password = 'admin123'): array
     {
-        $res = $this->request('POST', '/api/v1/auth/login', [
+        return $this->request('POST', '/api/v1/auth/login', [
             'email' => $email,
             'password' => $password,
         ]);
-        return $res;
     }
 
     protected function authHeaderFor(string $email): array

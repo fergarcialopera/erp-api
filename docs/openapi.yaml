@@ -690,7 +690,16 @@ paths:
         - bearerAuth: []
       responses:
         '200':
-          description: Entry logs list
+          description: Entry logs list with locker and compartment when set
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/EntryLogListItem'
         '401':
           description: Unauthorized
     post:
@@ -715,9 +724,35 @@ paths:
                   minimum: 1
                 note:
                   type: string
+                compartment_id:
+                  type: string
+                  description: Optional destination compartment UUID
+                locker_id:
+                  type: string
+                  description: Optional; only with compartment_id, must match compartment locker
       responses:
         '201':
-          description: Entry log created
+          description: Entry log created with location enrichment
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      entry_log:
+                        $ref: '#/components/schemas/EntryLogListItem'
+                      inventory:
+                        type: object
+                        properties:
+                          sku: { type: string }
+                          quantity: { type: integer }
+                          compartment_id: { type: string, nullable: true }
+                          locker:
+                            $ref: '#/components/schemas/LockerRef'
+                          compartment:
+                            $ref: '#/components/schemas/CompartmentRef'
         '401':
           description: Unauthorized
         '422':
@@ -764,9 +799,12 @@ paths:
                       compartment_id:
                         type: string
                         description: Optional compartment public id for the line
+                      locker_id:
+                        type: string
+                        description: Optional; only with compartment_id, must match compartment locker
       responses:
         '201':
-          description: Draft exit log created with enriched items
+          description: Draft exit log created with enriched items (locker/compartment per line, location on header)
         '401':
           description: Unauthorized
         '422':
@@ -1014,6 +1052,58 @@ paths:
         '200':
           description: OK
 components:
+  schemas:
+    LockerRef:
+      nullable: true
+      oneOf:
+        - type: 'null'
+        - type: object
+          properties:
+            id: { type: string }
+            name: { type: string }
+            device_id: { type: string, nullable: true }
+    CompartmentRef:
+      nullable: true
+      oneOf:
+        - type: 'null'
+        - type: object
+          properties:
+            id: { type: string }
+            code: { type: string }
+    StockLocation:
+      type: object
+      properties:
+        locker:
+          $ref: '#/components/schemas/LockerRef'
+        compartment:
+          $ref: '#/components/schemas/CompartmentRef'
+    EntryLogListItem:
+      type: object
+      properties:
+        id: { type: string }
+        sku: { type: string }
+        name: { type: string }
+        quantity: { type: integer }
+        note: { type: string, nullable: true }
+        created_by: { type: string }
+        created_at: { type: string }
+        locker:
+          $ref: '#/components/schemas/LockerRef'
+        compartment:
+          $ref: '#/components/schemas/CompartmentRef'
+    ExitLogHeader:
+      type: object
+      properties:
+        id: { type: string }
+        status: { type: string }
+        note: { type: string, nullable: true }
+        location:
+          $ref: '#/components/schemas/StockLocation'
+        compartment_public_id:
+          type: string
+          nullable: true
+          deprecated: true
+          description: Use location.compartment.id instead
   securitySchemes:
     bearerAuth:
       type: http

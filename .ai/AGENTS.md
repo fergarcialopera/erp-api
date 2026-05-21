@@ -166,151 +166,124 @@ Por tanto:
 
 ## 🧪 Testing
 
-### Regla crítica: base de datos aislada
+### Resumen rápido (comandos)
 
-Los tests de integración **no deben usar nunca** la base de datos principal (`erp`).
-
-| Componente | Base de datos |
-|------------|---------------|
-| Desarrollo normal (`docker compose up`) | `erp` |
-| Tests de integración | `erp_test` |
-
-Los tests hacen dos cosas a la vez:
-
-1. **PDO directo** — migraciones, seed de usuarios de prueba (`BaseApiTestCase`).
-2. **Peticiones HTTP** a `http://nginx` — pasan por el contenedor `php`.
-
-Si `php` sigue con `DB_DATABASE=erp`, las peticiones HTTP contaminan la BD principal aunque phpunit use `erp_test` en PDO. Por eso es obligatorio levantar PHP con `docker-compose.test.yml` antes de ejecutar la suite de integración.
-
-Al arrancar, `BaseApiTestCase` comprueba que la API responde con un usuario probe que solo existe en `erp_test`. Si falla, verás un error explícito pidiendo el override de compose.
-
-### Prerrequisitos
-
-Servicios Docker en marcha (desde la raíz del repo):
+La API en desarrollo usa **siempre** la BD `erp`. Durante los tests, el contenedor `php` pasa temporalmente a `erp_test` y los tests de integración llaman a la API por HTTP (`nginx`).
 
 ```bash
 docker compose up -d
-```
-
-La BD `erp_test` se crea en el init de Postgres (`docker/postgres/init.sql`) o la crea `BaseApiTestCase` si no existe.
-
-### Ejecutar tests (comando canónico)
-
-**Usar siempre este flujo** para la suite completa (unitarios + integración):
-
-```bash
 docker compose exec php composer test:docker
 ```
 
-Equivale a:
+**No ejecutar** solo `docker compose exec php vendor/bin/phpunit` para integración: dejaría la API en `erp_test` o fallaría el probe si `php` sigue en `erp`.
 
-```bash
-docker compose -f docker-compose.yml -f docker-compose.test.yml up -d php
-docker compose -f docker-compose.yml -f docker-compose.test.yml exec -T php vendor/bin/phpunit
-```
-
-Solo tests unitarios (sin HTTP, no requieren `docker-compose.test.yml`):
+Solo unitarios (no cambian el contenedor `php`):
 
 ```bash
 docker compose exec php vendor/bin/phpunit --testsuite Unit
 ```
 
-Suite concreta o archivo:
+Si la API quedó en modo test:
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.test.yml exec -T php vendor/bin/phpunit --testsuite Integration
-docker compose -f docker-compose.yml -f docker-compose.test.yml exec -T php vendor/bin/phpunit tests/Integration/Auth/LoginEndpointTest.php
+docker compose exec php composer test:docker:restore
 ```
 
-### Tras ejecutar tests
+---
 
-Volver a la BD de desarrollo:
+### Flujo obligatorio
+
+| Fase | Contenedor `php` (`DB_DATABASE`) | Tests de integración |
+|------|----------------------------------|----------------------|
+| Desarrollo normal | `erp` | — |
+| Durante `composer test:docker` | `erp_test` | HTTP a `http://nginx` |
+| Al finalizar (éxito o fallo) | `erp` (restaurado en `finally`) | — |
+
+1. **Desarrollo:** `docker compose up` → API en `:8080` apunta a `erp`.
+2. **Tests:** [`scripts/run-tests-docker.ps1`](scripts/run-tests-docker.ps1) (Windows/host) o [`scripts/run-tests-docker.sh`](scripts/run-tests-docker.sh) recrea `php` con [`docker-compose.test.yml`](docker-compose.test.yml), ejecuta phpunit por HTTP y restaura `erp`.
+
+**Ejecutar `composer test:docker` desde el host**, no con `docker compose exec php composer ...` (el contenedor no tiene CLI de Docker).
+3. El PDO auxiliar de `BaseApiTestCase` solo prepara fixtures en `erp_test`; la API es la que atiende las peticiones de test.
+
+---
+
+### Arquitectura
+
+Un solo PDO en [`bootstrap/app.php`](bootstrap/app.php) inyectado en todos los servicios. Los endpoints no abren conexiones propias.
+
+- **Integración:** peticiones HTTP reales a `TEST_BASE_URL` (nginx → php-fpm).
+- **Fixtures:** PDO directo a `erp_test` vía `TEST_DB_*` (migraciones, usuarios).
+- **Probe:** usuario solo en `erp_test`; login por HTTP debe devolver 200 o los tests abortan con instrucciones de `test:docker`.
+
+---
+
+### Prerrequisitos
 
 ```bash
-docker compose up -d php
+docker compose up -d
 ```
 
-### Configuración relevante
+Requiere `php`, `nginx`, `postgres` y `redis`.
+
+---
+
+### Comandos Composer
+
+| Script | Acción |
+|--------|--------|
+| `composer test:docker` | Activa API test → phpunit → restaura API a `erp` |
+| `composer test:docker:up` | Solo activa API en `erp_test` |
+| `composer test:docker:restore` | Solo restaura API a `erp` |
+
+Variantes:
+
+```bash
+docker compose exec php composer test:docker -- --testsuite Integration
+docker compose exec php composer test:docker -- tests/Integration/Auth/LoginEndpointTest.php
+```
+
+---
+
+### Ficheros relevantes
 
 | Fichero | Rol |
 |---------|-----|
-| `phpunit.xml` | Suites `Unit` / `Integration`, variables `TEST_*` y `APP_ENV=testing` |
-| `docker-compose.test.yml` | Override: `APP_ENV=testing`, `DB_DATABASE=erp_test`, `MQTT_DISABLED=true` en `php` |
-| `bootstrap/app.php` | Con `APP_ENV=testing`, fuerza `DB_DATABASE` con sufijo `_test` |
-| `tests/Integration/Support/BaseApiTestCase.php` | Bootstrap de BD de tests, migraciones, usuarios fixture, probe HTTP |
+| [`phpunit.xml`](phpunit.xml) | `TEST_BASE_URL`, `TEST_DB_*` |
+| [`docker-compose.test.yml`](docker-compose.test.yml) | `DB_DATABASE=erp_test` en `php` durante tests |
+| [`scripts/run-tests-docker.ps1`](scripts/run-tests-docker.ps1) | Ciclo activar / test / restaurar (host) |
+| [`BaseApiTestCase.php`](tests/Integration/Support/BaseApiTestCase.php) | Fixtures + HTTP + probe |
 
-Variables de entorno en `phpunit.xml` (ya definidas; no cambiar a `erp`):
+En SQL auxiliar usar `BaseApiTestCase::testPdo()`. **No** abrir PDO contra `erp`.
 
-- `TEST_BASE_URL=http://nginx`
-- `TEST_DB_DATABASE=erp_test`
-- `TEST_DB_HOST=postgres`, `TEST_DB_PORT=5432`, `TEST_DB_USERNAME=erp`, `TEST_DB_PASSWORD=erp`
+---
 
-Para consultas auxiliares en tests de integración, usar `BaseApiTestCase::testPdo()`. **No** abrir PDO contra `dbname=erp`.
+### IDE y agentes de IA
 
-### Configuración para IDEs y agentes
+Integración:
 
-Los tests de integración **deben ejecutarse dentro del contenedor `php`**, con la red Docker (`nginx`, `postgres`). Ejecutar `phpunit` en el host contra `localhost:5432` suele fallar o usar la BD equivocada.
+```bash
+docker compose exec php composer test:docker
+```
 
-#### Cursor / VS Code / PhpStorm
+Tras cambios en API/tests: ejecutar lo anterior y, si hace falta, `composer test:docker:restore`.
 
-1. **PHPUnit / configuración**
-   - Fichero de config: `phpunit.xml` (raíz del repo).
-   - Bootstrap: `vendor/autoload.php` (definido en `phpunit.xml`).
-
-2. **Ejecución recomendada (integración + unitarios)**  
-   Configurar el comando de test del IDE como ejecución remota en Docker, no como PHP local:
-
-   ```bash
-   docker compose -f docker-compose.yml -f docker-compose.test.yml exec -T php vendor/bin/phpunit
-   ```
-
-   O el atajo de Composer (levanta PHP en modo test y ejecuta phpunit):
-
-   ```bash
-   docker compose exec php composer test:docker
-   ```
-
-3. **Solo unitarios desde el IDE** (si el IDE lanza PHP en el contenedor sin override de test):
-
-   ```bash
-   docker compose exec -T php vendor/bin/phpunit --testsuite Unit
-   ```
-
-4. **Antes de la primera ejecución de integración en la sesión**, asegurar PHP en modo test:
-
-   ```bash
-   docker compose -f docker-compose.yml -f docker-compose.test.yml up -d php
-   ```
-
-5. **No** configurar el IDE para usar `DB_DATABASE=erp` al correr tests de integración.
-
-#### Agentes de IA
-
-Al terminar cambios que afecten a tests:
-
-1. Ejecutar `docker compose exec php composer test:docker` (o el equivalente con `-f docker-compose.test.yml`).
-2. No dar por válida una pasada de integración si PHP no se recreó con `docker-compose.test.yml`.
-3. Tras validar, opcionalmente restaurar: `docker compose up -d php`.
+---
 
 ### Cobertura al implementar funcionalidad
 
-Cuando se implemente funcionalidad:
-
 - añadir tests si existe infraestructura previa
-- cubrir casos:
-  - éxito
-  - entidad no encontrada
-  - estado inválido
-  - errores externos (MQTT, etc.)
+- cubrir éxito, not found, estado inválido, errores externos (MQTT, etc.)
+
+---
 
 ### Errores frecuentes
 
 | Síntoma | Causa | Solución |
 |---------|--------|----------|
-| `La API HTTP no está usando la base de datos de tests` | `php` con `DB_DATABASE=erp` | `docker compose -f docker-compose.yml -f docker-compose.test.yml up -d php` y volver a ejecutar phpunit |
-| `Unsafe test DB` / sufijo `_test` | `TEST_DB_DATABASE` apunta a `erp` | Usar `erp_test` en `phpunit.xml` |
-| Login 401 en todos los tests de integración | API y PDO en BDs distintas | Mismo override de compose para `php` |
-| Datos basura en producción/desarrollo | Tests ejecutados sin aislamiento | Limpiar `erp` manualmente; usar siempre `test:docker` |
+| `La API HTTP no está usando la base de datos de tests` | `php` en `erp` | `composer test:docker` |
+| API no ve datos de desarrollo tras tests | API quedó en `erp_test` | `composer test:docker:restore` |
+| `Unsafe test DB` | `TEST_DB_DATABASE=erp` | `erp_test` en `phpunit.xml` |
+| Datos basura en `erp` | Tests sin ciclo test/restore | Limpiar `erp`; usar `test:docker` |
 
 ---
 

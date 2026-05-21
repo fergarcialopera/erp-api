@@ -26,11 +26,10 @@
   },
   "scripts": {
     "test": "phpunit",
-    "test:docker:up": "docker compose -f docker-compose.yml -f docker-compose.test.yml up -d php",
-    "test:docker": [
-      "@test:docker:up",
-      "docker compose -f docker-compose.yml -f docker-compose.test.yml exec -T php vendor/bin/phpunit"
-    ],
+    "test:docker:up": "docker compose -f docker-compose.yml -f docker-compose.test.yml up -d --force-recreate php",
+    "test:docker:restore": "docker compose -f docker-compose.yml up -d --force-recreate php",
+    "test:docker": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run-tests-docker.ps1",
+    "test:docker:sh": "sh scripts/run-tests-docker.sh",
     "db:migrate": "php bin/db.php migrate",
     "db:seed": "php bin/db.php seed",
     "db:status": "php bin/db.php status"

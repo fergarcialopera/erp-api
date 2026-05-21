@@ -12,6 +12,7 @@ use App\Infrastructure\Auth\TokenService;
 use App\Application\ExitLogs\OpenExitLogLockAction;
 use App\Infrastructure\Config\Config;
 use App\Infrastructure\Database\Connection;
+use App\Infrastructure\Database\DatabaseConfig;
 use App\Infrastructure\Http\Router;
 use App\Infrastructure\Logging\LoggerFactory;
 use App\Infrastructure\Mqtt\NoOpLockCommandPublisher;
@@ -28,6 +29,7 @@ use App\Modules\Clinic\Handlers\GetClinicHandler;
 use App\Modules\Clinic\Handlers\PatchClinicSettingsHandler;
 use App\Modules\Clinic\Services\ClinicService;
 use App\Modules\Clinic\Validators\ClinicSettingsValidator;
+use App\Application\Stock\LocationValidator;
 use App\Modules\EntryLogs\Handlers\CreateEntryLogHandler;
 use App\Modules\EntryLogs\Handlers\ListEntryLogsHandler;
 use App\Modules\EntryLogs\Services\EntryLogService;
@@ -91,23 +93,14 @@ if (is_file(dirname(__DIR__) . '/.env')) {
     }
 }
 
-$appEnv = (string) ($_ENV['APP_ENV'] ?? getenv('APP_ENV') ?: '');
-if ($appEnv === 'testing') {
-    $testDatabase = (string) ($_ENV['TEST_DB_DATABASE'] ?? getenv('TEST_DB_DATABASE') ?: 'erp_test');
-    if ($testDatabase === '' || !str_ends_with($testDatabase, '_test')) {
-        throw new \RuntimeException(
-            'APP_ENV=testing requires TEST_DB_DATABASE with suffix _test (got: ' . $testDatabase . ')'
-        );
-    }
-    $_ENV['DB_DATABASE'] = $testDatabase;
-}
+$dbConfig = DatabaseConfig::fromEnvironment();
 
 $config = new Config([
-    'db.host' => $_ENV['DB_HOST'] ?? 'postgres',
-    'db.port' => $_ENV['DB_PORT'] ?? '5432',
-    'db.database' => $_ENV['DB_DATABASE'] ?? 'erp',
-    'db.username' => $_ENV['DB_USERNAME'] ?? 'erp',
-    'db.password' => $_ENV['DB_PASSWORD'] ?? 'erp',
+    'db.host' => $dbConfig['host'],
+    'db.port' => $dbConfig['port'],
+    'db.database' => $dbConfig['database'],
+    'db.username' => $dbConfig['username'],
+    'db.password' => $dbConfig['password'],
     'redis.host' => $_ENV['REDIS_HOST'] ?? 'redis',
     'redis.port' => (int) ($_ENV['REDIS_PORT'] ?? 6379),
     'mqtt.host' => trim((string) ($_ENV['MQTT_HOST'] ?? '')),
@@ -118,11 +111,11 @@ $config = new Config([
 ]);
 
 $pdo = Connection::create(
-    (string) $config->get('db.host'),
-    (string) $config->get('db.port'),
-    (string) $config->get('db.database'),
-    (string) $config->get('db.username'),
-    (string) $config->get('db.password')
+    $dbConfig['host'],
+    $dbConfig['port'],
+    $dbConfig['database'],
+    $dbConfig['username'],
+    $dbConfig['password']
 );
 
 $redis = new RedisClient(
@@ -141,12 +134,13 @@ $inventoryService = new InventoryService($pdo);
 $inventoryValidator = new InventoryValidator();
 $listInventoryHandler = new ListInventoryHandler($inventoryService);
 $upsertInventoryHandler = new UpsertInventoryHandler($inventoryValidator, $inventoryService);
-$entryLogService = new EntryLogService($pdo);
-$entryLogValidator = new EntryLogValidator();
+$locationValidator = new LocationValidator($pdo);
+$entryLogService = new EntryLogService($pdo, $locationValidator);
+$entryLogValidator = new EntryLogValidator($locationValidator);
 $createEntryLogHandler = new CreateEntryLogHandler($entryLogValidator, $entryLogService);
 $listEntryLogsHandler = new ListEntryLogsHandler($entryLogService);
-$exitLogService = new ExitLogService($pdo);
-$exitLogValidator = new ExitLogValidator();
+$exitLogService = new ExitLogService($pdo, $locationValidator);
+$exitLogValidator = new ExitLogValidator($locationValidator);
 $createExitLogHandler = new CreateExitLogHandler($exitLogValidator, $exitLogService);
 $listExitLogsHandler = new ListExitLogsHandler($exitLogService);
 $getExitLogHandler = new GetExitLogHandler($exitLogService);
@@ -309,4 +303,5 @@ $dispatcher = new ApiDispatcher(
 
 return [
     'dispatcher' => $dispatcher,
+    'pdo' => $pdo,
 ];

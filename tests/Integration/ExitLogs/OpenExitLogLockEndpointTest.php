@@ -72,6 +72,19 @@ final class OpenExitLogLockEndpointTest extends BaseApiTestCase
         $compartmentId = (string) ($comp['json']['data']['id'] ?? '');
         $this->assertNotSame('', $compartmentId);
 
+        $entry = $this->request(
+            'POST',
+            '/api/v1/entry-logs',
+            [
+                'sku' => 'SR-GLV-001',
+                'quantity' => 2,
+                'compartment_id' => $compartmentId,
+                'locker_id' => $lockerId,
+            ],
+            $this->authHeaderFor('tech@clinic.local')
+        );
+        $this->assertSame(201, $entry['status'], $entry['raw'] ?? '');
+
         $created = $this->request(
             'POST',
             '/api/v1/exit-logs',

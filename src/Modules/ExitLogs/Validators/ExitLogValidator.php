@@ -4,12 +4,17 @@ declare(strict_types=1);
 
 namespace App\Modules\ExitLogs\Validators;
 
+use App\Application\Stock\LocationValidator;
 use App\Modules\ExitLogs\DTOs\CreateExitLogDTO;
 use App\Modules\ExitLogs\DTOs\ExitLogLineInputDTO;
 use InvalidArgumentException;
 
 final class ExitLogValidator
 {
+    public function __construct(private readonly LocationValidator $locationValidator)
+    {
+    }
+
     public function validateCreate(array $payload): CreateExitLogDTO
     {
         $items = $payload['items'] ?? null;
@@ -40,16 +45,10 @@ final class ExitLogValidator
                 throw new InvalidArgumentException('Invalid quantity at index ' . (int) $idx);
             }
 
-            $compartmentId = null;
-            if (array_key_exists('compartment_id', $row)) {
-                $raw = $row['compartment_id'];
-                if ($raw !== null && $raw !== '') {
-                    $compartmentId = trim((string) $raw);
-                    if ($compartmentId === '') {
-                        throw new InvalidArgumentException('Invalid compartment_id at index ' . (int) $idx);
-                    }
-                }
-            }
+            $compartmentId = $this->locationValidator->parseOptionalLocation(
+                $row,
+                'index ' . (int) $idx
+            );
 
             $lines[] = new ExitLogLineInputDTO($productId, (int) $quantity, $compartmentId);
         }

@@ -1,7 +1,6 @@
-# Override para tests de integración: la API (PHP-FPM) debe usar la misma BD que phpunit.
-# Uso:
-#   docker compose -f docker-compose.yml -f docker-compose.test.yml up -d php
-#   docker compose -f docker-compose.yml -f docker-compose.test.yml exec php vendor/bin/phpunit
+# Override para tests de integración: la API (PHP-FPM) usa erp_test mientras corre la suite.
+# Tras los tests, restaurar con: composer test:docker:restore
+# O usar el flujo completo: composer test:docker (activa test, ejecuta phpunit, restaura erp).
 services:
   php:
     environment:

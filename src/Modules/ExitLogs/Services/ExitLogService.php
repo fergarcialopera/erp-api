@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Modules\ExitLogs\Services;
 
+use App\Application\Stock\LocationPresenter;
+use App\Application\Stock\LocationValidator;
 use App\Domain\ExitLogs\Exception\ExitLogBusinessRuleException;
 use App\Domain\ExitLogs\Exception\ExitLogNotFoundException;
 use App\Domain\ExitLogs\ExitLogStatus;
@@ -15,8 +17,10 @@ use Throwable;
 
 final class ExitLogService
 {
-    public function __construct(private readonly PDO $pdo)
-    {
+    public function __construct(
+        private readonly PDO $pdo,
+        private readonly LocationValidator $locationValidator
+    ) {
     }
 
     public function create(string $clinicId, string $userId, CreateExitLogDTO $dto): array
@@ -26,7 +30,7 @@ final class ExitLogService
             $insLog = $this->pdo->prepare(
                 'INSERT INTO exit_logs (clinic_id, note, created_by_user_id, status, compartment_id)
                  VALUES (:clinic_id, :note, :created_by_user_id, :status, NULL)
-                 RETURNING id, clinic_id, status, note, created_by_user_id, created_at, confirmed_at, cancelled_at'
+                 RETURNING id, clinic_id, status, note, created_by_user_id, created_at, confirmed_at, cancelled_at, compartment_id'
             );
             $insLog->execute([
                 'clinic_id' => $clinicId,
@@ -47,8 +51,12 @@ final class ExitLogService
 
             foreach ($dto->lines as $line) {
                 $this->assertProductInClinic($clinicId, $line->productId);
-                if ($line->compartmentId !== null && $line->compartmentId !== '') {
-                    $this->assertCompartmentInClinic($clinicId, $line->compartmentId);
+                if ($line->compartmentId !== null) {
+                    try {
+                        $this->locationValidator->assertCompartmentInClinic($clinicId, $line->compartmentId);
+                    } catch (RuntimeException $e) {
+                        throw new ExitLogBusinessRuleException($e->getMessage());
+                    }
                 }
                 $insItem->execute([
                     'exit_log_id' => $exitLogId,
@@ -159,16 +167,18 @@ final class ExitLogService
                     ?? throw new RuntimeException('Exit log not found');
             }
 
-            $productTotals = $this->aggregateRequestedBySku($items);
-            foreach ($productTotals as $productId => $need) {
-                $inv = $this->getInventoryRow($clinicId, $productId);
-                if ($inv === null || (int) $inv['quantity'] < $need) {
-                    throw new ExitLogBusinessRuleException('Insufficient stock for product: ' . $productId);
+            foreach ($items as $it) {
+                $qty = (int) $it['requested_quantity'];
+                if ($qty <= 0) {
+                    continue;
                 }
-            }
-
-            foreach ($productTotals as $productId => $need) {
-                $this->decrementInventory($clinicId, $productId, $need);
+                $productId = (string) $it['product_id'];
+                $compartmentId = $it['compartment_id'] ?? null;
+                if ($compartmentId !== null && $compartmentId !== '') {
+                    $this->decrementInventoryAtCompartment($clinicId, $productId, (string) $compartmentId, $qty);
+                } else {
+                    $this->decrementInventoryUnlocatedFifo($clinicId, $productId, $qty);
+                }
             }
 
             $conf = $this->pdo->prepare(
@@ -243,8 +253,39 @@ final class ExitLogService
              ORDER BY el.id DESC'
         );
         $stmt->execute(['clinic_id' => $clinicId]);
+        $rows = $stmt->fetchAll() ?: [];
 
-        return $stmt->fetchAll() ?: [];
+        $out = [];
+        foreach ($rows as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $exitLogId = (string) $row['id'];
+            $compartmentId = $row['compartment_id'] ?? null;
+            if ($compartmentId === null || $compartmentId === '') {
+                $compartmentId = $this->fetchFirstItemCompartmentId($exitLogId);
+            }
+            $location = $compartmentId !== null && $compartmentId !== ''
+                ? ($this->locationValidator->fetchLocationForCompartment($clinicId, (string) $compartmentId)
+                    ?? LocationPresenter::empty())
+                : LocationPresenter::empty();
+
+            $out[] = [
+                'id' => $exitLogId,
+                'clinic_id' => (string) $row['clinic_id'],
+                'status' => (string) $row['status'],
+                'note' => $row['note'],
+                'created_by_user_id' => $row['created_by_user_id'],
+                'created_at' => $row['created_at'],
+                'confirmed_at' => $row['confirmed_at'],
+                'cancelled_at' => $row['cancelled_at'],
+                'items_count' => (int) ($row['items_count'] ?? 0),
+                'compartment_public_id' => $row['compartment_id'],
+                'location' => $location,
+            ];
+        }
+
+        return $out;
     }
 
     public function getDetail(string $clinicId, string $exitLogId): ?array
@@ -286,7 +327,12 @@ final class ExitLogService
              LEFT JOIN lockers l
                 ON l.id = c.locker_id AND l.clinic_id = :clinic_id
              LEFT JOIN inventory_items ii
-                ON ii.clinic_id = :clinic_id AND ii.product_id = p.id
+                ON ii.clinic_id = :clinic_id
+               AND ii.product_id = p.id
+               AND (
+                    (ei.compartment_id IS NULL AND ii.compartment_id IS NULL)
+                    OR ii.compartment_id = ei.compartment_id
+               )
              WHERE ei.exit_log_id::text = :exit_log_id
              ORDER BY ei.id ASC'
         );
@@ -294,7 +340,16 @@ final class ExitLogService
         $rawItems = $itemsStmt->fetchAll() ?: [];
 
         $items = [];
+        $headerCompartmentId = $header['compartment_id'] ?? null;
         foreach ($rawItems as $it) {
+            $location = LocationPresenter::fromJoinRow($it);
+            if (($headerCompartmentId === null || $headerCompartmentId === '')
+                && $it['compartment_id'] !== null
+                && $it['compartment_id'] !== ''
+            ) {
+                $headerCompartmentId = (string) $it['compartment_id'];
+            }
+
             $items[] = [
                 'id' => (string) $it['id'],
                 'product' => [
@@ -303,20 +358,18 @@ final class ExitLogService
                     'sku' => $it['product_sku'] !== null ? (string) $it['product_sku'] : null,
                     'barcode' => null,
                 ],
-                'locker' => $it['locker_id'] !== null ? [
-                    'id' => (string) $it['locker_id'],
-                    'name' => (string) $it['locker_name'],
-                    'device_id' => $it['locker_device_id'] !== null ? (string) $it['locker_device_id'] : null,
-                ] : null,
-                'compartment' => $it['compartment_id'] !== null ? [
-                    'id' => (string) $it['compartment_id'],
-                    'code' => $it['compartment_code'] !== null ? (string) $it['compartment_code'] : '',
-                ] : null,
+                'locker' => $location['locker'],
+                'compartment' => $location['compartment'],
                 'requested_quantity' => (int) $it['requested_quantity'],
                 'confirmed_quantity' => $it['confirmed_quantity'] !== null ? (int) $it['confirmed_quantity'] : null,
                 'stock_available' => $it['stock_available'] !== null ? (int) $it['stock_available'] : null,
             ];
         }
+
+        $headerLocation = $headerCompartmentId !== null && $headerCompartmentId !== ''
+            ? ($this->locationValidator->fetchLocationForCompartment($clinicId, (string) $headerCompartmentId)
+                ?? LocationPresenter::empty())
+            : LocationPresenter::empty();
 
         return [
             'exit_log' => [
@@ -335,6 +388,7 @@ final class ExitLogService
                 'legacy_sku' => null,
                 'legacy_quantity' => null,
                 'compartment_public_id' => $header['compartment_id'],
+                'location' => $headerLocation,
             ],
             'items' => $items,
         ];
@@ -360,7 +414,7 @@ final class ExitLogService
     private function fetchItemsForExit(string $clinicId, string $exitLogId): array
     {
         $stmt = $this->pdo->prepare(
-            'SELECT ei.id, ei.requested_quantity, p.id AS product_id
+            'SELECT ei.id, ei.requested_quantity, ei.compartment_id, p.id AS product_id
              FROM exit_log_items ei
              INNER JOIN products p ON p.id = ei.product_id AND p.clinic_id = :clinic_id
              WHERE ei.exit_log_id::text = :id
@@ -372,48 +426,60 @@ final class ExitLogService
         return is_array($rows) ? $rows : [];
     }
 
-    /**
-     * @param list<array<string, mixed>> $items
-     * @return array<string, int> product_id => total requested (>0 only)
-     */
-    private function aggregateRequestedBySku(array $items): array
-    {
-        $totals = [];
-        foreach ($items as $it) {
-            $qty = (int) $it['requested_quantity'];
-            if ($qty <= 0) {
-                continue;
-            }
-            $productId = (string) $it['product_id'];
-            $totals[$productId] = ($totals[$productId] ?? 0) + $qty;
-        }
-
-        return $totals;
-    }
-
-    /**
-     * @return array<string, mixed>|null
-     */
-    private function getInventoryRow(string $clinicId, string $productId): ?array
+    private function fetchFirstItemCompartmentId(string $exitLogId): ?string
     {
         $stmt = $this->pdo->prepare(
-            'SELECT
-                MIN(id::text) AS id,
-                COALESCE(SUM(quantity), 0)::int AS quantity
-             FROM inventory_items
-             WHERE clinic_id = :clinic_id AND product_id = :product_id'
+            'SELECT compartment_id
+             FROM exit_log_items
+             WHERE exit_log_id::text = :id AND compartment_id IS NOT NULL
+             ORDER BY id ASC
+             LIMIT 1'
         );
-        $stmt->execute(['clinic_id' => $clinicId, 'product_id' => $productId]);
+        $stmt->execute(['id' => $exitLogId]);
         $row = $stmt->fetch();
-
-        if (!is_array($row) || $row['id'] === null) {
+        if (!is_array($row) || $row['compartment_id'] === null) {
             return null;
         }
 
-        return $row;
+        return (string) $row['compartment_id'];
     }
 
-    private function decrementInventory(string $clinicId, string $productId, int $delta): void
+    private function decrementInventoryAtCompartment(
+        string $clinicId,
+        string $productId,
+        string $compartmentId,
+        int $delta
+    ): void {
+        $stmt = $this->pdo->prepare(
+            'SELECT id, quantity
+             FROM inventory_items
+             WHERE clinic_id = :clinic_id
+               AND product_id = :product_id
+               AND compartment_id = :compartment_id
+             LIMIT 1'
+        );
+        $stmt->execute([
+            'clinic_id' => $clinicId,
+            'product_id' => $productId,
+            'compartment_id' => $compartmentId,
+        ]);
+        $row = $stmt->fetch();
+        if (!is_array($row) || (int) $row['quantity'] < $delta) {
+            throw new ExitLogBusinessRuleException(
+                'Insufficient stock for product at compartment: ' . $productId
+            );
+        }
+
+        $upd = $this->pdo->prepare(
+            'UPDATE inventory_items SET quantity = :quantity, updated_at = NOW() WHERE id = :id'
+        );
+        $upd->execute([
+            'quantity' => (int) $row['quantity'] - $delta,
+            'id' => $row['id'],
+        ]);
+    }
+
+    private function decrementInventoryUnlocatedFifo(string $clinicId, string $productId, int $delta): void
     {
         $remaining = $delta;
 
@@ -455,6 +521,10 @@ final class ExitLogService
             ]);
             $remaining -= $consume;
         }
+
+        if ($remaining > 0) {
+            throw new ExitLogBusinessRuleException('Insufficient stock for product: ' . $productId);
+        }
     }
 
     private function assertProductInClinic(string $clinicId, string $productId): void
@@ -465,17 +535,6 @@ final class ExitLogService
         $stmt->execute(['id' => $productId, 'clinic_id' => $clinicId]);
         if (!$stmt->fetch()) {
             throw new ExitLogBusinessRuleException('Product not found in clinic');
-        }
-    }
-
-    private function assertCompartmentInClinic(string $clinicId, string $compartmentId): void
-    {
-        $stmt = $this->pdo->prepare(
-            'SELECT 1 FROM compartments WHERE id = :id AND clinic_id = :clinic_id LIMIT 1'
-        );
-        $stmt->execute(['id' => $compartmentId, 'clinic_id' => $clinicId]);
-        if (!$stmt->fetch()) {
-            throw new ExitLogBusinessRuleException('Compartment not found in clinic');
         }
     }
 
