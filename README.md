@@ -126,12 +126,15 @@ Payload:
 - Los tests de integración pasan la API a **`erp_test`** temporalmente (HTTP vía `nginx`) y al terminar se restaura **`erp`**.
 
 ```bash
-# Recomendado desde el HOST (raíz del repo): activa test → phpunit → restaura API a erp
+# Desde el HOST (raíz del repo): erp_test → migrate/seed → phpunit → restaura erp
 composer test:docker
-# o: powershell -File scripts/run-tests-docker.ps1
+# equivalente:
+php bin/run-tests.php
+php bin/run-tests.php -- --filter LockersTreeEndpointTest
 
 # Si la API quedó en modo test por error
-docker compose exec php composer test:docker:restore
+composer test:docker:restore
+# o: docker compose -f docker-compose.yml up -d --force-recreate php
 ```
 
 Solo unitarios (no cambian el contenedor `php`):
@@ -163,10 +166,10 @@ No uses `vendor/bin/phpunit` a pelo para integración: dejaría la API apuntando
    docker compose exec php composer db:seed
    ```
 
-4. Ejecutar tests (con BD `erp_test`, ver sección 9):
+4. Ejecutar tests (desde el host, ver sección 9):
 
    ```bash
-   docker compose exec php composer test:docker
+   composer test:docker
    ```
 
 ## 11) Problemas comunes (y solucion)

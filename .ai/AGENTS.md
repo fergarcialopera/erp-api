@@ -200,7 +200,7 @@ docker compose exec php composer test:docker:restore
 | Al finalizar (éxito o fallo) | `erp` (restaurado en `finally`) | — |
 
 1. **Desarrollo:** `docker compose up` → API en `:8080` apunta a `erp`.
-2. **Tests:** [`scripts/run-tests-docker.ps1`](scripts/run-tests-docker.ps1) (Windows/host) o [`scripts/run-tests-docker.sh`](scripts/run-tests-docker.sh) recrea `php` con [`docker-compose.test.yml`](docker-compose.test.yml), ejecuta phpunit por HTTP y restaura `erp`.
+2. **Tests:** [`bin/run-tests.php`](bin/run-tests.php) → [`scripts/run-tests-docker.ps1`](scripts/run-tests-docker.ps1) / [`.sh`](scripts/run-tests-docker.sh): levanta infra, recrea `php` con [`docker-compose.test.yml`](docker-compose.test.yml), `migrate`+`seed` en `erp_test`, phpunit por HTTP y restaura `erp`.
 
 **Ejecutar `composer test:docker` desde el host**, no con `docker compose exec php composer ...` (el contenedor no tiene CLI de Docker).
 3. El PDO auxiliar de `BaseApiTestCase` solo prepara fixtures en `erp_test`; la API es la que atiende las peticiones de test.
@@ -231,7 +231,7 @@ Requiere `php`, `nginx`, `postgres` y `redis`.
 
 | Script | Acción |
 |--------|--------|
-| `composer test:docker` | Activa API test → phpunit → restaura API a `erp` |
+| `composer test:docker` | Host: `bin/run-tests.php` — infra, `erp_test`, migrate/seed, phpunit, restaura `erp` |
 | `composer test:docker:up` | Solo activa API en `erp_test` |
 | `composer test:docker:restore` | Solo restaura API a `erp` |
 

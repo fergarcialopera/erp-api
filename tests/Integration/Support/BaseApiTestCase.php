@@ -75,7 +75,7 @@ abstract class BaseApiTestCase extends TestCase
         if ($res['status'] !== 200) {
             throw new \RuntimeException(
                 'La API HTTP no está usando la base de datos de tests (erp_test). '
-                . 'Ejecuta los tests con: composer test:docker (o php bin/run-tests-docker.php). '
+                . 'Ejecuta los tests con: composer test:docker (o php bin/run-tests.php). '
                 . 'Si la API quedó en modo test, restaura con: composer test:docker:restore. '
                 . 'HTTP status del probe: ' . $res['status']
             );
