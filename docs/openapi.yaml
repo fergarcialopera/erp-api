@@ -1147,7 +1147,7 @@ paths:
                       - $ref: '#/components/schemas/ExitLogCreateItemLegacy'
       responses:
         '201':
-          description: Draft exit log created. Response items may repeat the same product.id when multiple compartments were requested. Header location reflects the first compartment when present.
+          description: Draft exit log created. Each items entry is one product with nested locations (one per DB line). Header location reflects the first compartment when present.
         '401':
           description: Unauthorized
         '422':
@@ -1497,6 +1497,40 @@ components:
         locker_id:
           type: string
           description: Optional; only with compartment_id, must match compartment locker
+    ExitLogLocationLine:
+      type: object
+      properties:
+        item_id:
+          type: string
+          description: Internal exit_log_items id (use in PATCH)
+        requested_quantity: { type: integer }
+        confirmed_quantity: { type: integer, nullable: true }
+        stock_available: { type: integer, nullable: true }
+        locker:
+          $ref: '#/components/schemas/LockerRef'
+        compartment:
+          $ref: '#/components/schemas/CompartmentRef'
+    ExitLogProductItem:
+      type: object
+      properties:
+        product:
+          type: object
+          properties:
+            id: { type: string }
+            name: { type: string }
+            sku: { type: string, nullable: true }
+            barcode: { type: string, nullable: true }
+        requested_quantity_total:
+          type: integer
+          description: Sum of requested_quantity across locations for this product
+        confirmed_quantity_total:
+          type: integer
+          nullable: true
+          description: Sum of confirmed quantities when all lines are confirmed; null in draft
+        locations:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExitLogLocationLine'
     ExitLogHeader:
       type: object
       properties:

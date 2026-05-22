@@ -141,7 +141,7 @@ final class ExitLogsEndpointTest extends BaseApiTestCase
         );
         $this->assertSame(201, $created['status']);
         $exitId = (string) ($created['json']['data']['exit_log']['id'] ?? '');
-        $itemId = (string) (($created['json']['data']['items'][0]['id'] ?? ''));
+        $itemId = (string) ($created['json']['data']['items'][0]['locations'][0]['item_id'] ?? '');
 
         $patch = $this->request(
             'PATCH',
@@ -168,7 +168,8 @@ final class ExitLogsEndpointTest extends BaseApiTestCase
         $item = $get['json']['data']['items'][0] ?? null;
         $this->assertIsArray($item);
         $this->assertArrayHasKey('product', $item);
-        $this->assertArrayHasKey('requested_quantity', $item);
+        $this->assertArrayHasKey('locations', $item);
+        $this->assertArrayHasKey('requested_quantity_total', $item);
     }
 
     public function testCreateExitLogWithCompartmentReturnsLocationOnListAndDetail(): void
@@ -190,8 +191,10 @@ final class ExitLogsEndpointTest extends BaseApiTestCase
         $exitId = (string) ($created['json']['data']['exit_log']['id'] ?? '');
         $item = $created['json']['data']['items'][0] ?? null;
         $this->assertIsArray($item);
-        $this->assertSame(self::COMPARTMENT_A1, $item['compartment']['id'] ?? null);
-        $this->assertSame(self::LOCKER_A1, $item['locker']['id'] ?? null);
+        $location = $item['locations'][0] ?? null;
+        $this->assertIsArray($location);
+        $this->assertSame(self::COMPARTMENT_A1, $location['compartment']['id'] ?? null);
+        $this->assertSame(self::LOCKER_A1, $location['locker']['id'] ?? null);
 
         $list = $this->request('GET', '/api/v1/exit-logs', null, $this->authHeaderFor('admin@clinic.local'));
         $row = null;
@@ -282,16 +285,18 @@ final class ExitLogsEndpointTest extends BaseApiTestCase
         $this->assertSame(201, $created['status'], $created['raw'] ?? '');
 
         $items = $created['json']['data']['items'] ?? [];
-        $this->assertCount(2, $items);
+        $this->assertCount(1, $items);
+        $this->assertSame(self::PRODUCT_A1, $items[0]['product']['id'] ?? null);
+        $this->assertSame(3, $items[0]['requested_quantity_total'] ?? null);
 
-        $productIds = array_map(static fn (array $row): string => (string) ($row['product']['id'] ?? ''), $items);
-        $this->assertSame([self::PRODUCT_A1, self::PRODUCT_A1], $productIds);
+        $locations = $items[0]['locations'] ?? [];
+        $this->assertCount(2, $locations);
 
-        $compartmentIds = array_map(static fn (array $row): ?string => $row['compartment']['id'] ?? null, $items);
+        $compartmentIds = array_map(static fn (array $row): ?string => $row['compartment']['id'] ?? null, $locations);
         $this->assertContains(self::COMPARTMENT_A1, $compartmentIds);
         $this->assertContains(self::COMPARTMENT_A2, $compartmentIds);
 
-        $quantities = array_map(static fn (array $row): int => (int) ($row['requested_quantity'] ?? 0), $items);
+        $quantities = array_map(static fn (array $row): int => (int) ($row['requested_quantity'] ?? 0), $locations);
         sort($quantities);
         $this->assertSame([1, 2], $quantities);
     }
@@ -438,7 +443,7 @@ final class ExitLogsEndpointTest extends BaseApiTestCase
         $this->assertCount(1, $created['json']['data']['items'] ?? []);
         $this->assertSame(
             self::COMPARTMENT_A1,
-            $created['json']['data']['items'][0]['compartment']['id'] ?? null
+            $created['json']['data']['items'][0]['locations'][0]['compartment']['id'] ?? null
         );
     }
 }

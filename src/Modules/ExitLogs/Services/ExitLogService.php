@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\ExitLogs\Services;
 
+use App\Application\ExitLogs\ExitLogItemsPresenter;
 use App\Application\Stock\LocationPresenter;
 use App\Application\Stock\LocationValidator;
 use App\Domain\ExitLogs\Exception\ExitLogBusinessRuleException;
@@ -246,7 +247,8 @@ final class ExitLogService
     {
         $sql = 'SELECT el.id, el.clinic_id, el.status, el.note, el.compartment_id,
                     el.created_by_user_id, el.created_at, el.confirmed_at, el.cancelled_at,
-                    (SELECT COUNT(*)::int FROM exit_log_items ei WHERE ei.exit_log_id = el.id) AS items_count
+                    (SELECT COUNT(DISTINCT ei.product_id)::int FROM exit_log_items ei WHERE ei.exit_log_id = el.id) AS items_count,
+                    (SELECT COUNT(*)::int FROM exit_log_items ei WHERE ei.exit_log_id = el.id) AS line_items_count
              FROM exit_logs el
              WHERE el.clinic_id = :clinic_id';
         $params = ['clinic_id' => $clinicId];
@@ -285,6 +287,7 @@ final class ExitLogService
                 'confirmed_at' => $row['confirmed_at'],
                 'cancelled_at' => $row['cancelled_at'],
                 'items_count' => (int) ($row['items_count'] ?? 0),
+                'line_items_count' => (int) ($row['line_items_count'] ?? 0),
                 'compartment_public_id' => $row['compartment_id'],
                 'location' => $location,
             ];
@@ -349,7 +352,7 @@ final class ExitLogService
         $itemsStmt->execute(['clinic_id' => $clinicId, 'exit_log_id' => $exitLogId]);
         $rawItems = $itemsStmt->fetchAll() ?: [];
 
-        $items = [];
+        $flatLines = [];
         $headerCompartmentId = $header['compartment_id'] ?? null;
         foreach ($rawItems as $it) {
             $location = LocationPresenter::fromJoinRow($it);
@@ -360,8 +363,8 @@ final class ExitLogService
                 $headerCompartmentId = (string) $it['compartment_id'];
             }
 
-            $items[] = [
-                'id' => (string) $it['id'],
+            $flatLines[] = [
+                'item_id' => (string) $it['id'],
                 'product' => [
                     'id' => (string) $it['product_id'],
                     'name' => (string) $it['product_name'],
@@ -375,6 +378,8 @@ final class ExitLogService
                 'stock_available' => $it['stock_available'] !== null ? (int) $it['stock_available'] : null,
             ];
         }
+
+        $items = ExitLogItemsPresenter::groupByProduct($flatLines);
 
         $headerLocation = $headerCompartmentId !== null && $headerCompartmentId !== ''
             ? ($this->locationValidator->fetchLocationForCompartment($clinicId, (string) $headerCompartmentId)
