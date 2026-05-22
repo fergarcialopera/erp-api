@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Auth\Validators;
 
+use App\Application\Support\PinValidator;
 use InvalidArgumentException;
 
 final class PinLoginValidator
@@ -22,6 +23,8 @@ final class PinLoginValidator
         if ($pin === '') {
             throw new InvalidArgumentException('Invalid pin');
         }
+
+        PinValidator::assertValid($pin);
 
         return ['user_id' => $userId, 'pin' => $pin];
     }

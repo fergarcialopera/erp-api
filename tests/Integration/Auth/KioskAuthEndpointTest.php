@@ -10,6 +10,13 @@ final class KioskAuthEndpointTest extends BaseApiTestCase
 {
     private const CLINIC_ID = '11111111-1111-1111-1111-111111111111';
     private const STAFF_USER_ID = '44444444-4444-4444-4444-444444444444';
+    private const TECH_USER_ID = '33333333-3333-3333-3333-333333333333';
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        self::clearAuthAttemptCounters(self::STAFF_USER_ID, self::TECH_USER_ID);
+    }
 
     public function testListVisibleClinics(): void
     {
@@ -43,20 +50,32 @@ final class KioskAuthEndpointTest extends BaseApiTestCase
         $this->assertArrayHasKey('access_token', $pinLogin['json']['data'] ?? []);
     }
 
+    public function testPinLoginRejectsNonFourDigitPin(): void
+    {
+        $clinicToken = $this->clinicToken();
+
+        $res = $this->request('POST', '/api/v1/auth/login/pin', [
+            'user_id' => self::STAFF_USER_ID,
+            'pin' => '12345',
+        ], ['Authorization' => 'Bearer ' . $clinicToken]);
+
+        $this->assertSame(422, $res['status']);
+    }
+
     public function testPinLockFallbackAfterThreeFailures(): void
     {
         $clinicToken = $this->clinicToken();
 
         for ($i = 0; $i < 2; $i++) {
             $fail = $this->request('POST', '/api/v1/auth/login/pin', [
-                'user_id' => self::STAFF_USER_ID,
+                'user_id' => self::TECH_USER_ID,
                 'pin' => '0000',
             ], ['Authorization' => 'Bearer ' . $clinicToken]);
             $this->assertSame(401, $fail['status'], 'Expected failed attempt ' . ($i + 1));
         }
 
         $locked = $this->request('POST', '/api/v1/auth/login/pin', [
-            'user_id' => self::STAFF_USER_ID,
+            'user_id' => self::TECH_USER_ID,
             'pin' => '0000',
         ], ['Authorization' => 'Bearer ' . $clinicToken]);
         $this->assertSame(423, $locked['status']);

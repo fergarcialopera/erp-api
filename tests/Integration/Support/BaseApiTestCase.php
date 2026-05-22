@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Integration\Support;
 
+use App\Infrastructure\Redis\RedisClient;
 use PDO;
 use PHPUnit\Framework\TestCase;
 
@@ -54,6 +55,19 @@ abstract class BaseApiTestCase extends TestCase
     protected static function testPdo(): PDO
     {
         return self::$pdo;
+    }
+
+    protected static function clearAuthAttemptCounters(string ...$userIds): void
+    {
+        $redis = new RedisClient(
+            (string) (getenv('TEST_REDIS_HOST') ?: 'redis'),
+            (int) (getenv('TEST_REDIS_PORT') ?: 6379)
+        );
+
+        foreach ($userIds as $userId) {
+            $redis->del('auth:pin-fail:' . $userId);
+            $redis->del('auth:login-fail:' . $userId);
+        }
     }
 
     private static function assertApiUsesTestDatabase(): void

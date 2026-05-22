@@ -103,11 +103,17 @@ paths:
                   type: string
                 pin:
                   type: string
+                  minLength: 4
+                  maxLength: 4
+                  pattern: '^[0-9]{4}$'
+                  description: Exactly 4 numeric digits
       responses:
         '200':
           description: Authenticated
         '401':
           description: Invalid credentials
+        '422':
+          description: Invalid PIN format
         '423':
           description: PIN locked, use classic login
   /api/v1/auth/login:
@@ -192,6 +198,10 @@ paths:
                   type: string
                 new_pin:
                   type: string
+                  minLength: 4
+                  maxLength: 4
+                  pattern: '^[0-9]{4}$'
+                  description: Exactly 4 numeric digits (required when type is user_pin)
       responses:
         '200':
           description: Confirmed
