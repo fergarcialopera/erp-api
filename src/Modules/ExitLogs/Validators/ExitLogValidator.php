@@ -40,20 +40,85 @@ final class ExitLogValidator
             }
             $seenProducts[$productId] = true;
 
-            $quantity = filter_var($row['quantity'] ?? null, FILTER_VALIDATE_INT);
-            if ($quantity === false || $quantity <= 0) {
-                throw new InvalidArgumentException('Invalid quantity at index ' . (int) $idx);
+            $hasLocations = array_key_exists('locations', $row);
+            $hasQuantity = array_key_exists('quantity', $row);
+
+            if ($hasLocations && $hasQuantity) {
+                throw new InvalidArgumentException(
+                    'Cannot send both locations and quantity on the same item at index ' . (int) $idx
+                );
             }
 
-            $compartmentId = $this->locationValidator->parseOptionalLocation(
-                $row,
-                'index ' . (int) $idx
-            );
+            if ($hasLocations) {
+                foreach ($this->parseProductLocations($productId, $row['locations'], (int) $idx) as $line) {
+                    $lines[] = $line;
+                }
+            } else {
+                $lines[] = $this->parseLegacyItem($productId, $row, (int) $idx);
+            }
+        }
+
+        return new CreateExitLogDTO($lines, $note);
+    }
+
+    /**
+     * @return list<ExitLogLineInputDTO>
+     */
+    private function parseProductLocations(string $productId, mixed $locations, int $itemIdx): array
+    {
+        if (!is_array($locations) || $locations === []) {
+            throw new InvalidArgumentException('locations must be a non-empty array at item index ' . $itemIdx);
+        }
+
+        $lines = [];
+        $seenCompartments = [];
+
+        foreach ($locations as $locIdx => $loc) {
+            if (!is_array($loc)) {
+                throw new InvalidArgumentException(
+                    'Each location must be an object at item index ' . $itemIdx . ' location index ' . (int) $locIdx
+                );
+            }
+
+            $quantity = filter_var($loc['quantity'] ?? null, FILTER_VALIDATE_INT);
+            if ($quantity === false || $quantity <= 0) {
+                throw new InvalidArgumentException(
+                    'Invalid quantity at item index ' . $itemIdx . ' location index ' . (int) $locIdx
+                );
+            }
+
+            $label = 'item ' . $itemIdx . ' location ' . (int) $locIdx;
+            $compartmentId = $this->locationValidator->parseOptionalLocation($loc, $label);
+            if ($compartmentId === null) {
+                throw new InvalidArgumentException('compartment_id is required at ' . $label);
+            }
+
+            if (isset($seenCompartments[$compartmentId])) {
+                throw new InvalidArgumentException(
+                    'Duplicate compartment_id in locations at item index ' . $itemIdx
+                );
+            }
+            $seenCompartments[$compartmentId] = true;
 
             $lines[] = new ExitLogLineInputDTO($productId, (int) $quantity, $compartmentId);
         }
 
-        return new CreateExitLogDTO($lines, $note);
+        return $lines;
+    }
+
+    private function parseLegacyItem(string $productId, array $row, int $idx): ExitLogLineInputDTO
+    {
+        $quantity = filter_var($row['quantity'] ?? null, FILTER_VALIDATE_INT);
+        if ($quantity === false || $quantity <= 0) {
+            throw new InvalidArgumentException('Invalid quantity at index ' . $idx);
+        }
+
+        $compartmentId = $this->locationValidator->parseOptionalLocation(
+            $row,
+            'index ' . $idx
+        );
+
+        return new ExitLogLineInputDTO($productId, (int) $quantity, $compartmentId);
     }
 
     /**

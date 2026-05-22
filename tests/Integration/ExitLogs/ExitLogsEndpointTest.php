@@ -8,8 +8,10 @@ use Tests\Integration\Support\BaseApiTestCase;
 
 final class ExitLogsEndpointTest extends BaseApiTestCase
 {
+    private const CLINIC_A = '11111111-1111-1111-1111-111111111111';
     private const PRODUCT_A1 = '10000000-0000-4000-8000-000000000001';
     private const COMPARTMENT_A1 = '50000000-0000-4000-8000-000000000001';
+    private const COMPARTMENT_A2 = '50000000-0000-4000-8000-000000000002';
     private const LOCKER_A1 = '40000000-0000-4000-8000-000000000001';
 
     public function testCreateExitLogWithoutTokenReturns401(): void
@@ -246,11 +248,197 @@ final class ExitLogsEndpointTest extends BaseApiTestCase
         $this->assertSame(200, $confirm['status'], $confirm['raw'] ?? '');
 
         $stmt->execute([
-            'clinic_id' => '11111111-1111-1111-1111-111111111111',
+            'clinic_id' => self::CLINIC_A,
             'product_id' => self::PRODUCT_A1,
             'compartment_id' => self::COMPARTMENT_A1,
         ]);
         $after = (int) ($stmt->fetchColumn() ?: 0);
         $this->assertSame($before - 1, $after);
+    }
+
+    public function testCreateExitLogWithLocationsCreatesMultipleLinesForSameProduct(): void
+    {
+        $created = $this->request(
+            'POST',
+            '/api/v1/exit-logs',
+            [
+                'items' => [[
+                    'product_id' => self::PRODUCT_A1,
+                    'locations' => [
+                        [
+                            'compartment_id' => self::COMPARTMENT_A1,
+                            'quantity' => 1,
+                            'locker_id' => self::LOCKER_A1,
+                        ],
+                        [
+                            'compartment_id' => self::COMPARTMENT_A2,
+                            'quantity' => 2,
+                        ],
+                    ],
+                ]],
+            ],
+            $this->authHeaderFor('admin@clinic.local')
+        );
+        $this->assertSame(201, $created['status'], $created['raw'] ?? '');
+
+        $items = $created['json']['data']['items'] ?? [];
+        $this->assertCount(2, $items);
+
+        $productIds = array_map(static fn (array $row): string => (string) ($row['product']['id'] ?? ''), $items);
+        $this->assertSame([self::PRODUCT_A1, self::PRODUCT_A1], $productIds);
+
+        $compartmentIds = array_map(static fn (array $row): ?string => $row['compartment']['id'] ?? null, $items);
+        $this->assertContains(self::COMPARTMENT_A1, $compartmentIds);
+        $this->assertContains(self::COMPARTMENT_A2, $compartmentIds);
+
+        $quantities = array_map(static fn (array $row): int => (int) ($row['requested_quantity'] ?? 0), $items);
+        sort($quantities);
+        $this->assertSame([1, 2], $quantities);
+    }
+
+    public function testConfirmExitLogWithLocationsDeductsFromMultipleCompartments(): void
+    {
+        $pdo = self::testPdo();
+        $exists = $pdo->prepare(
+            'SELECT id FROM inventory_items
+             WHERE clinic_id = :clinic_id AND product_id = :product_id AND compartment_id = :compartment_id
+             LIMIT 1'
+        );
+        $exists->execute([
+            'clinic_id' => self::CLINIC_A,
+            'product_id' => self::PRODUCT_A1,
+            'compartment_id' => self::COMPARTMENT_A2,
+        ]);
+        if ($exists->fetchColumn() === false) {
+            $pdo->prepare(
+                'INSERT INTO inventory_items (id, clinic_id, product_id, compartment_id, quantity, updated_at)
+                 VALUES (:id, :clinic_id, :product_id, :compartment_id, :quantity, NOW())'
+            )->execute([
+                'id' => '30000000-0000-4000-8000-000000009901',
+                'clinic_id' => self::CLINIC_A,
+                'product_id' => self::PRODUCT_A1,
+                'compartment_id' => self::COMPARTMENT_A2,
+                'quantity' => 50,
+            ]);
+        } else {
+            $pdo->prepare(
+                'UPDATE inventory_items
+                 SET quantity = GREATEST(quantity, :quantity), updated_at = NOW()
+                 WHERE clinic_id = :clinic_id AND product_id = :product_id AND compartment_id = :compartment_id'
+            )->execute([
+                'quantity' => 50,
+                'clinic_id' => self::CLINIC_A,
+                'product_id' => self::PRODUCT_A1,
+                'compartment_id' => self::COMPARTMENT_A2,
+            ]);
+        }
+
+        $stmt = $pdo->prepare(
+            'SELECT quantity FROM inventory_items
+             WHERE clinic_id = :clinic_id AND product_id = :product_id AND compartment_id = :compartment_id'
+        );
+
+        $readQty = static function (string $compartmentId) use ($stmt): int {
+            $stmt->execute([
+                'clinic_id' => self::CLINIC_A,
+                'product_id' => self::PRODUCT_A1,
+                'compartment_id' => $compartmentId,
+            ]);
+
+            return (int) ($stmt->fetchColumn() ?: 0);
+        };
+
+        $beforeC1 = $readQty(self::COMPARTMENT_A1);
+        $beforeC2 = $readQty(self::COMPARTMENT_A2);
+        $this->assertGreaterThan(0, $beforeC1);
+        $this->assertGreaterThanOrEqual(2, $beforeC2);
+
+        $created = $this->request(
+            'POST',
+            '/api/v1/exit-logs',
+            [
+                'items' => [[
+                    'product_id' => self::PRODUCT_A1,
+                    'locations' => [
+                        ['compartment_id' => self::COMPARTMENT_A1, 'quantity' => 1],
+                        ['compartment_id' => self::COMPARTMENT_A2, 'quantity' => 2],
+                    ],
+                ]],
+            ],
+            $this->authHeaderFor('tech@clinic.local')
+        );
+        $this->assertSame(201, $created['status'], $created['raw'] ?? '');
+        $exitId = (string) ($created['json']['data']['exit_log']['id'] ?? '');
+
+        $confirm = $this->request(
+            'POST',
+            '/api/v1/exit-logs/' . $exitId . '/confirm',
+            null,
+            $this->authHeaderFor('admin@clinic.local')
+        );
+        $this->assertSame(200, $confirm['status'], $confirm['raw'] ?? '');
+
+        $this->assertSame($beforeC1 - 1, $readQty(self::COMPARTMENT_A1));
+        $this->assertSame($beforeC2 - 2, $readQty(self::COMPARTMENT_A2));
+    }
+
+    public function testCreateExitLogRejectsDuplicateCompartmentInLocations(): void
+    {
+        $res = $this->request(
+            'POST',
+            '/api/v1/exit-logs',
+            [
+                'items' => [[
+                    'product_id' => self::PRODUCT_A1,
+                    'locations' => [
+                        ['compartment_id' => self::COMPARTMENT_A1, 'quantity' => 1],
+                        ['compartment_id' => self::COMPARTMENT_A1, 'quantity' => 2],
+                    ],
+                ]],
+            ],
+            $this->authHeaderFor('admin@clinic.local')
+        );
+        $this->assertSame(422, $res['status']);
+    }
+
+    public function testCreateExitLogRejectsLocationsAndQuantityTogether(): void
+    {
+        $res = $this->request(
+            'POST',
+            '/api/v1/exit-logs',
+            [
+                'items' => [[
+                    'product_id' => self::PRODUCT_A1,
+                    'quantity' => 1,
+                    'locations' => [
+                        ['compartment_id' => self::COMPARTMENT_A1, 'quantity' => 1],
+                    ],
+                ]],
+            ],
+            $this->authHeaderFor('admin@clinic.local')
+        );
+        $this->assertSame(422, $res['status']);
+    }
+
+    public function testCreateExitLogLegacyFormatStillAccepted(): void
+    {
+        $created = $this->request(
+            'POST',
+            '/api/v1/exit-logs',
+            [
+                'items' => [[
+                    'product_id' => self::PRODUCT_A1,
+                    'quantity' => 1,
+                    'compartment_id' => self::COMPARTMENT_A1,
+                ]],
+            ],
+            $this->authHeaderFor('admin@clinic.local')
+        );
+        $this->assertSame(201, $created['status'], $created['raw'] ?? '');
+        $this->assertCount(1, $created['json']['data']['items'] ?? []);
+        $this->assertSame(
+            self::COMPARTMENT_A1,
+            $created['json']['data']['items'][0]['compartment']['id'] ?? null
+        );
     }
 }
