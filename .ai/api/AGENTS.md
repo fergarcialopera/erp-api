@@ -1,9 +1,20 @@
-# API_GUIDELINES.md
+# API
 
-## Objetivo
+Reglas de contrato HTTP/OpenAPI y diseño orientado al frontend.
 
-Reglas **solo de contrato API** (HTTP/OpenAPI).  
-Las reglas generales de arquitectura, capas y antipatrones globales viven en `AGENTS.md`.
+---
+
+## Principio clave
+
+> La API debe estar orientada a **casos de uso reales del frontend**, no a entidades de base de datos.
+
+Esto implica:
+
+- evitar endpoints genéricos basados en tablas
+- evitar respuestas con IDs que obliguen al frontend a hacer múltiples llamadas
+- devolver datos listos para pintar en UI
+
+Para autenticación, roles y aislamiento por clínica, ver [auth/AGENTS.md](../auth/AGENTS.md).
 
 ---
 
@@ -11,8 +22,8 @@ Las reglas generales de arquitectura, capas y antipatrones globales viven en `AG
 
 - Base path: `/api/v1`
 - Formato: `application/json`
-- Autenticación: `Authorization: Bearer <token>` en endpoints privados
 - Fuente de verdad del contrato: `docs/openapi.yaml`
+- Autenticación y permisos: [auth/AGENTS.md](../auth/AGENTS.md)
 
 ---
 
@@ -49,18 +60,22 @@ Para cualquier endpoint nuevo (y refactors de endpoints existentes), los handler
 Usar códigos HTTP coherentes:
 
 - `200`/`201` éxito
-- `401` sin autenticación/token inválido
-- `403` sin permisos
-- `404` no existe o no pertenece al tenant (`clinic_id`)
 - `422` validación/estado inválido
+- `401`/`403`/tenant `404`: ver [auth/AGENTS.md](../auth/AGENTS.md)
 
 ---
 
-## Multi-tenant y permisos
+## Performance
 
-- Todos los recursos de negocio deben resolverse por `clinic_id`.
-- Si el `id` existe en otra clínica, responder `404` (no filtrar existencia).
-- Definir permisos por rol en rutas y reflejarlos en tests.
+Regla fundamental:
+
+> Una vista del frontend debe poder resolverse con el menor número posible de llamadas.
+
+Por tanto:
+
+- usar joins en backend cuando sea necesario
+- devolver datos enriquecidos
+- evitar N+1 requests HTTP
 
 ---
 
@@ -70,7 +85,7 @@ Cada cambio de endpoint debe incluir en el mismo bloque de trabajo:
 
 1. Implementación del endpoint
 2. Actualización de `docs/openapi.yaml`
-3. Tests de integración HTTP
+3. Tests de integración HTTP (ver [testing/AGENTS.md](../testing/AGENTS.md))
 
 Cobertura mínima:
 
