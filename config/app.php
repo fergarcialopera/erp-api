@@ -1,7 +1,8 @@
 <?php
 
-return [
-    'name' => $_ENV['APP_NAME'] ?? 'ERP Clinic Stock',
-    'env' => $_ENV['APP_ENV'] ?? 'local',
-    'debug' => filter_var($_ENV['APP_DEBUG'] ?? false, FILTER_VALIDATE_BOOL),
-];
+declare(strict_types=1);
+
+/** @var array{app: array{name: string, env: string, debug: bool, url: string}} $config */
+$config = require __DIR__ . '/application.php';
+
+return $config['app'];

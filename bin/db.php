@@ -3,11 +3,9 @@
 
 declare(strict_types=1);
 
-require_once dirname(__DIR__) . '/vendor/autoload.php';
+require dirname(__DIR__) . '/bootstrap/load-env.php';
 
-if (is_file(dirname(__DIR__) . '/.env') && class_exists(\Dotenv\Dotenv::class)) {
-    \Dotenv\Dotenv::createImmutable(dirname(__DIR__))->safeLoad();
-}
+use App\Infrastructure\Database\DatabaseConfig;
 
 final class DbMigrator
 {
@@ -208,11 +206,12 @@ final class DbMigrator
 
     private function connect(): PDO
     {
-        $host = $_ENV['DB_HOST'] ?? 'postgres';
-        $port = $_ENV['DB_PORT'] ?? '5432';
-        $db = $_ENV['DB_DATABASE'] ?? 'erp';
-        $user = $_ENV['DB_USERNAME'] ?? 'erp';
-        $pass = $_ENV['DB_PASSWORD'] ?? 'erp';
+        $dbConfig = DatabaseConfig::fromEnvironment();
+        $host = $dbConfig['host'];
+        $port = $dbConfig['port'];
+        $db = $dbConfig['database'];
+        $user = $dbConfig['username'];
+        $pass = $dbConfig['password'];
 
         return new PDO(
             sprintf('pgsql:host=%s;port=%s;dbname=%s', $host, $port, $db),

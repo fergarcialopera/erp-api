@@ -7,6 +7,7 @@ use App\Application\Stock\LocationValidator;
 use App\Application\Support\PublicUrlBuilder;
 use App\Infrastructure\Auth\LoginAttemptService;
 use App\Infrastructure\Auth\TokenService;
+use App\Infrastructure\Config\ApplicationConfig;
 use App\Infrastructure\Config\Config;
 use App\Infrastructure\Database\Connection;
 use App\Infrastructure\Logging\LoggerFactory;
@@ -104,7 +105,6 @@ use App\Modules\Users\Validators\UserValidator;
 use Psr\Log\LoggerInterface;
 
 /**
- * @param array<string, mixed> $dbConfig
  * @return array{
  *     pdo: \PDO,
  *     logger: LoggerInterface,
@@ -112,7 +112,10 @@ use Psr\Log\LoggerInterface;
  *     handlers: array<string, callable|OpenApiController>
  * }
  */
-return static function (Config $config, array $dbConfig): array {
+return static function (ApplicationConfig $appConfig): array {
+    $dbConfig = $appConfig->database();
+    $config = $appConfig->infrastructure();
+
     $pdo = Connection::create(
         $dbConfig['host'],
         $dbConfig['port'],
@@ -128,32 +131,30 @@ return static function (Config $config, array $dbConfig): array {
 
     $logger = LoggerFactory::create('erp-api');
     $projectRoot = dirname(__DIR__);
-    $publicBaseUrl = rtrim((string) ($_ENV['APP_PUBLIC_URL'] ?? 'http://localhost:8080'), '/');
-    $frontendBaseUrl = rtrim((string) ($_ENV['FRONTEND_URL'] ?? 'http://localhost:3000'), '/');
-    $publicUrls = new PublicUrlBuilder($publicBaseUrl);
-    $userTtl = (int) ($_ENV['AUTH_USER_TTL'] ?? 1800);
-    $clinicTtl = (int) ($_ENV['AUTH_CLINIC_TTL'] ?? 28800);
+    $publicUrls = new PublicUrlBuilder($appConfig->publicBaseUrl());
+    $userTtl = $appConfig->authUserTtl();
+    $clinicTtl = $appConfig->authClinicTtl();
     $tokenService = new TokenService($redis, $userTtl, $clinicTtl);
     $loginAttempts = new LoginAttemptService($redis);
     $authMapper = new AuthMapper($publicUrls);
     $authService = new AuthService($pdo, $tokenService, $loginAttempts, $authMapper);
 
     $mailer = null;
-    $mailHost = trim((string) ($_ENV['MAIL_HOST'] ?? ''));
+    $mailHost = $appConfig->mailHost();
     if ($mailHost !== '') {
         $mailer = new SmtpMailer(
             $mailHost,
-            (int) ($_ENV['MAIL_PORT'] ?? 1025),
-            (string) ($_ENV['MAIL_FROM'] ?? 'noreply@erp.local'),
-            (string) ($_ENV['MAIL_FROM_NAME'] ?? 'ERP Clinic')
+            $appConfig->mailPort(),
+            $appConfig->mailFrom(),
+            $appConfig->mailFromName()
         );
     }
 
     $recoveryService = new RecoveryService(
         $pdo,
         $mailer,
-        $frontendBaseUrl,
-        (int) ($_ENV['RECOVERY_TTL_MINUTES'] ?? 60)
+        $appConfig->frontendBaseUrl(),
+        $appConfig->recoveryTtlMinutes()
     );
     $imageStorage = new LocalImageStorage($projectRoot);
     $locationValidator = new LocationValidator($pdo);
@@ -167,9 +168,8 @@ return static function (Config $config, array $dbConfig): array {
     $exitLogService = new ExitLogService($pdo, $locationValidator);
     $exitLogValidator = new ExitLogValidator($locationValidator);
     $exitLogLockPort = new PdoExitLogLockPort($pdo);
-    $mqttDisabled = filter_var($_ENV['MQTT_DISABLED'] ?? 'false', FILTER_VALIDATE_BOOL);
-    $mqttHost = (string) $config->get('mqtt.host', '');
-    $lockCommandPublisher = ($mqttHost !== '' && !$mqttDisabled)
+    $mqttHost = $appConfig->mqttHost();
+    $lockCommandPublisher = ($mqttHost !== '' && !$appConfig->mqttDisabled())
         ? new PhpMqttLockCommandPublisher($config, $logger)
         : new NoOpLockCommandPublisher();
     $openExitLogLockAction = new OpenExitLogLockAction($exitLogLockPort, $lockCommandPublisher, $logger);
