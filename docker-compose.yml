@@ -1,5 +1,6 @@
 services:
   nginx:
+    container_name: erp-nginx
     image: nginx:1.27-alpine
     ports:
       - "8080:80"
@@ -12,6 +13,7 @@ services:
       - erp_net
 
   mailpit:
+    container_name: erp-mailpit
     image: axllent/mailpit:latest
     ports:
       - "1025:1025"
@@ -20,6 +22,7 @@ services:
       - erp_net
 
   php:
+    container_name: erp-php
     build:
       context: .
       dockerfile: docker/php/Dockerfile
@@ -56,6 +59,7 @@ services:
       - erp_net
 
   postgres:
+    container_name: erp-postgres
     image: postgres:15-alpine
     environment:
       POSTGRES_DB: ${DB_DATABASE:-erp}
@@ -70,6 +74,7 @@ services:
       - erp_net
 
   redis:
+    container_name: erp-redis
     image: redis:7.4-alpine
     ports:
       - "6379:6379"
@@ -79,6 +84,7 @@ services:
       - erp_net
 
   mosquitto:
+    container_name: erp-mosquitto
     image: eclipse-mosquitto:2
     user: "0:0"
     ports:
