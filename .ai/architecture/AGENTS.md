@@ -3,8 +3,20 @@
 El proyecto sigue:
 
 - Clean Code
+- SOLID (aplicados con criterio pragmático)
 - DDD (Domain Driven Design)
 - Arquitectura Hexagonal (Ports & Adapters)
+
+---
+
+## Criterio de implementación
+
+El objetivo no es un diseño perfecto en abstracto, sino un código **legible, coherente y mantenible**.
+
+- **Sí:** responsabilidades claras, nombres expresivos, dependencias en la dirección correcta, reutilizar lo que ya existe en el repo.
+- **No:** capas o interfaces que solo añaden indirección, clases “dios”, métodos kilométricos, lógica duplicada o acoplada a detalles de infraestructura.
+
+Cuando SOLID y la simplicidad entren en conflicto, **prevalece la simplicidad** siempre que se respeten las reglas de capas de este proyecto.
 
 ---
 
@@ -62,6 +74,8 @@ Además:
 
 Los agentes deben evitar:
 
+**Arquitectura y código**
+
 - diseñar endpoints basados en tablas
 - crear endpoints duplicados como:
   - `/orders/table`
@@ -70,6 +84,8 @@ Los agentes deben evitar:
 - forzar múltiples llamadas desde frontend
 - introducir lógica de negocio en handlers
 - acoplar lógica de dominio a detalles de PDO/SQL o Redis
+- código espagueti o clases con demasiadas responsabilidades
+- abstracciones o capas innecesarias “por si acaso”
 - introducir conceptos obsoletos del dominio:
   - ❌ `open-orders`
   - ❌ `dispenses`

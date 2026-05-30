@@ -48,7 +48,8 @@ Valores por defecto del proyecto:
 - APP URL: `http://localhost:8080`
 - PostgreSQL: `erp/erp`
 - Redis: `redis:6379`
-- Mosquitto: credenciales en `MQTT_USERNAME` / `MQTT_PASSWORD` (ver seccion 13); el API no las usa aun
+- Mosquitto: credenciales en `MQTT_USERNAME` / `MQTT_PASSWORD` (ver seccion 13)
+- MQTT en el backend: `MQTT_HOST`, `MQTT_PORT`, etc. (apertura de cerraduras; ver seccion 13). Si `MQTT_HOST` esta vacio o `MQTT_DISABLED=true`, el API no conecta al broker
 
 ## 4) Levantar contenedores
 
@@ -62,7 +63,7 @@ Servicios que se levantan:
 - `php` (FPM)
 - `postgres` (puerto `5432`)
 - `redis` (puerto `6379`)
-- `mosquitto` (broker MQTT, puerto `1883`; solo infraestructura, el backend no lo usa aun)
+- `mosquitto` (broker MQTT, puerto `1883`; usado por el backend para comandos de cerradura)
 
 ## 5) Ejecutar migraciones y seeders
 
@@ -208,11 +209,12 @@ Primero confirma que estas usando el puerto correcto del backend:
 - `database/migrations` -> SQL de esquema versionado
 - `database/seeders` -> datos iniciales
 - `docs/openapi.yaml` -> contrato API
+- `.ai/` -> guias para agentes de IA y convenciones del proyecto (ver seccion 15)
 - `tests/Integration` -> tests HTTP/integracion
 
 ## 13) MQTT (Mosquitto) — desarrollo local con autenticacion
 
-**Eclipse Mosquitto** esta integrado como servicio Docker para pruebas y para conectar mas adelante el backend y dispositivos (por ejemplo un ESP32) con **usuario y contrasena**. **El codigo PHP del ERP no usa MQTT todavia**; las variables `MQTT_*` solo preparan la convencion para cuando se implemente.
+**Eclipse Mosquitto** esta integrado como servicio Docker. El backend publica comandos de apertura de cerradura en el topic `lockers/{deviceId}/cmd` (payload `open`) cuando se invoca `POST /api/v1/exit-logs/{id}/open-lock`. Si `MQTT_HOST` esta vacio o `MQTT_DISABLED=true`, el API usa un publicador no-op (util en tests o sin broker).
 
 ### Que hace la infraestructura
 
@@ -233,7 +235,7 @@ Primero confirma que estas usando el puerto correcto del backend:
 | Archivo | Motivo |
 |--------|--------|
 | `docker-compose.yml` | Servicio `mosquitto`: variables `MQTT_USERNAME` / `MQTT_PASSWORD`, entrypoint, montaje del script; usuario root solo para generar `passwd` y hacer `su` al usuario del broker. |
-| `.env.example` | Plantilla `MQTT_HOST`, `MQTT_PORT`, `MQTT_USERNAME`, `MQTT_PASSWORD` para Compose y futura aplicacion (copiar a `.env` y personalizar). |
+| `.env.example` | Plantilla `MQTT_*` para Compose y el servicio `php` (copiar a `.env` y personalizar). |
 
 ### Variables de entorno (obligatorio para arrancar Mosquitto)
 
@@ -242,7 +244,7 @@ En la raiz del proyecto, tu `.env` (creado desde `.env.example`) debe incluir al
 - `MQTT_USERNAME`
 - `MQTT_PASSWORD`
 
-Docker Compose las inyecta en el contenedor `mosquitto`. El servicio `php` **no** recibe estas variables: el comportamiento del API no cambia.
+Docker Compose las inyecta en los contenedores `mosquitto` y `php`. En `php` controlan la conexion del backend al broker; en `mosquitto`, la autenticacion del broker.
 
 Valores orientativos para **otro contenedor** o **futuro Laravel**: `MQTT_HOST=mosquitto`, `MQTT_PORT=1883`. Para un ESP32 en la LAN: `MQTT_HOST` sera la IP del PC o del servidor Docker.
 
@@ -332,3 +334,20 @@ Usuario/contrasena sin TLS solo es aceptable en **desarrollo local**. En producc
 
 - GitHub: [fergarcialopera/erp-api](https://github.com/fergarcialopera/erp-api.git)
 
+## 15) Documentacion para agentes de IA (`.ai/`)
+
+Convenciones de arquitectura, API, auth, IoT y tests para asistentes de codigo y contribuidores. Punto de entrada:
+
+- [`.ai/AGENTS.md`](.ai/AGENTS.md) — indice, contexto del proyecto y workflow (analizar, aclarar, planificar; confirmacion antes de editar ficheros)
+
+Guias tematicas:
+
+| Guia | Contenido |
+|------|-----------|
+| [`.ai/architecture/AGENTS.md`](.ai/architecture/AGENTS.md) | Capas, DDD, dependencias, antipatrones |
+| [`.ai/api/AGENTS.md`](.ai/api/AGENTS.md) | Endpoints, respuestas, OpenAPI, rendimiento |
+| [`.ai/auth/AGENTS.md`](.ai/auth/AGENTS.md) | Tokens, roles, multi-tenant |
+| [`.ai/iot/AGENTS.md`](.ai/iot/AGENTS.md) | Apertura de cerraduras via MQTT |
+| [`.ai/testing/AGENTS.md`](.ai/testing/AGENTS.md) | PHPUnit, Docker, integracion HTTP |
+
+Detalle ampliado de tests: seccion 9 de este README y [`.ai/testing/AGENTS.md`](.ai/testing/AGENTS.md).

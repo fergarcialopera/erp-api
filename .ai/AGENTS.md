@@ -29,22 +29,32 @@ El backend está diseñado como **API-first**, siendo el frontend su principal c
 
 ## Workflow obligatorio para implementar cambios
 
-Antes de implementar cualquier cambio no trivial, el agente debe seguir este flujo:
+**Regla general:** no modificar ningún fichero sin confirmación explícita del usuario.
 
-1. **Investigar contexto y código actual**
-   - revisar estructura existente
+Cada cambio debe **analizarse**, **aclararse** (dudas, alcance, criterios de éxito) y **planificarse** antes de tocar código. Solo después de esa planificación y la aprobación del usuario se implementa.
+
+### Flujo estándar
+
+1. **Analizar**
+   - revisar contexto y código existente
    - localizar código relacionado
    - identificar restricciones y dependencias
 
-2. **Proponer plan de acción**
-   - pasos concretos y verificables
-   - impacto esperado por capa/módulo
-   - riesgos o decisiones relevantes
+2. **Aclarar**
+   - resolver ambigüedades con el usuario si hace falta
+   - confirmar alcance y criterios de éxito
 
-3. **Esperar confirmación del usuario**
-   - no iniciar implementación hasta recibir aprobación explícita del plan
+3. **Planificar**
+   - proponer pasos concretos y verificables
+   - indicar impacto por capa/módulo
+   - señalar riesgos o decisiones relevantes
 
-Regla: la implementación comienza **solo después** de la confirmación del usuario.
+4. **Esperar confirmación**
+   - no editar ficheros hasta recibir aprobación explícita del plan
+
+### Excepción: cambios claros y pequeños
+
+Si el cambio es **evidente, acotado y de bajo riesgo** (p. ej. typo, ajuste menor acordado en la conversación, corrección obvia de un error señalado), el agente puede implementarlo directamente sin plan formal. En caso de duda, aplicar el flujo estándar.
 
 ---
 
@@ -66,6 +76,28 @@ MQTT_PORT
 MQTT_USERNAME
 MQTT_PASSWORD
 ```
+
+---
+
+## Calidad de código
+
+**Norma general:** implementar código limpio, coherente con el proyecto y mantenible por cualquier desarrollador.
+
+Principios:
+
+- Aplicar **SOLID** y **Clean Code** de forma **pragmática**, no dogmática.
+- Mantener **coherencia técnica** con patrones, capas y convenciones ya presentes en el repo.
+- Priorizar claridad y mantenibilidad sobre sofisticación innecesaria.
+
+Evitar:
+
+- código espagueti (lógica mezclada, responsabilidades difusas, acoplamiento alto)
+- sobreingeniería (abstracciones prematuras, capas de más, patrones “de libro” sin beneficio real)
+- complejidad extrema orientada a un sistema ideal inalcanzable
+
+Regla práctica: la solución debe ser la **más simple que respete la arquitectura del proyecto**. Si un cambio exige explicación larga para justificar su complejidad, simplificarlo.
+
+Detalle de capas y antipatrones: [architecture/AGENTS.md](architecture/AGENTS.md).
 
 ---
 
