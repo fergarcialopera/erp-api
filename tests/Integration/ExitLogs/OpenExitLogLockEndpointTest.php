@@ -29,7 +29,7 @@ final class OpenExitLogLockEndpointTest extends BaseApiTestCase
             'POST',
             '/api/v1/exit-logs',
             ['items' => [['product_id' => self::PRODUCT_A1, 'quantity' => 1]]],
-            $this->authHeaderFor('admin@clinic.local')
+            $this->authHeaderFor('staff@clinic.local')
         );
         $this->assertSame(201, $created['status']);
         $exitId = (string) ($created['json']['data']['exit_log']['id'] ?? '');
@@ -40,19 +40,20 @@ final class OpenExitLogLockEndpointTest extends BaseApiTestCase
 
     public function testOpenLockReturns422WhenNoCompartmentLinkedAfterConfirm(): void
     {
+        $staffAuth = $this->authHeaderFor('staff@clinic.local');
         $created = $this->request(
             'POST',
             '/api/v1/exit-logs',
             ['items' => [['product_id' => self::PRODUCT_A1, 'quantity' => 1]]],
-            $this->authHeaderFor('admin@clinic.local')
+            $staffAuth
         );
         $this->assertSame(201, $created['status']);
         $exitId = (string) ($created['json']['data']['exit_log']['id'] ?? '');
 
-        $confirm = $this->request('POST', '/api/v1/exit-logs/' . $exitId . '/confirm', null, $this->authHeaderFor('admin@clinic.local'));
+        $confirm = $this->request('POST', '/api/v1/exit-logs/' . $exitId . '/confirm', null, $staffAuth);
         $this->assertSame(200, $confirm['status'], $confirm['raw'] ?? '');
 
-        $open = $this->request('POST', '/api/v1/exit-logs/' . $exitId . '/open-lock', null, $this->authHeaderFor('staff@clinic.local'));
+        $open = $this->request('POST', '/api/v1/exit-logs/' . $exitId . '/open-lock', null, $staffAuth);
         $this->assertSame(422, $open['status']);
     }
 
@@ -85,6 +86,7 @@ final class OpenExitLogLockEndpointTest extends BaseApiTestCase
         );
         $this->assertSame(201, $entry['status'], $entry['raw'] ?? '');
 
+        $staffAuth = $this->authHeaderFor('staff@clinic.local');
         $created = $this->request(
             'POST',
             '/api/v1/exit-logs',
@@ -95,16 +97,16 @@ final class OpenExitLogLockEndpointTest extends BaseApiTestCase
                     'compartment_id' => $compartmentId,
                 ]],
             ],
-            $this->authHeaderFor('admin@clinic.local')
+            $staffAuth
         );
         $this->assertSame(201, $created['status']);
         $exitId = (string) ($created['json']['data']['exit_log']['id'] ?? '');
         $this->assertNotSame('', $exitId);
 
-        $confirm = $this->request('POST', '/api/v1/exit-logs/' . $exitId . '/confirm', null, $this->authHeaderFor('admin@clinic.local'));
+        $confirm = $this->request('POST', '/api/v1/exit-logs/' . $exitId . '/confirm', null, $staffAuth);
         $this->assertSame(200, $confirm['status'], $confirm['raw'] ?? '');
 
-        $open = $this->request('POST', '/api/v1/exit-logs/' . $exitId . '/open-lock', null, $this->authHeaderFor('staff@clinic.local'));
+        $open = $this->request('POST', '/api/v1/exit-logs/' . $exitId . '/open-lock', null, $staffAuth);
         $this->assertSame(200, $open['status'], $open['raw'] ?? '');
         $this->assertIsArray($open['json']);
         $data = $open['json']['data'] ?? null;

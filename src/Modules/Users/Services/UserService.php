@@ -117,17 +117,24 @@ final class UserService
              WHERE clinic_id = :clinic_id AND id::text = :id
              RETURNING id, clinic_id, name, email, role, is_active, is_locked, image_path, created_at, updated_at'
         );
-        $stmt->execute([
-            'clinic_id' => $clinicId,
-            'id' => $userId,
-            'name' => $name,
-            'role' => $role,
-            'is_active' => $isActive,
-            'password_hash' => $passwordHash,
-            'pin_hash' => $pinHash,
-            'is_locked' => $isLocked,
-            'locked_at' => $lockedAt,
-        ]);
+        $stmt->bindValue(':clinic_id', $clinicId);
+        $stmt->bindValue(':id', $userId);
+        $stmt->bindValue(':name', $name);
+        $stmt->bindValue(':role', $role);
+        $stmt->bindValue(':is_active', $isActive, PDO::PARAM_BOOL);
+        $stmt->bindValue(':password_hash', $passwordHash);
+        if ($pinHash === null) {
+            $stmt->bindValue(':pin_hash', null, PDO::PARAM_NULL);
+        } else {
+            $stmt->bindValue(':pin_hash', $pinHash);
+        }
+        $stmt->bindValue(':is_locked', $isLocked, PDO::PARAM_BOOL);
+        if ($lockedAt === null) {
+            $stmt->bindValue(':locked_at', null, PDO::PARAM_NULL);
+        } else {
+            $stmt->bindValue(':locked_at', $lockedAt);
+        }
+        $stmt->execute();
 
         $row = $stmt->fetch();
 
