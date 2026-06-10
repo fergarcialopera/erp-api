@@ -5,9 +5,14 @@ on:
     branches:
       - main
 
+concurrency:
+  group: production-deploy
+  cancel-in-progress: true
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    environment: VPS_IONOS.env
 
     steps:
       - name: Deploy to IONOS VPS
@@ -19,25 +24,19 @@ jobs:
           port: ${{ secrets.VPS_PORT }}
           script: |
             set -euo pipefail
-            cd /opt/erp-api
+            APP_DIR=/opt/erp-api
+            REPO_URL=https://github.com/fergarcialopera/erp-api.git
 
-            if [ ! -f .env.production ]; then
-              echo "ERROR: falta .env.production en el servidor"
-              exit 1
+            if [ -f "${APP_DIR}/scripts/deploy-remote.sh" ]; then
+              exec env APP_DIR="${APP_DIR}" REPO_URL="${REPO_URL}" bash "${APP_DIR}/scripts/deploy-remote.sh"
             fi
 
-            if ! grep -qE '^APP_ENV=prod' .env.production; then
-              echo "ERROR: .env.production debe definir APP_ENV=prod"
-              exit 1
+            if [ -d "${APP_DIR}/.git" ]; then
+              cd "${APP_DIR}"
+              git fetch origin
+              git pull origin main
+            else
+              git clone "${REPO_URL}" "${APP_DIR}"
             fi
 
-            git pull origin main
-
-            docker compose --env-file .env.production \
-              -f docker-compose.yml \
-              -f docker-compose.prod.yml \
-              up -d --build
-
-            docker image prune -f
-
-            curl -fsS http://127.0.0.1/up
+            exec env APP_DIR="${APP_DIR}" REPO_URL="${REPO_URL}" bash "${APP_DIR}/scripts/deploy-remote.sh"
