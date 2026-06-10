@@ -3,7 +3,7 @@ services:
     container_name: erp-nginx
     image: nginx:1.27-alpine
     ports:
-      - "8080:80"
+      - "80:80"
     volumes:
       - ./:/var/www/html
       - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
