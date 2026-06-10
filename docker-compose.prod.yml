@@ -2,7 +2,7 @@
 #   docker compose --env-file .env.production -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 #
 # Variables sensibles: .env.production en el servidor (no versionado).
-# API en el puerto 8080 del host; el frontend React usa el puerto 80 (repo aparte).
+# Solo el API (puerto 8080 del host). El frontend es un repo y despliegue aparte.
 
 services:
   nginx:
