@@ -36,6 +36,7 @@ final class ApiDispatcher
         foreach ($vars as $key => $value) {
             $request = $request->withAttribute((string) $key, $value);
         }
+
         $core = fn (Request $req): Response => $handler($req);
         $pipeline = array_reduce(
             array_reverse($this->middlewares),

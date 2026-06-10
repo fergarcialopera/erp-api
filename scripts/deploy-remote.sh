@@ -6,7 +6,6 @@ set -euo pipefail
 APP_DIR="${APP_DIR:-/opt/erp-api}"
 REPO_URL="${REPO_URL:-https://github.com/fergarcialopera/erp-api.git}"
 REQUIRED_SERVICES="nginx php postgres redis mosquitto"
-HEALTH_URL="${HEALTH_URL:-http://127.0.0.1/up}"
 
 echo "==> Sincronizando código en ${APP_DIR}"
 if [ -d "${APP_DIR}/.git" ]; then
@@ -26,6 +25,14 @@ fi
 
 if ! grep -qE '^APP_ENV=prod' .env.production; then
   echo "ERROR: .env.production debe definir APP_ENV=prod"
+  exit 1
+fi
+
+if grep -qE '^APP_PUBLIC_URL=' .env.production; then
+  public_base="$(grep -E '^APP_PUBLIC_URL=' .env.production | head -1 | cut -d= -f2- | tr -d '\r"' | sed "s/^['\"]//;s/['\"]$//" | sed 's/[[:space:]]*$//')"
+  HEALTH_URL="${public_base%/}/up"
+else
+  echo "ERROR: .env.production debe definir APP_PUBLIC_URL (p. ej. http://212.227.145.0:8080)"
   exit 1
 fi
 
@@ -53,7 +60,7 @@ echo "==> Aplicando migraciones"
 echo "==> Limpiando imágenes Docker sin uso"
 docker image prune -f
 
-echo "==> Health check (${HEALTH_URL})"
+echo "==> Health check API (${HEALTH_URL})"
 curl -fsS "${HEALTH_URL}"
 echo ""
 echo "Deploy completado."
