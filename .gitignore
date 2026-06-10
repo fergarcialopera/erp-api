@@ -1,9 +1,21 @@
 /vendor/
 
-# Environment
+# Environment (secretos y configuración por entorno)
 .env
 .env.local
+.env.production
 .env.*.local
+.env.*.production
+
+# Claves y credenciales
+*.pem
+*.key
+*.p12
+*.pfx
+credentials.json
+secrets/
+id_rsa
+id_ed25519
 
 # PHPUnit / test artifacts
 .phpunit.cache/

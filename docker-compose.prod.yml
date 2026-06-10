@@ -1,0 +1,35 @@
+# Override de producción. Combinar siempre con docker-compose.yml:
+#   docker compose --env-file .env.production -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+#
+# Variables sensibles: .env.production en el servidor (no versionado).
+# Solo nginx expone puerto 80; el resto de servicios quedan en la red interna Docker.
+
+services:
+  nginx:
+    restart: unless-stopped
+    ports:
+      - "80:80"
+
+  php:
+    restart: unless-stopped
+    env_file:
+      - .env.production
+    depends_on: !reset
+      - postgres
+      - redis
+      - mosquitto
+
+  postgres:
+    restart: unless-stopped
+    ports: []
+
+  redis:
+    restart: unless-stopped
+    ports: []
+
+  mosquitto:
+    restart: unless-stopped
+    ports: []
+
+  mailpit:
+    profiles: ["dev"]
