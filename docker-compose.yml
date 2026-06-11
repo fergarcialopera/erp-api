@@ -2,9 +2,7 @@ services:
   nginx:
     container_name: erp-nginx
     image: nginx:1.27-alpine
-    ports:
-      # API en :8080 del host (local y prod). El frontend va en otro repo/puerto.
-      - "8080:80"
+    # Puertos publicados en docker-compose.dev.yml (8080) y docker-compose.prod.yml (80).
     volumes:
       - ./:/var/www/html
       - ./docker/nginx/snippets:/etc/nginx/snippets:ro

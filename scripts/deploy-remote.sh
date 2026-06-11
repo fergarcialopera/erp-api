@@ -29,11 +29,20 @@ if ! grep -qE '^APP_ENV=prod' .env.production; then
 fi
 
 if ! grep -qE '^APP_PUBLIC_URL=' .env.production; then
-  echo "ERROR: .env.production debe definir APP_PUBLIC_URL (p. ej. http://212.227.145.0:8080)"
+  echo "ERROR: .env.production debe definir APP_PUBLIC_URL (p. ej. http://212.227.145.0)"
   exit 1
 fi
+
+FRONTEND_DIST_PATH="$(grep -E '^FRONTEND_DIST_PATH=' .env.production 2>/dev/null | head -1 | cut -d= -f2- | tr -d '\r' | sed 's/^["'\'']//;s/["'\'']$//' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+FRONTEND_DIST_PATH="${FRONTEND_DIST_PATH:-/root/erp-frontend/dist}"
+
+if [ ! -f "${FRONTEND_DIST_PATH}/index.html" ]; then
+  echo "ERROR: no se encuentra ${FRONTEND_DIST_PATH}/index.html (build del frontend en erp-frontend)"
+  exit 1
+fi
+
 # Comprobar en localhost: en muchos VPS falla el curl a la IP pública desde el propio host (hairpin/NAT).
-HEALTH_URL="http://127.0.0.1:8080/up"
+HEALTH_URL="http://127.0.0.1/up"
 
 COMPOSE=(docker compose --env-file .env.production -f docker-compose.yml -f docker-compose.prod.yml)
 

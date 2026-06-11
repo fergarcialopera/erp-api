@@ -2,7 +2,7 @@
 #   docker compose --env-file .env.production -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 #
 # Variables sensibles: .env.production en el servidor (no versionado).
-# Solo el API (puerto 8080 del host). El frontend es un repo y despliegue aparte.
+# Nginx en :80 sirve el SPA (erp-frontend/dist) y el API en el mismo origen.
 
 services:
   php:
@@ -10,7 +10,10 @@ services:
       - .env.production
 
   nginx:
+    ports:
+      - "80:80"
     volumes:
       - ./:/var/www/html
+      - ${FRONTEND_DIST_PATH:-/root/erp-frontend/dist}:/var/www/frontend:ro
       - ./docker/nginx/prod.conf:/etc/nginx/conf.d/default.conf:ro
       - ./docker/nginx/snippets:/etc/nginx/snippets:ro

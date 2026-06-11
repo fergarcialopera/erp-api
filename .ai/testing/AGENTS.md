@@ -33,7 +33,7 @@ docker compose exec php composer test:docker:restore
 | Durante `composer test:docker` | `erp_test` | HTTP a `http://nginx` |
 | Al finalizar (éxito o fallo) | `erp` (restaurado en `finally`) | — |
 
-1. **Desarrollo:** `docker compose up` → API en `:8080` apunta a `erp`.
+1. **Desarrollo:** `make up` → API en `:8080` apunta a `erp`. **Producción:** Nginx unificado en `:80` (API + SPA).
 2. **Tests:** [`bin/run-tests.php`](bin/run-tests.php) → [`scripts/run-tests-docker.ps1`](scripts/run-tests-docker.ps1) / [`.sh`](scripts/run-tests-docker.sh): levanta infra, recrea `php` con [`docker-compose.test.yml`](docker-compose.test.yml), `migrate`+`seed` en `erp_test`, phpunit por HTTP y restaura `erp`.
 
 **Ejecutar `composer test:docker` desde el host**, no con `docker compose exec php composer ...` (el contenedor no tiene CLI de Docker).
