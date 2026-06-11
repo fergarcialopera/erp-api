@@ -2,7 +2,7 @@
 #   docker compose --env-file .env.production -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 #
 # Variables sensibles: .env.production en el servidor (no versionado).
-# Nginx en :80 sirve el SPA (erp-frontend/dist) y el API en el mismo origen.
+# Nginx en :80 sirve el SPA (FRONTEND_DIST_PATH, p. ej. ../erp-frontend/dist) y el API.
 
 services:
   php:

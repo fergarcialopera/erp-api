@@ -188,7 +188,7 @@ No uses `vendor/bin/phpunit` a pelo para integración: dejaría la API apuntando
 
 En producción, `erp-nginx` escucha en el **puerto 80** y sirve:
 
-- el SPA desde `/root/erp-frontend/dist` (repo independiente, montado como volumen);
+- el SPA desde `../erp-frontend/dist` (repo hermano de `erp-api`, montado como volumen);
 - el API en `/api/v1`, `/up`, `/docs` y `/uploads`.
 
 El frontend llama al API con rutas relativas (`/api/v1/...`) en el mismo origen; no hace falta exponer el puerto 8080.
@@ -197,7 +197,8 @@ Despliegue (en el servidor):
 
 ```bash
 # .env.production: APP_PUBLIC_URL y FRONTEND_URL sin puerto (ej. http://212.227.145.0)
-# Opcional: FRONTEND_DIST_PATH=/root/erp-frontend/dist
+# El deploy detecta el build en FRONTEND_DIR/dist o FRONTEND_DIR (por defecto /root/erp-frontend).
+# Si falta index.html: cd /root/erp-frontend && npm ci && npm run build
 docker compose --env-file .env.production -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 ```
 

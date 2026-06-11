@@ -39,14 +39,54 @@ if ! grep -qE '^APP_PUBLIC_URL=' .env.production; then
   exit 1
 fi
 
-FRONTEND_DIST_PATH="$(grep -E '^FRONTEND_DIST_PATH=' .env.production 2>/dev/null | head -1 | cut -d= -f2- | tr -d '\r' | sed 's/^["'\'']//;s/["'\'']$//' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
-FRONTEND_DIST_PATH="${FRONTEND_DIST_PATH:-/root/erp-frontend/dist}"
-export FRONTEND_DIST_PATH
+strip_env() {
+  echo "$1" | tr -d '\r' | sed 's/^["'\'']//;s/["'\'']$//' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'
+}
 
-if [ ! -f "${FRONTEND_DIST_PATH}/index.html" ]; then
-  echo "ERROR: no se encuentra ${FRONTEND_DIST_PATH}/index.html (build del frontend en erp-frontend)"
+FRONTEND_DIR="$(strip_env "$(grep -E '^FRONTEND_DIR=' .env.production 2>/dev/null | head -1 | cut -d= -f2-)")"
+FRONTEND_DIR="${FRONTEND_DIR:-$(dirname "${APP_DIR}")/erp-frontend}"
+
+FRONTEND_DIST_PATH="$(strip_env "$(grep -E '^FRONTEND_DIST_PATH=' .env.production 2>/dev/null | head -1 | cut -d= -f2-)")"
+
+resolve_frontend_dist() {
+  local candidate
+  for candidate in \
+    "${FRONTEND_DIST_PATH}" \
+    "${FRONTEND_DIR}/dist" \
+    "${FRONTEND_DIR}"; do
+    if [ -n "${candidate}" ] && [ -f "${candidate}/index.html" ]; then
+      echo "${candidate}"
+      return 0
+    fi
+  done
+  return 1
+}
+
+if ! FRONTEND_DIST_PATH="$(resolve_frontend_dist)"; then
+  echo "ERROR: no se encuentra index.html del frontend."
+  echo "  APP_DIR=${APP_DIR}"
+  echo "  FRONTEND_DIR=${FRONTEND_DIR} (hermano de erp-api por defecto)"
+  echo "  Rutas comprobadas:"
+  echo "    - FRONTEND_DIST_PATH en .env.production (si está definido)"
+  echo "    - ${FRONTEND_DIR}/dist"
+  echo "    - ${FRONTEND_DIR}"
+  if [ -d "${FRONTEND_DIR}" ]; then
+    echo "  Contenido de ${FRONTEND_DIR}:"
+    ls -la "${FRONTEND_DIR}" || true
+    if [ -d "${FRONTEND_DIR}/dist" ]; then
+      echo "  Contenido de ${FRONTEND_DIR}/dist:"
+      ls -la "${FRONTEND_DIR}/dist" || true
+    fi
+  else
+    echo "  El directorio ${FRONTEND_DIR} no existe."
+  fi
+  echo "  Genera el build en el VPS: cd ${FRONTEND_DIR} && npm ci && npm run build"
+  echo "  O define FRONTEND_DIST_PATH=/ruta/al/dist en .env.production"
   exit 1
 fi
+
+export FRONTEND_DIST_PATH
+echo "==> Frontend estático: ${FRONTEND_DIST_PATH}"
 
 # Comprobar en localhost: en muchos VPS falla el curl a la IP pública desde el propio host (hairpin/NAT).
 API_HEALTH_URL="http://127.0.0.1/up"
