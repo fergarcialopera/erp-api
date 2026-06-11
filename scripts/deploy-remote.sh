@@ -28,13 +28,12 @@ if ! grep -qE '^APP_ENV=prod' .env.production; then
   exit 1
 fi
 
-if grep -qE '^APP_PUBLIC_URL=' .env.production; then
-  public_base="$(grep -E '^APP_PUBLIC_URL=' .env.production | head -1 | cut -d= -f2- | tr -d '\r"' | sed "s/^['\"]//;s/['\"]$//" | sed 's/[[:space:]]*$//')"
-  HEALTH_URL="${public_base%/}/up"
-else
+if ! grep -qE '^APP_PUBLIC_URL=' .env.production; then
   echo "ERROR: .env.production debe definir APP_PUBLIC_URL (p. ej. http://212.227.145.0:8080)"
   exit 1
 fi
+# Comprobar en localhost: en muchos VPS falla el curl a la IP pública desde el propio host (hairpin/NAT).
+HEALTH_URL="http://127.0.0.1:8080/up"
 
 COMPOSE=(docker compose --env-file .env.production -f docker-compose.yml -f docker-compose.prod.yml)
 
@@ -61,6 +60,11 @@ echo "==> Limpiando imágenes Docker sin uso"
 docker image prune -f
 
 echo "==> Health check API (${HEALTH_URL})"
-curl -fsS "${HEALTH_URL}"
+if ! curl -fsS "${HEALTH_URL}"; then
+  echo "ERROR: health check falló; revisar nginx:"
+  "${COMPOSE[@]}" ps nginx
+  "${COMPOSE[@]}" logs --tail=50 nginx
+  exit 1
+fi
 echo ""
 echo "Deploy completado."

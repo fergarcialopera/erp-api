@@ -3,6 +3,10 @@
 #   make up
 
 services:
+  nginx:
+    volumes:
+      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+
   postgres:
     ports:
       - "5432:5432"
