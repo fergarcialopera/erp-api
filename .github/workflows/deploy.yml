@@ -24,7 +24,7 @@ jobs:
           port: ${{ secrets.VPS_PORT }}
           script: |
             set -euo pipefail
-            APP_DIR=/opt/erp-api
+            APP_DIR=/root/erp-api
             REPO_URL=https://github.com/fergarcialopera/erp-api.git
 
             if [ -f "${APP_DIR}/scripts/deploy-remote.sh" ]; then

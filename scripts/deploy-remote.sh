@@ -3,7 +3,7 @@
 #   bash scripts/deploy-remote.sh
 set -euo pipefail
 
-APP_DIR="${APP_DIR:-/opt/erp-api}"
+APP_DIR="${APP_DIR:-/root/erp-api}"
 REPO_URL="${REPO_URL:-https://github.com/fergarcialopera/erp-api.git}"
 REQUIRED_SERVICES="nginx php postgres redis mosquitto"
 
