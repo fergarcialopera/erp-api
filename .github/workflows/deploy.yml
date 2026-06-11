@@ -27,15 +27,8 @@ jobs:
             APP_DIR=/root/erp-api
             REPO_URL=https://github.com/fergarcialopera/erp-api.git
 
-            if [ -f "${APP_DIR}/scripts/deploy-remote.sh" ]; then
-              exec env APP_DIR="${APP_DIR}" REPO_URL="${REPO_URL}" bash "${APP_DIR}/scripts/deploy-remote.sh"
-            fi
-
-            if [ -d "${APP_DIR}/.git" ]; then
-              cd "${APP_DIR}"
-              git fetch origin
-              git pull origin main
-            else
+            if [ ! -d "${APP_DIR}/.git" ]; then
+              mkdir -p "$(dirname "${APP_DIR}")"
               git clone "${REPO_URL}" "${APP_DIR}"
             fi
 

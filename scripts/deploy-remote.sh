@@ -18,6 +18,12 @@ else
   cd "${APP_DIR}"
 fi
 
+# Tras git pull, el proceso actual sigue con el script antiguo en memoria (p. ej. HEALTH_URL en :8080).
+if [ "${DEPLOY_REEXEC:-}" != "1" ]; then
+  export DEPLOY_REEXEC=1
+  exec env DEPLOY_REEXEC=1 APP_DIR="${APP_DIR}" REPO_URL="${REPO_URL}" bash "${APP_DIR}/scripts/deploy-remote.sh"
+fi
+
 if [ ! -f .env.production ]; then
   echo "ERROR: falta .env.production en el servidor (${APP_DIR})"
   exit 1
