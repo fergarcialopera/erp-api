@@ -29,7 +29,7 @@ ifeq ($(APP_ENV),prod)
   COMPOSE := docker compose --env-file .env.production -f docker-compose.yml -f docker-compose.prod.yml
   HEALTH_URL ?= $(if $(APP_PUBLIC_URL),$(APP_PUBLIC_URL),http://127.0.0.1)/up
 else
-  COMPOSE := docker compose
+  COMPOSE := docker compose --env-file .env -f docker-compose.yml -f docker-compose.dev.yml --profile dev
   HEALTH_URL ?= $(if $(APP_PUBLIC_URL),$(APP_PUBLIC_URL),http://127.0.0.1:8080)/up
 endif
 

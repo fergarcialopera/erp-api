@@ -1,0 +1,16 @@
+# Override local. Combinar con docker-compose.yml y activar profile dev (mailpit):
+#   docker compose --env-file .env -f docker-compose.yml -f docker-compose.dev.yml --profile dev up -d
+#   make up
+
+services:
+  postgres:
+    ports:
+      - "5432:5432"
+
+  redis:
+    ports:
+      - "6379:6379"
+
+  mosquitto:
+    ports:
+      - "1883:1883"

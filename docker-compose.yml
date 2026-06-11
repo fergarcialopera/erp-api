@@ -3,7 +3,7 @@ services:
     container_name: erp-nginx
     image: nginx:1.27-alpine
     ports:
-      # Local: 8080 evita conflicto con el frontend u otros servicios en :80 del host.
+      # API en :8080 del host (local y prod). El frontend va en otro repo/puerto.
       - "8080:80"
     volumes:
       - ./:/var/www/html
@@ -17,6 +17,7 @@ services:
   mailpit:
     container_name: erp-mailpit
     image: axllent/mailpit:latest
+    profiles: ["dev"]
     ports:
       - "1025:1025"
       - "8025:8025"
@@ -33,7 +34,7 @@ services:
     depends_on:
       - postgres
       - redis
-      - mailpit
+      - mosquitto
     environment:
       DB_HOST: ${DB_HOST}
       DB_PORT: ${DB_PORT}
@@ -67,9 +68,6 @@ services:
       POSTGRES_DB: ${DB_DATABASE:-erp}
       POSTGRES_USER: ${DB_USERNAME:-erp}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-erp}
-    ports:
-      # Solo localhost en desarrollo; en prod docker-compose.prod.yml anula la publicación.
-      - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
@@ -79,8 +77,6 @@ services:
   redis:
     container_name: erp-redis
     image: redis:7.4-alpine
-    ports:
-      - "127.0.0.1:6379:6379"
     volumes:
       - redis_data:/data
     networks:
@@ -90,8 +86,6 @@ services:
     container_name: erp-mosquitto
     image: eclipse-mosquitto:2
     user: "0:0"
-    ports:
-      - "127.0.0.1:1883:1883"
     environment:
       MQTT_USERNAME: ${MQTT_USERNAME}
       MQTT_PASSWORD: ${MQTT_PASSWORD}
