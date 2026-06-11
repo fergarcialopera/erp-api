@@ -41,6 +41,7 @@ fi
 
 FRONTEND_DIST_PATH="$(grep -E '^FRONTEND_DIST_PATH=' .env.production 2>/dev/null | head -1 | cut -d= -f2- | tr -d '\r' | sed 's/^["'\'']//;s/["'\'']$//' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
 FRONTEND_DIST_PATH="${FRONTEND_DIST_PATH:-/root/erp-frontend/dist}"
+export FRONTEND_DIST_PATH
 
 if [ ! -f "${FRONTEND_DIST_PATH}/index.html" ]; then
   echo "ERROR: no se encuentra ${FRONTEND_DIST_PATH}/index.html (build del frontend en erp-frontend)"
@@ -48,11 +49,13 @@ if [ ! -f "${FRONTEND_DIST_PATH}/index.html" ]; then
 fi
 
 # Comprobar en localhost: en muchos VPS falla el curl a la IP pública desde el propio host (hairpin/NAT).
-HEALTH_URL="http://127.0.0.1/up"
+API_HEALTH_URL="http://127.0.0.1/up"
+SPA_HEALTH_URL="http://127.0.0.1/"
 
 COMPOSE=(docker compose --env-file .env.production -f docker-compose.yml -f docker-compose.prod.yml)
 
-echo "==> Levantando contenedores"
+echo "==> Levantando contenedores (nginx en :80, frontend en ${FRONTEND_DIST_PATH})"
+"${COMPOSE[@]}" up -d --build --force-recreate nginx
 "${COMPOSE[@]}" up -d --build
 
 echo "==> Comprobando servicios en ejecución"
@@ -74,12 +77,21 @@ echo "==> Aplicando migraciones"
 echo "==> Limpiando imágenes Docker sin uso"
 docker image prune -f
 
-echo "==> Health check API (${HEALTH_URL})"
-if ! curl -fsS "${HEALTH_URL}"; then
-  echo "ERROR: health check falló; revisar nginx:"
+echo "==> Health check API (${API_HEALTH_URL})"
+if ! curl -fsS "${API_HEALTH_URL}"; then
+  echo "ERROR: health check API falló; revisar nginx:"
   "${COMPOSE[@]}" ps nginx
   "${COMPOSE[@]}" logs --tail=50 nginx
   exit 1
 fi
+
+echo "==> Health check SPA (${SPA_HEALTH_URL})"
+if ! curl -fsS -o /dev/null "${SPA_HEALTH_URL}"; then
+  echo "ERROR: health check SPA falló; revisar montaje de ${FRONTEND_DIST_PATH}:"
+  "${COMPOSE[@]}" ps nginx
+  "${COMPOSE[@]}" logs --tail=50 nginx
+  exit 1
+fi
+
 echo ""
 echo "Deploy completado."
