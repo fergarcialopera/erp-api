@@ -31,6 +31,7 @@ return static function (Router $router, array $handlers): array {
         return ApiResponse::success($request, [
             'id' => (string) ($user['user_id'] ?? $user['id'] ?? ''),
             'clinic_id' => (string) ($user['clinic_id'] ?? ''),
+            'name' => (string) ($user['name'] ?? ''),
             'role' => (string) ($user['role'] ?? ''),
             'email' => (string) ($user['email'] ?? ''),
         ]);

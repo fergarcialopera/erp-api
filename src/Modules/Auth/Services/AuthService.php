@@ -110,7 +110,7 @@ final class AuthService
     public function login(LoginDTO $dto, ?string $clinicIdFromSession = null): array
     {
         $stmt = $this->pdo->prepare(
-            'SELECT id, clinic_id, email, password_hash, role, is_active, is_locked, pin_hash
+            'SELECT id, clinic_id, name, email, password_hash, role, is_active, is_locked, pin_hash
              FROM users WHERE email = :email LIMIT 1'
         );
         $stmt->execute(['email' => $dto->email]);
@@ -170,7 +170,7 @@ final class AuthService
 
         return $this->mapper->toUserLoginResponse(
             $token,
-            $payload,
+            $user,
             $this->tokenService->getUserTtlSeconds()
         );
     }
@@ -178,7 +178,7 @@ final class AuthService
     private function findActiveUserInClinic(string $clinicId, string $userId): ?array
     {
         $stmt = $this->pdo->prepare(
-            'SELECT id, clinic_id, email, password_hash, role, is_active, is_locked, pin_hash
+            'SELECT id, clinic_id, name, email, password_hash, role, is_active, is_locked, pin_hash
              FROM users
              WHERE clinic_id::text = :clinic_id AND id::text = :id AND is_active = TRUE
              LIMIT 1'

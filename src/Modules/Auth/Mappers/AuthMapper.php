@@ -20,20 +20,23 @@ final class AuthMapper
             'clinic_id' => $userRow['clinic_id'],
             'role' => (string) $userRow['role'],
             'email' => (string) $userRow['email'],
+            'name' => (string) ($userRow['name'] ?? ''),
         ];
     }
 
-    public function toUserLoginResponse(string $token, array $payload, int $expiresIn): array
+    public function toUserLoginResponse(string $token, array $userRow, int $expiresIn): array
     {
         return [
             'access_token' => $token,
             'token_type' => 'Bearer',
             'expires_in' => $expiresIn,
             'user' => [
-                'id' => $payload['user_id'],
-                'clinic_id' => $payload['clinic_id'],
-                'role' => $payload['role'],
-                'email' => $payload['email'],
+                'id' => (string) $userRow['id'],
+                'clinic_id' => (string) $userRow['clinic_id'],
+                'name' => (string) ($userRow['name'] ?? ''),
+                'role' => (string) $userRow['role'],
+                'email' => (string) $userRow['email'],
+                'is_active' => (bool) ($userRow['is_active'] ?? true),
             ],
         ];
     }

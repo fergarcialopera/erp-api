@@ -31,5 +31,6 @@ final class MeEndpointTest extends BaseApiTestCase
         $this->assertSame('11111111-1111-1111-1111-111111111111', $res['json']['data']['clinic_id'] ?? null);
         $this->assertSame('STAFF', $res['json']['data']['role'] ?? null);
         $this->assertSame('staff@clinic.local', $res['json']['data']['email'] ?? null);
+        $this->assertSame('Elena Martin', $res['json']['data']['name'] ?? null);
     }
 }
