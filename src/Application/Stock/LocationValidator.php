@@ -15,19 +15,19 @@ final class LocationValidator
     }
 
     /**
-     * @throws InvalidArgumentException when ambiente_id is sent without compartment_id
+     * @throws InvalidArgumentException when ambiente_id is sent without zone_id
      */
     public function parseOptionalLocation(array $payload, string $indexLabel = ''): ?string
     {
         $suffix = $indexLabel !== '' ? ' at ' . $indexLabel : '';
 
-        $compartmentId = null;
-        if (array_key_exists('compartment_id', $payload)) {
-            $raw = $payload['compartment_id'];
+        $zoneId = null;
+        if (array_key_exists('zone_id', $payload)) {
+            $raw = $payload['zone_id'];
             if ($raw !== null && $raw !== '') {
-                $compartmentId = trim((string) $raw);
-                if ($compartmentId === '') {
-                    throw new InvalidArgumentException('Invalid compartment_id' . $suffix);
+                $zoneId = trim((string) $raw);
+                if ($zoneId === '') {
+                    throw new InvalidArgumentException('Invalid zone_id' . $suffix);
                 }
             }
         }
@@ -43,61 +43,61 @@ final class LocationValidator
             }
         }
 
-        if ($ambienteId !== null && $compartmentId === null) {
-            throw new InvalidArgumentException('ambiente_id requires compartment_id' . $suffix);
+        if ($ambienteId !== null && $zoneId === null) {
+            throw new InvalidArgumentException('ambiente_id requires zone_id' . $suffix);
         }
 
-        if ($compartmentId !== null && $ambienteId !== null) {
-            $this->assertCompartmentMatchesAmbiente($compartmentId, $ambienteId);
+        if ($zoneId !== null && $ambienteId !== null) {
+            $this->assertZoneMatchesAmbiente($zoneId, $ambienteId);
         }
 
-        return $compartmentId;
+        return $zoneId;
     }
 
-    public function assertCompartmentInClinic(string $clinicId, string $compartmentId): void
+    public function assertZoneInClinic(string $clinicId, string $zoneId): void
     {
         $stmt = $this->pdo->prepare(
-            'SELECT is_active FROM compartments WHERE id = :id AND clinic_id = :clinic_id LIMIT 1'
+            'SELECT is_active FROM zones WHERE id = :id AND clinic_id = :clinic_id LIMIT 1'
         );
-        $stmt->execute(['id' => $compartmentId, 'clinic_id' => $clinicId]);
+        $stmt->execute(['id' => $zoneId, 'clinic_id' => $clinicId]);
         $row = $stmt->fetch();
         if (!is_array($row)) {
-            throw new RuntimeException('Compartment not found in clinic');
+            throw new RuntimeException('Zone not found in clinic');
         }
         if (!(bool) $row['is_active']) {
-            throw new RuntimeException('Compartment is inactive');
+            throw new RuntimeException('Zone is inactive');
         }
     }
 
-    public function assertCompartmentMatchesAmbiente(string $compartmentId, string $ambienteId): void
+    public function assertZoneMatchesAmbiente(string $zoneId, string $ambienteId): void
     {
         $stmt = $this->pdo->prepare(
-            'SELECT 1 FROM compartments WHERE id = :compartment_id AND ambiente_id = :ambiente_id LIMIT 1'
+            'SELECT 1 FROM zones WHERE id = :zone_id AND ambiente_id = :ambiente_id LIMIT 1'
         );
-        $stmt->execute(['compartment_id' => $compartmentId, 'ambiente_id' => $ambienteId]);
+        $stmt->execute(['zone_id' => $zoneId, 'ambiente_id' => $ambienteId]);
         if (!$stmt->fetch()) {
-            throw new InvalidArgumentException('compartment_id does not belong to ambiente_id');
+            throw new InvalidArgumentException('zone_id does not belong to ambiente_id');
         }
     }
 
     /**
-     * @return array{ambiente: ?array{id: string, name: string, device_id: ?string}, compartment: ?array{id: string, code: string}}|null
+     * @return array{ambiente: ?array{id: string, name: string, device_id: ?string}, zone: ?array{id: string, code: string}}|null
      */
-    public function fetchLocationForCompartment(string $clinicId, string $compartmentId): ?array
+    public function fetchLocationForZone(string $clinicId, string $zoneId): ?array
     {
         $stmt = $this->pdo->prepare(
             'SELECT
-                c.id AS compartment_id,
-                c.code AS compartment_code,
+                c.id AS zone_id,
+                c.code AS zone_code,
                 a.id AS ambiente_id,
                 a.name AS ambiente_name,
                 a.device_id AS ambiente_device_id
-             FROM compartments c
+             FROM zones c
              LEFT JOIN ambientes a ON a.id = c.ambiente_id AND a.clinic_id = :clinic_id
-             WHERE c.id = :compartment_id AND c.clinic_id = :clinic_id
+             WHERE c.id = :zone_id AND c.clinic_id = :clinic_id
              LIMIT 1'
         );
-        $stmt->execute(['clinic_id' => $clinicId, 'compartment_id' => $compartmentId]);
+        $stmt->execute(['clinic_id' => $clinicId, 'zone_id' => $zoneId]);
         $row = $stmt->fetch();
 
         return is_array($row) ? LocationPresenter::fromJoinRow($row) : null;

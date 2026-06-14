@@ -27,7 +27,7 @@ tags:
     description: Usuarios por clinica.
   - name: Ambientes
     description: Ambientes por clinica.
-  - name: Compartments
+  - name: Zones
     description: Compartimentos por clinica.
   - name: Docs
     description: Documentacion OpenAPI y UI.
@@ -336,7 +336,7 @@ paths:
                             type: object
                             properties:
                               quantity: { type: integer }
-                              compartment:
+                              zone:
                                 nullable: true
                                 oneOf:
                                   - type: 'null'
@@ -361,10 +361,10 @@ paths:
                     updated_at: "2026-05-07T08:00:00+02:00"
                     locations:
                       - quantity: 120
-                        compartment: { id: "50000000-0000-4000-8000-000000000001", code: "A1-C1" }
+                        zone: { id: "50000000-0000-4000-8000-000000000001", code: "A1-C1" }
                         ambiente: { id: "40000000-0000-4000-8000-000000000001", name: "Ambiente Urgencias A1" }
                       - quantity: 45
-                        compartment: null
+                        zone: null
                         ambiente: null
                 meta: {}
         '401':
@@ -403,16 +403,16 @@ paths:
                       quantity:
                         type: integer
                         minimum: 0
-                      compartment_id:
+                      zone_id:
                         type: string
                         format: uuid
                         nullable: true
             example:
               locations:
                 - quantity: 12
-                  compartment_id: "50000000-0000-4000-8000-000000000001"
+                  zone_id: "50000000-0000-4000-8000-000000000001"
                 - quantity: 3
-                  compartment_id: null
+                  zone_id: null
       responses:
         '200':
           description: Updated stock by location
@@ -550,7 +550,7 @@ paths:
           description: Not Found
   /api/v1/products/{id}/stock-locations:
     get:
-      summary: Stock locations for a product (for entry/exit compartment pickers)
+      summary: Stock locations for a product (for entry/exit zone pickers)
       tags: [Products]
       security:
         - bearerAuth: []
@@ -563,7 +563,7 @@ paths:
             description: Product public id (UUID)
       responses:
         '200':
-          description: Product stock broken down by ambiente/compartment (quantity > 0 only)
+          description: Product stock broken down by ambiente/zone (quantity > 0 only)
           content:
             application/json:
               schema:
@@ -580,10 +580,10 @@ paths:
                   quantity_total: 165
                   locations:
                     - quantity: 120
-                      compartment: { id: "50000000-0000-4000-8000-000000000001", code: "A1-C1" }
+                      zone: { id: "50000000-0000-4000-8000-000000000001", code: "A1-C1" }
                       ambiente: { id: "40000000-0000-4000-8000-000000000001", name: "Ambiente Urgencias A1" }
                     - quantity: 45
-                      compartment: null
+                      zone: null
                       ambiente: null
         '401':
           description: Unauthorized
@@ -717,7 +717,7 @@ paths:
           description: Not Found
   /api/v1/ambientes/tree:
     get:
-      summary: List ambientes with nested compartments (UI catalog)
+      summary: List ambientes with nested zones (UI catalog)
       tags: [Ambientes]
       security:
         - bearerAuth: []
@@ -727,10 +727,10 @@ paths:
           required: false
           schema:
             type: boolean
-          description: When set, filters both ambientes and compartments by is_active
+          description: When set, filters both ambientes and zones by is_active
       responses:
         '200':
-          description: Ambientes each with a compartments array
+          description: Ambientes each with a zones array
           content:
             application/json:
               schema:
@@ -753,7 +753,7 @@ paths:
                           nullable: true
                         is_active:
                           type: boolean
-                        compartments:
+                        zones:
                           type: array
                           items:
                             type: object
@@ -773,7 +773,7 @@ paths:
                     location: "Planta 1 - Urgencias"
                     device_id: "SR-A1-LOCK"
                     is_active: true
-                    compartments:
+                    zones:
                       - id: "50000000-0000-4000-8000-000000000001"
                         ambiente_id: "40000000-0000-4000-8000-000000000001"
                         code: "A1-C1"
@@ -912,10 +912,10 @@ paths:
           description: Forbidden
         '404':
           description: Not Found
-  /api/v1/compartments:
+  /api/v1/zones:
     get:
-      summary: List compartments
-      tags: [Compartments]
+      summary: List zones
+      tags: [Zones]
       security:
         - bearerAuth: []
       parameters:
@@ -931,14 +931,14 @@ paths:
             type: boolean
       responses:
         '200':
-          description: Compartments list
+          description: Zones list
         '401':
           description: Unauthorized
         '422':
           description: Validation error
     post:
-      summary: Create compartment
-      tags: [Compartments]
+      summary: Create zone
+      tags: [Zones]
       security:
         - bearerAuth: []
       requestBody:
@@ -957,17 +957,17 @@ paths:
                   type: boolean
       responses:
         '201':
-          description: Compartment created
+          description: Zone created
         '401':
           description: Unauthorized
         '403':
           description: Forbidden
         '422':
           description: Validation error
-  /api/v1/compartments/{id}:
+  /api/v1/zones/{id}:
     get:
-      summary: Get compartment detail
-      tags: [Compartments]
+      summary: Get zone detail
+      tags: [Zones]
       security:
         - bearerAuth: []
       parameters:
@@ -978,14 +978,14 @@ paths:
             type: string
       responses:
         '200':
-          description: Compartment detail
+          description: Zone detail
         '401':
           description: Unauthorized
         '404':
           description: Not Found
     patch:
-      summary: Patch compartment
-      tags: [Compartments]
+      summary: Patch zone
+      tags: [Zones]
       security:
         - bearerAuth: []
       parameters:
@@ -1007,7 +1007,7 @@ paths:
                   type: boolean
       responses:
         '200':
-          description: Compartment updated
+          description: Zone updated
         '401':
           description: Unauthorized
         '403':
@@ -1017,8 +1017,8 @@ paths:
         '422':
           description: Validation error
     delete:
-      summary: Soft delete compartment
-      tags: [Compartments]
+      summary: Soft delete zone
+      tags: [Zones]
       security:
         - bearerAuth: []
       parameters:
@@ -1044,7 +1044,7 @@ paths:
         - bearerAuth: []
       responses:
         '200':
-          description: Entry logs list with ambiente and compartment when set
+          description: Entry logs list with ambiente and zone when set
           content:
             application/json:
               schema:
@@ -1078,12 +1078,12 @@ paths:
                   minimum: 1
                 note:
                   type: string
-                compartment_id:
+                zone_id:
                   type: string
-                  description: Optional destination compartment UUID
+                  description: Optional destination zone UUID
                 ambiente_id:
                   type: string
-                  description: Optional; only with compartment_id, must match compartment ambiente
+                  description: Optional; only with zone_id, must match zone ambiente
       responses:
         '201':
           description: Entry log created with location enrichment
@@ -1102,11 +1102,11 @@ paths:
                         properties:
                           sku: { type: string }
                           quantity: { type: integer }
-                          compartment_id: { type: string, nullable: true }
+                          zone_id: { type: string, nullable: true }
                           ambiente:
                             $ref: '#/components/schemas/AmbienteRef'
-                          compartment:
-                            $ref: '#/components/schemas/CompartmentRef'
+                          zone:
+                            $ref: '#/components/schemas/ZoneRef'
         '401':
           description: Unauthorized
         '422':
@@ -1140,14 +1140,14 @@ paths:
                 items:
                   type: array
                   minItems: 1
-                  description: One entry per product_id. Use locations for explicit per-compartment quantities, or legacy quantity/compartment_id fields.
+                  description: One entry per product_id. Use locations for explicit per-zone quantities, or legacy quantity/zone_id fields.
                   items:
                     oneOf:
                       - $ref: '#/components/schemas/ExitLogCreateItemWithLocations'
                       - $ref: '#/components/schemas/ExitLogCreateItemLegacy'
       responses:
         '201':
-          description: Draft exit log created. Each items entry is one product with nested locations (one per DB line). Header location reflects the first compartment when present.
+          description: Draft exit log created. Each items entry is one product with nested locations (one per DB line). Header location reflects the first zone when present.
         '401':
           description: Unauthorized
         '422':
@@ -1256,7 +1256,7 @@ paths:
           description: State error
   /api/v1/exit-logs/{id}/open-lock:
     post:
-      summary: Open lock (only after exit log is CONFIRMED; uses first linked compartment; multi-compartment exits may need multiple calls or a future extension)
+      summary: Open lock (only after exit log is CONFIRMED; uses first linked zone; multi-zone exits may need multiple calls or a future extension)
       tags: [ExitLogs]
       security:
         - bearerAuth: []
@@ -1297,7 +1297,7 @@ paths:
         '404':
           description: Exit log not found
         '422':
-          description: Exit log cannot open lock (e.g. no compartment or device)
+          description: Exit log cannot open lock (e.g. no zone or device)
         '502':
           description: MQTT publish failed
   /api/v1/incidents:
@@ -1405,7 +1405,7 @@ components:
             id: { type: string }
             name: { type: string }
             device_id: { type: string, nullable: true }
-    CompartmentRef:
+    ZoneRef:
       nullable: true
       oneOf:
         - type: 'null'
@@ -1418,14 +1418,14 @@ components:
       properties:
         ambiente:
           $ref: '#/components/schemas/AmbienteRef'
-        compartment:
-          $ref: '#/components/schemas/CompartmentRef'
+        zone:
+          $ref: '#/components/schemas/ZoneRef'
     InventoryLocation:
       type: object
       properties:
         quantity: { type: integer }
-        compartment:
-          $ref: '#/components/schemas/CompartmentRef'
+        zone:
+          $ref: '#/components/schemas/ZoneRef'
         ambiente:
           $ref: '#/components/schemas/AmbienteRef'
     ProductStockLocations:
@@ -1454,21 +1454,21 @@ components:
         created_at: { type: string }
         ambiente:
           $ref: '#/components/schemas/AmbienteRef'
-        compartment:
-          $ref: '#/components/schemas/CompartmentRef'
+        zone:
+          $ref: '#/components/schemas/ZoneRef'
     ExitLogCreateLocationAllocation:
       type: object
-      required: [compartment_id, quantity]
+      required: [zone_id, quantity]
       properties:
-        compartment_id:
+        zone_id:
           type: string
-          description: Compartment public id (required for each allocation)
+          description: Zone public id (required for each allocation)
         quantity:
           type: integer
           minimum: 1
         ambiente_id:
           type: string
-          description: Optional; only with compartment_id, must match compartment ambiente
+          description: Optional; only with zone_id, must match zone ambiente
     ExitLogCreateItemWithLocations:
       type: object
       required: [product_id, locations]
@@ -1491,12 +1491,12 @@ components:
         quantity:
           type: integer
           minimum: 1
-        compartment_id:
+        zone_id:
           type: string
-          description: Optional compartment public id (single allocation)
+          description: Optional zone public id (single allocation)
         ambiente_id:
           type: string
-          description: Optional; only with compartment_id, must match compartment ambiente
+          description: Optional; only with zone_id, must match zone ambiente
     ExitLogLocationLine:
       type: object
       properties:
@@ -1508,8 +1508,8 @@ components:
         stock_available: { type: integer, nullable: true }
         ambiente:
           $ref: '#/components/schemas/AmbienteRef'
-        compartment:
-          $ref: '#/components/schemas/CompartmentRef'
+        zone:
+          $ref: '#/components/schemas/ZoneRef'
     ExitLogProductItem:
       type: object
       properties:
@@ -1539,11 +1539,11 @@ components:
         note: { type: string, nullable: true }
         location:
           $ref: '#/components/schemas/StockLocation'
-        compartment_public_id:
+        zone_public_id:
           type: string
           nullable: true
           deprecated: true
-          description: Use location.compartment.id instead
+          description: Use location.zone.id instead
   securitySchemes:
     bearerAuth:
       type: http

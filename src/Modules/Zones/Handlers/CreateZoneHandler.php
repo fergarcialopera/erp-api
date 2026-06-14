@@ -1,19 +1,19 @@
 <?php
 
-namespace App\Modules\Compartments\Handlers;
+namespace App\Modules\Zones\Handlers;
 
 use App\Application\Http\ApiResponse;
 use App\Application\Http\Request;
 use App\Application\Http\Response;
-use App\Modules\Compartments\Services\CompartmentService;
-use App\Modules\Compartments\Validators\CompartmentValidator;
+use App\Modules\Zones\Services\ZoneService;
+use App\Modules\Zones\Validators\ZoneValidator;
 use Throwable;
 
-final class CreateCompartmentHandler
+final class CreateZoneHandler
 {
     public function __construct(
-        private readonly CompartmentValidator $validator,
-        private readonly CompartmentService $service
+        private readonly ZoneValidator $validator,
+        private readonly ZoneService $service
     ) {
     }
 

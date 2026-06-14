@@ -23,9 +23,9 @@ final class OpenExitLogLockActionTest extends TestCase
     {
         return [
             'status' => 'CONFIRMED',
-            'compartment_id' => '00000000-0000-4000-8000-000000000001',
-            'compartment_resolved' => true,
-            'compartment_is_active' => true,
+            'zone_id' => '00000000-0000-4000-8000-000000000001',
+            'zone_resolved' => true,
+            'zone_is_active' => true,
             'ambiente_resolved' => true,
             'ambiente_is_active' => true,
             'device_id' => 'DEVICE-UNIT-TEST',
@@ -91,14 +91,14 @@ final class OpenExitLogLockActionTest extends TestCase
         $action->execute(self::CLINIC, '1', 'user-1');
     }
 
-    public function testThrowsWhenCompartmentMissing(): void
+    public function testThrowsWhenZoneMissing(): void
     {
         $port = $this->createMock(ExitLogLockPort::class);
         $port->method('findContextForOpenLock')->willReturn([
             'status' => 'CONFIRMED',
-            'compartment_id' => null,
-            'compartment_resolved' => false,
-            'compartment_is_active' => false,
+            'zone_id' => null,
+            'zone_resolved' => false,
+            'zone_is_active' => false,
             'ambiente_resolved' => false,
             'ambiente_is_active' => false,
             'device_id' => null,

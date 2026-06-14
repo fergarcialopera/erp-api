@@ -1,14 +1,14 @@
 <?php
 
-namespace App\Modules\Compartments\Validators;
+namespace App\Modules\Zones\Validators;
 
-use App\Modules\Compartments\DTOs\CreateCompartmentDTO;
-use App\Modules\Compartments\DTOs\PatchCompartmentDTO;
+use App\Modules\Zones\DTOs\CreateZoneDTO;
+use App\Modules\Zones\DTOs\PatchZoneDTO;
 use InvalidArgumentException;
 
-final class CompartmentValidator
+final class ZoneValidator
 {
-    public function validateCreate(array $payload): CreateCompartmentDTO
+    public function validateCreate(array $payload): CreateZoneDTO
     {
         $ambienteId = trim((string) ($payload['ambiente_id'] ?? ''));
         $code = trim((string) ($payload['code'] ?? ''));
@@ -26,10 +26,10 @@ final class CompartmentValidator
             throw new InvalidArgumentException('Invalid is_active');
         }
 
-        return new CreateCompartmentDTO($ambienteId, $code, (bool) $isActive);
+        return new CreateZoneDTO($ambienteId, $code, (bool) $isActive);
     }
 
-    public function validatePatch(array $payload): PatchCompartmentDTO
+    public function validatePatch(array $payload): PatchZoneDTO
     {
         $code = array_key_exists('code', $payload) ? trim((string) $payload['code']) : null;
         if (array_key_exists('is_active', $payload)) {
@@ -49,7 +49,7 @@ final class CompartmentValidator
             throw new InvalidArgumentException('No fields to update');
         }
 
-        return new PatchCompartmentDTO($code, $isActive);
+        return new PatchZoneDTO($code, $isActive);
     }
 }
 

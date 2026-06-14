@@ -38,7 +38,7 @@ final class OpenExitLogLockEndpointTest extends BaseApiTestCase
         $this->assertSame(422, $open['status']);
     }
 
-    public function testOpenLockReturns422WhenNoCompartmentLinkedAfterConfirm(): void
+    public function testOpenLockReturns422WhenNoZoneLinkedAfterConfirm(): void
     {
         $staffAuth = $this->authHeaderFor('staff@clinic.local');
         $created = $this->request(
@@ -57,7 +57,7 @@ final class OpenExitLogLockEndpointTest extends BaseApiTestCase
         $this->assertSame(422, $open['status']);
     }
 
-    public function testOpenLockSuccessWithCompartmentAndDevice(): void
+    public function testOpenLockSuccessWithZoneAndDevice(): void
     {
         $ambiente = $this->request('POST', '/api/v1/ambientes', ['name' => 'L-' . bin2hex(random_bytes(2))], $this->authHeaderFor('tech@clinic.local'));
         $this->assertSame(201, $ambiente['status']);
@@ -68,10 +68,10 @@ final class OpenExitLogLockEndpointTest extends BaseApiTestCase
         $patch = $this->request('PATCH', '/api/v1/ambientes/' . $ambienteId, ['device_id' => $deviceId], $this->authHeaderFor('tech@clinic.local'));
         $this->assertSame(200, $patch['status']);
 
-        $comp = $this->request('POST', '/api/v1/compartments', ['ambiente_id' => $ambienteId, 'code' => 'C-' . bin2hex(random_bytes(2))], $this->authHeaderFor('tech@clinic.local'));
+        $comp = $this->request('POST', '/api/v1/zones', ['ambiente_id' => $ambienteId, 'code' => 'C-' . bin2hex(random_bytes(2))], $this->authHeaderFor('tech@clinic.local'));
         $this->assertSame(201, $comp['status']);
-        $compartmentId = (string) ($comp['json']['data']['id'] ?? '');
-        $this->assertNotSame('', $compartmentId);
+        $zoneId = (string) ($comp['json']['data']['id'] ?? '');
+        $this->assertNotSame('', $zoneId);
 
         $entry = $this->request(
             'POST',
@@ -79,7 +79,7 @@ final class OpenExitLogLockEndpointTest extends BaseApiTestCase
             [
                 'sku' => 'SR-GLV-001',
                 'quantity' => 2,
-                'compartment_id' => $compartmentId,
+                'zone_id' => $zoneId,
                 'ambiente_id' => $ambienteId,
             ],
             $this->authHeaderFor('tech@clinic.local')
@@ -94,7 +94,7 @@ final class OpenExitLogLockEndpointTest extends BaseApiTestCase
                 'items' => [[
                     'product_id' => self::PRODUCT_A1,
                     'quantity' => 1,
-                    'compartment_id' => $compartmentId,
+                    'zone_id' => $zoneId,
                 ]],
             ],
             $staffAuth

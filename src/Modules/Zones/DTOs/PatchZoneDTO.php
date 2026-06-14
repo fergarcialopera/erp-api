@@ -1,8 +1,8 @@
 <?php
 
-namespace App\Modules\Compartments\DTOs;
+namespace App\Modules\Zones\DTOs;
 
-final class PatchCompartmentDTO
+final class PatchZoneDTO
 {
     public function __construct(
         public readonly ?string $code,

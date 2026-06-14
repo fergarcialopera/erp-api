@@ -93,7 +93,7 @@ final class InventoryService
                 $this->setInventoryQuantity(
                     $clinicId,
                     $productId,
-                    $location->compartmentId,
+                    $location->zoneId,
                     $location->quantity
                 );
             }
@@ -114,7 +114,7 @@ final class InventoryService
         $stmt = $this->pdo->prepare(
             'INSERT INTO inventory_items (clinic_id, product_id, quantity)
              VALUES (:clinic_id, :product_id, :quantity)
-             ON CONFLICT (clinic_id, product_id) WHERE compartment_id IS NULL
+             ON CONFLICT (clinic_id, product_id) WHERE zone_id IS NULL
              DO UPDATE SET
                 quantity = EXCLUDED.quantity,
                 updated_at = NOW()
@@ -146,24 +146,24 @@ final class InventoryService
     private function setInventoryQuantity(
         string $clinicId,
         string $productId,
-        ?string $compartmentId,
+        ?string $zoneId,
         int $quantity
     ): void {
-        if ($compartmentId !== null) {
-            $compartmentStmt = $this->pdo->prepare(
-                'SELECT is_active FROM compartments WHERE id = :id AND clinic_id = :clinic_id LIMIT 1'
+        if ($zoneId !== null) {
+            $zoneStmt = $this->pdo->prepare(
+                'SELECT is_active FROM zones WHERE id = :id AND clinic_id = :clinic_id LIMIT 1'
             );
-            $compartmentStmt->execute(['id' => $compartmentId, 'clinic_id' => $clinicId]);
-            $compartment = $compartmentStmt->fetch();
-            if (!is_array($compartment)) {
-                throw new RuntimeException('Compartment not found in clinic');
+            $zoneStmt->execute(['id' => $zoneId, 'clinic_id' => $clinicId]);
+            $zone = $zoneStmt->fetch();
+            if (!is_array($zone)) {
+                throw new RuntimeException('Zone not found in clinic');
             }
-            if (!(bool) $compartment['is_active']) {
-                throw new RuntimeException('Compartment is inactive');
+            if (!(bool) $zone['is_active']) {
+                throw new RuntimeException('Zone is inactive');
             }
         }
 
-        $inventoryItem = $this->findOrCreateInventoryRow($clinicId, $productId, $compartmentId);
+        $inventoryItem = $this->findOrCreateInventoryRow($clinicId, $productId, $zoneId);
 
         $updateStmt = $this->pdo->prepare(
             'UPDATE inventory_items SET quantity = :quantity, updated_at = NOW() WHERE id = :id'
@@ -177,34 +177,34 @@ final class InventoryService
     /**
      * @return array<string, mixed>
      */
-    private function findOrCreateInventoryRow(string $clinicId, string $productId, ?string $compartmentId): array
+    private function findOrCreateInventoryRow(string $clinicId, string $productId, ?string $zoneId): array
     {
-        if ($compartmentId !== null) {
+        if ($zoneId !== null) {
             $inventoryStmt = $this->pdo->prepare(
                 'SELECT id, quantity
                  FROM inventory_items
                  WHERE clinic_id = :clinic_id
                    AND product_id = :product_id
-                   AND compartment_id = :compartment_id
+                   AND zone_id = :zone_id
                  LIMIT 1'
             );
             $inventoryStmt->execute([
                 'clinic_id' => $clinicId,
                 'product_id' => $productId,
-                'compartment_id' => $compartmentId,
+                'zone_id' => $zoneId,
             ]);
             $inventoryItem = $inventoryStmt->fetch();
 
             if (!$inventoryItem) {
                 $insStmt = $this->pdo->prepare(
-                    'INSERT INTO inventory_items (clinic_id, product_id, compartment_id, quantity, updated_at)
-                     VALUES (:clinic_id, :product_id, :compartment_id, 0, NOW())
+                    'INSERT INTO inventory_items (clinic_id, product_id, zone_id, quantity, updated_at)
+                     VALUES (:clinic_id, :product_id, :zone_id, 0, NOW())
                      RETURNING id, quantity'
                 );
                 $insStmt->execute([
                     'clinic_id' => $clinicId,
                     'product_id' => $productId,
-                    'compartment_id' => $compartmentId,
+                    'zone_id' => $zoneId,
                 ]);
                 $inventoryItem = $insStmt->fetch();
             }
@@ -214,7 +214,7 @@ final class InventoryService
                  FROM inventory_items
                  WHERE clinic_id = :clinic_id
                    AND product_id = :product_id
-                   AND compartment_id IS NULL
+                   AND zone_id IS NULL
                  LIMIT 1'
             );
             $inventoryStmt->execute([
@@ -227,7 +227,7 @@ final class InventoryService
                 $insStmt = $this->pdo->prepare(
                     'INSERT INTO inventory_items (clinic_id, product_id, quantity, updated_at)
                      VALUES (:clinic_id, :product_id, 0, NOW())
-                     ON CONFLICT (clinic_id, product_id) WHERE compartment_id IS NULL DO NOTHING'
+                     ON CONFLICT (clinic_id, product_id) WHERE zone_id IS NULL DO NOTHING'
                 );
                 $insStmt->execute([
                     'clinic_id' => $clinicId,
@@ -258,15 +258,15 @@ final class InventoryService
                 ii.product_id::text AS product_id,
                 p.sku,
                 p.name,
-                ii.compartment_id::text AS compartment_id,
-                c.code AS compartment_code,
+                ii.zone_id::text AS zone_id,
+                c.code AS zone_code,
                 l.id::text AS ambiente_id,
                 l.name AS ambiente_name,
                 COALESCE(SUM(ii.quantity), 0)::int AS quantity,
                 MAX(ii.updated_at) AS updated_at
              FROM inventory_items ii
              INNER JOIN products p ON p.id = ii.product_id
-             LEFT JOIN compartments c ON c.id = ii.compartment_id
+             LEFT JOIN zones c ON c.id = ii.zone_id
              LEFT JOIN ambientes l ON l.id = c.ambiente_id
              WHERE ii.clinic_id = :clinic_id';
 
@@ -281,7 +281,7 @@ final class InventoryService
             $sql .= ' AND ii.quantity > 0';
         }
 
-        $sql .= ' GROUP BY ii.product_id, p.sku, p.name, ii.compartment_id, c.code, l.id, l.name
+        $sql .= ' GROUP BY ii.product_id, p.sku, p.name, ii.zone_id, c.code, l.id, l.name
              ORDER BY MAX(ii.updated_at) DESC';
 
         $stmt = $this->pdo->prepare($sql);
@@ -335,18 +335,18 @@ final class InventoryService
 
     /**
      * @param array<string, mixed> $row
-     * @return array{quantity: int, compartment: ?array{id: string, code: string}, ambiente: ?array{id: string, name: string}}
+     * @return array{quantity: int, zone: ?array{id: string, code: string}, ambiente: ?array{id: string, name: string}}
      */
     private function mapLocationFromRow(array $row): array
     {
-        $compartmentId = $row['compartment_id'] !== null ? (string) $row['compartment_id'] : null;
+        $zoneId = $row['zone_id'] !== null ? (string) $row['zone_id'] : null;
         $ambienteId = $row['ambiente_id'] !== null ? (string) $row['ambiente_id'] : null;
 
         return [
             'quantity' => (int) ($row['quantity'] ?? 0),
-            'compartment' => $compartmentId !== null ? [
-                'id' => $compartmentId,
-                'code' => $row['compartment_code'] !== null ? (string) $row['compartment_code'] : '',
+            'zone' => $zoneId !== null ? [
+                'id' => $zoneId,
+                'code' => $row['zone_code'] !== null ? (string) $row['zone_code'] : '',
             ] : null,
             'ambiente' => $ambienteId !== null ? [
                 'id' => $ambienteId,
@@ -363,8 +363,8 @@ final class InventoryService
         usort(
             $locations,
             static function (array $a, array $b): int {
-                $aUnassigned = ($a['compartment'] ?? null) === null;
-                $bUnassigned = ($b['compartment'] ?? null) === null;
+                $aUnassigned = ($a['zone'] ?? null) === null;
+                $bUnassigned = ($b['zone'] ?? null) === null;
                 if ($aUnassigned !== $bUnassigned) {
                     return $aUnassigned ? 1 : -1;
                 }

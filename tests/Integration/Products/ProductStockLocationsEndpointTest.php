@@ -76,7 +76,7 @@ final class ProductStockLocationsEndpointTest extends BaseApiTestCase
         $ambienteId = (string) ($ambiente['id'] ?? '');
 
         $compStmt = $pdo->prepare(
-            'INSERT INTO compartments (clinic_id, ambiente_id, code, is_active, created_at, updated_at)
+            'INSERT INTO zones (clinic_id, ambiente_id, code, is_active, created_at, updated_at)
              VALUES (:clinic_id, :ambiente_id, :code, TRUE, NOW(), NOW())
              RETURNING id::text AS id, code'
         );
@@ -87,15 +87,15 @@ final class ProductStockLocationsEndpointTest extends BaseApiTestCase
         ]);
         $comp = $compStmt->fetch();
         $this->assertIsArray($comp);
-        $compartmentId = (string) ($comp['id'] ?? '');
+        $zoneId = (string) ($comp['id'] ?? '');
 
         $pdo->prepare(
-            'INSERT INTO inventory_items (clinic_id, product_id, compartment_id, quantity, updated_at)
-             VALUES (:clinic_id, :product_id, :compartment_id, 7, NOW())'
+            'INSERT INTO inventory_items (clinic_id, product_id, zone_id, quantity, updated_at)
+             VALUES (:clinic_id, :product_id, :zone_id, 7, NOW())'
         )->execute([
             'clinic_id' => $clinicId,
             'product_id' => $productId,
-            'compartment_id' => $compartmentId,
+            'zone_id' => $zoneId,
         ]);
 
         $this->request(
@@ -127,17 +127,17 @@ final class ProductStockLocationsEndpointTest extends BaseApiTestCase
         $foundAssigned = false;
         $foundUnassigned = false;
         foreach ($locations as $loc) {
-            if (($loc['compartment'] ?? null) === null) {
+            if (($loc['zone'] ?? null) === null) {
                 $foundUnassigned = true;
                 $this->assertSame(3, (int) ($loc['quantity'] ?? 0));
                 $this->assertNull($loc['ambiente'] ?? null);
                 continue;
             }
 
-            if ((string) ($loc['compartment']['id'] ?? '') === $compartmentId) {
+            if ((string) ($loc['zone']['id'] ?? '') === $zoneId) {
                 $foundAssigned = true;
                 $this->assertSame(7, (int) ($loc['quantity'] ?? 0));
-                $this->assertSame('SL-C1', (string) ($loc['compartment']['code'] ?? ''));
+                $this->assertSame('SL-C1', (string) ($loc['zone']['code'] ?? ''));
                 $this->assertSame($ambienteId, (string) ($loc['ambiente']['id'] ?? ''));
             }
         }

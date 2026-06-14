@@ -71,7 +71,7 @@ final class ExitLogValidator
         }
 
         $lines = [];
-        $seenCompartments = [];
+        $seenZones = [];
 
         foreach ($locations as $locIdx => $loc) {
             if (!is_array($loc)) {
@@ -88,19 +88,19 @@ final class ExitLogValidator
             }
 
             $label = 'item ' . $itemIdx . ' location ' . (int) $locIdx;
-            $compartmentId = $this->locationValidator->parseOptionalLocation($loc, $label);
-            if ($compartmentId === null) {
-                throw new InvalidArgumentException('compartment_id is required at ' . $label);
+            $zoneId = $this->locationValidator->parseOptionalLocation($loc, $label);
+            if ($zoneId === null) {
+                throw new InvalidArgumentException('zone_id is required at ' . $label);
             }
 
-            if (isset($seenCompartments[$compartmentId])) {
+            if (isset($seenZones[$zoneId])) {
                 throw new InvalidArgumentException(
-                    'Duplicate compartment_id in locations at item index ' . $itemIdx
+                    'Duplicate zone_id in locations at item index ' . $itemIdx
                 );
             }
-            $seenCompartments[$compartmentId] = true;
+            $seenZones[$zoneId] = true;
 
-            $lines[] = new ExitLogLineInputDTO($productId, (int) $quantity, $compartmentId);
+            $lines[] = new ExitLogLineInputDTO($productId, (int) $quantity, $zoneId);
         }
 
         return $lines;
@@ -113,12 +113,12 @@ final class ExitLogValidator
             throw new InvalidArgumentException('Invalid quantity at index ' . $idx);
         }
 
-        $compartmentId = $this->locationValidator->parseOptionalLocation(
+        $zoneId = $this->locationValidator->parseOptionalLocation(
             $row,
             'index ' . $idx
         );
 
-        return new ExitLogLineInputDTO($productId, (int) $quantity, $compartmentId);
+        return new ExitLogLineInputDTO($productId, (int) $quantity, $zoneId);
     }
 
     /**

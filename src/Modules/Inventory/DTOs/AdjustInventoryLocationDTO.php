@@ -6,7 +6,7 @@ final class AdjustInventoryLocationDTO
 {
     public function __construct(
         public readonly int $quantity,
-        public readonly ?string $compartmentId
+        public readonly ?string $zoneId
     ) {
     }
 }

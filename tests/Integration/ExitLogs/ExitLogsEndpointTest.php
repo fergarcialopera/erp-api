@@ -10,8 +10,8 @@ final class ExitLogsEndpointTest extends BaseApiTestCase
 {
     private const CLINIC_A = '11111111-1111-1111-1111-111111111111';
     private const PRODUCT_A1 = '10000000-0000-4000-8000-000000000001';
-    private const COMPARTMENT_A1 = '50000000-0000-4000-8000-000000000001';
-    private const COMPARTMENT_A2 = '50000000-0000-4000-8000-000000000002';
+    private const ZONE_A1 = '50000000-0000-4000-8000-000000000001';
+    private const ZONE_A2 = '50000000-0000-4000-8000-000000000002';
     private const AMBIENTE_A1 = '40000000-0000-4000-8000-000000000001';
 
     public function testCreateExitLogWithoutTokenReturns401(): void
@@ -172,7 +172,7 @@ final class ExitLogsEndpointTest extends BaseApiTestCase
         $this->assertArrayHasKey('requested_quantity_total', $item);
     }
 
-    public function testCreateExitLogWithCompartmentReturnsLocationOnListAndDetail(): void
+    public function testCreateExitLogWithZoneReturnsLocationOnListAndDetail(): void
     {
         $created = $this->request(
             'POST',
@@ -181,7 +181,7 @@ final class ExitLogsEndpointTest extends BaseApiTestCase
                 'items' => [[
                     'product_id' => self::PRODUCT_A1,
                     'quantity' => 1,
-                    'compartment_id' => self::COMPARTMENT_A1,
+                    'zone_id' => self::ZONE_A1,
                     'ambiente_id' => self::AMBIENTE_A1,
                 ]],
             ],
@@ -193,7 +193,7 @@ final class ExitLogsEndpointTest extends BaseApiTestCase
         $this->assertIsArray($item);
         $location = $item['locations'][0] ?? null;
         $this->assertIsArray($location);
-        $this->assertSame(self::COMPARTMENT_A1, $location['compartment']['id'] ?? null);
+        $this->assertSame(self::ZONE_A1, $location['zone']['id'] ?? null);
         $this->assertSame(self::AMBIENTE_A1, $location['ambiente']['id'] ?? null);
 
         $list = $this->request('GET', '/api/v1/exit-logs', null, $this->authHeaderFor('admin@clinic.local'));
@@ -205,24 +205,24 @@ final class ExitLogsEndpointTest extends BaseApiTestCase
             }
         }
         $this->assertIsArray($row);
-        $this->assertSame(self::COMPARTMENT_A1, $row['location']['compartment']['id'] ?? null);
+        $this->assertSame(self::ZONE_A1, $row['location']['zone']['id'] ?? null);
 
         $get = $this->request('GET', '/api/v1/exit-logs/' . $exitId, null, $this->authHeaderFor('admin@clinic.local'));
         $this->assertSame(200, $get['status']);
-        $this->assertSame(self::COMPARTMENT_A1, $get['json']['data']['exit_log']['location']['compartment']['id'] ?? null);
+        $this->assertSame(self::ZONE_A1, $get['json']['data']['exit_log']['location']['zone']['id'] ?? null);
     }
 
-    public function testConfirmExitLogDeductsFromCompartment(): void
+    public function testConfirmExitLogDeductsFromZone(): void
     {
         $pdo = self::testPdo();
         $stmt = $pdo->prepare(
             'SELECT quantity FROM inventory_items
-             WHERE clinic_id = :clinic_id AND product_id = :product_id AND compartment_id = :compartment_id'
+             WHERE clinic_id = :clinic_id AND product_id = :product_id AND zone_id = :zone_id'
         );
         $stmt->execute([
             'clinic_id' => '11111111-1111-1111-1111-111111111111',
             'product_id' => self::PRODUCT_A1,
-            'compartment_id' => self::COMPARTMENT_A1,
+            'zone_id' => self::ZONE_A1,
         ]);
         $before = (int) ($stmt->fetchColumn() ?: 0);
         $this->assertGreaterThan(0, $before);
@@ -234,7 +234,7 @@ final class ExitLogsEndpointTest extends BaseApiTestCase
                 'items' => [[
                     'product_id' => self::PRODUCT_A1,
                     'quantity' => 1,
-                    'compartment_id' => self::COMPARTMENT_A1,
+                    'zone_id' => self::ZONE_A1,
                 ]],
             ],
             $this->authHeaderFor('tech@clinic.local')
@@ -253,7 +253,7 @@ final class ExitLogsEndpointTest extends BaseApiTestCase
         $stmt->execute([
             'clinic_id' => self::CLINIC_A,
             'product_id' => self::PRODUCT_A1,
-            'compartment_id' => self::COMPARTMENT_A1,
+            'zone_id' => self::ZONE_A1,
         ]);
         $after = (int) ($stmt->fetchColumn() ?: 0);
         $this->assertSame($before - 1, $after);
@@ -269,12 +269,12 @@ final class ExitLogsEndpointTest extends BaseApiTestCase
                     'product_id' => self::PRODUCT_A1,
                     'locations' => [
                         [
-                            'compartment_id' => self::COMPARTMENT_A1,
+                            'zone_id' => self::ZONE_A1,
                             'quantity' => 1,
                             'ambiente_id' => self::AMBIENTE_A1,
                         ],
                         [
-                            'compartment_id' => self::COMPARTMENT_A2,
+                            'zone_id' => self::ZONE_A2,
                             'quantity' => 2,
                         ],
                     ],
@@ -292,69 +292,69 @@ final class ExitLogsEndpointTest extends BaseApiTestCase
         $locations = $items[0]['locations'] ?? [];
         $this->assertCount(2, $locations);
 
-        $compartmentIds = array_map(static fn (array $row): ?string => $row['compartment']['id'] ?? null, $locations);
-        $this->assertContains(self::COMPARTMENT_A1, $compartmentIds);
-        $this->assertContains(self::COMPARTMENT_A2, $compartmentIds);
+        $zoneIds = array_map(static fn (array $row): ?string => $row['zone']['id'] ?? null, $locations);
+        $this->assertContains(self::ZONE_A1, $zoneIds);
+        $this->assertContains(self::ZONE_A2, $zoneIds);
 
         $quantities = array_map(static fn (array $row): int => (int) ($row['requested_quantity'] ?? 0), $locations);
         sort($quantities);
         $this->assertSame([1, 2], $quantities);
     }
 
-    public function testConfirmExitLogWithLocationsDeductsFromMultipleCompartments(): void
+    public function testConfirmExitLogWithLocationsDeductsFromMultipleZones(): void
     {
         $pdo = self::testPdo();
         $exists = $pdo->prepare(
             'SELECT id FROM inventory_items
-             WHERE clinic_id = :clinic_id AND product_id = :product_id AND compartment_id = :compartment_id
+             WHERE clinic_id = :clinic_id AND product_id = :product_id AND zone_id = :zone_id
              LIMIT 1'
         );
         $exists->execute([
             'clinic_id' => self::CLINIC_A,
             'product_id' => self::PRODUCT_A1,
-            'compartment_id' => self::COMPARTMENT_A2,
+            'zone_id' => self::ZONE_A2,
         ]);
         if ($exists->fetchColumn() === false) {
             $pdo->prepare(
-                'INSERT INTO inventory_items (id, clinic_id, product_id, compartment_id, quantity, updated_at)
-                 VALUES (:id, :clinic_id, :product_id, :compartment_id, :quantity, NOW())'
+                'INSERT INTO inventory_items (id, clinic_id, product_id, zone_id, quantity, updated_at)
+                 VALUES (:id, :clinic_id, :product_id, :zone_id, :quantity, NOW())'
             )->execute([
                 'id' => '30000000-0000-4000-8000-000000009901',
                 'clinic_id' => self::CLINIC_A,
                 'product_id' => self::PRODUCT_A1,
-                'compartment_id' => self::COMPARTMENT_A2,
+                'zone_id' => self::ZONE_A2,
                 'quantity' => 50,
             ]);
         } else {
             $pdo->prepare(
                 'UPDATE inventory_items
                  SET quantity = GREATEST(quantity, :quantity), updated_at = NOW()
-                 WHERE clinic_id = :clinic_id AND product_id = :product_id AND compartment_id = :compartment_id'
+                 WHERE clinic_id = :clinic_id AND product_id = :product_id AND zone_id = :zone_id'
             )->execute([
                 'quantity' => 50,
                 'clinic_id' => self::CLINIC_A,
                 'product_id' => self::PRODUCT_A1,
-                'compartment_id' => self::COMPARTMENT_A2,
+                'zone_id' => self::ZONE_A2,
             ]);
         }
 
         $stmt = $pdo->prepare(
             'SELECT quantity FROM inventory_items
-             WHERE clinic_id = :clinic_id AND product_id = :product_id AND compartment_id = :compartment_id'
+             WHERE clinic_id = :clinic_id AND product_id = :product_id AND zone_id = :zone_id'
         );
 
-        $readQty = static function (string $compartmentId) use ($stmt): int {
+        $readQty = static function (string $zoneId) use ($stmt): int {
             $stmt->execute([
                 'clinic_id' => self::CLINIC_A,
                 'product_id' => self::PRODUCT_A1,
-                'compartment_id' => $compartmentId,
+                'zone_id' => $zoneId,
             ]);
 
             return (int) ($stmt->fetchColumn() ?: 0);
         };
 
-        $beforeC1 = $readQty(self::COMPARTMENT_A1);
-        $beforeC2 = $readQty(self::COMPARTMENT_A2);
+        $beforeC1 = $readQty(self::ZONE_A1);
+        $beforeC2 = $readQty(self::ZONE_A2);
         $this->assertGreaterThan(0, $beforeC1);
         $this->assertGreaterThanOrEqual(2, $beforeC2);
 
@@ -365,8 +365,8 @@ final class ExitLogsEndpointTest extends BaseApiTestCase
                 'items' => [[
                     'product_id' => self::PRODUCT_A1,
                     'locations' => [
-                        ['compartment_id' => self::COMPARTMENT_A1, 'quantity' => 1],
-                        ['compartment_id' => self::COMPARTMENT_A2, 'quantity' => 2],
+                        ['zone_id' => self::ZONE_A1, 'quantity' => 1],
+                        ['zone_id' => self::ZONE_A2, 'quantity' => 2],
                     ],
                 ]],
             ],
@@ -383,11 +383,11 @@ final class ExitLogsEndpointTest extends BaseApiTestCase
         );
         $this->assertSame(200, $confirm['status'], $confirm['raw'] ?? '');
 
-        $this->assertSame($beforeC1 - 1, $readQty(self::COMPARTMENT_A1));
-        $this->assertSame($beforeC2 - 2, $readQty(self::COMPARTMENT_A2));
+        $this->assertSame($beforeC1 - 1, $readQty(self::ZONE_A1));
+        $this->assertSame($beforeC2 - 2, $readQty(self::ZONE_A2));
     }
 
-    public function testCreateExitLogRejectsDuplicateCompartmentInLocations(): void
+    public function testCreateExitLogRejectsDuplicateZoneInLocations(): void
     {
         $res = $this->request(
             'POST',
@@ -396,8 +396,8 @@ final class ExitLogsEndpointTest extends BaseApiTestCase
                 'items' => [[
                     'product_id' => self::PRODUCT_A1,
                     'locations' => [
-                        ['compartment_id' => self::COMPARTMENT_A1, 'quantity' => 1],
-                        ['compartment_id' => self::COMPARTMENT_A1, 'quantity' => 2],
+                        ['zone_id' => self::ZONE_A1, 'quantity' => 1],
+                        ['zone_id' => self::ZONE_A1, 'quantity' => 2],
                     ],
                 ]],
             ],
@@ -416,7 +416,7 @@ final class ExitLogsEndpointTest extends BaseApiTestCase
                     'product_id' => self::PRODUCT_A1,
                     'quantity' => 1,
                     'locations' => [
-                        ['compartment_id' => self::COMPARTMENT_A1, 'quantity' => 1],
+                        ['zone_id' => self::ZONE_A1, 'quantity' => 1],
                     ],
                 ]],
             ],
@@ -434,7 +434,7 @@ final class ExitLogsEndpointTest extends BaseApiTestCase
                 'items' => [[
                     'product_id' => self::PRODUCT_A1,
                     'quantity' => 1,
-                    'compartment_id' => self::COMPARTMENT_A1,
+                    'zone_id' => self::ZONE_A1,
                 ]],
             ],
             $this->authHeaderFor('admin@clinic.local')
@@ -442,8 +442,8 @@ final class ExitLogsEndpointTest extends BaseApiTestCase
         $this->assertSame(201, $created['status'], $created['raw'] ?? '');
         $this->assertCount(1, $created['json']['data']['items'] ?? []);
         $this->assertSame(
-            self::COMPARTMENT_A1,
-            $created['json']['data']['items'][0]['locations'][0]['compartment']['id'] ?? null
+            self::ZONE_A1,
+            $created['json']['data']['items'][0]['locations'][0]['zone']['id'] ?? null
         );
     }
 }

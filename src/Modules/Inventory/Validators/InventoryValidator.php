@@ -28,7 +28,7 @@ final class InventoryValidator
         }
 
         $out = [];
-        $seenCompartments = [];
+        $seenZones = [];
 
         foreach ($rows as $idx => $row) {
             if (!is_array($row)) {
@@ -40,18 +40,18 @@ final class InventoryValidator
                 throw new InvalidArgumentException('Invalid quantity at index ' . (int) $idx);
             }
 
-            $compartmentId = $this->locationValidator->parseOptionalLocation(
+            $zoneId = $this->locationValidator->parseOptionalLocation(
                 $row,
                 'index ' . (int) $idx
             );
 
-            $key = $compartmentId ?? '';
-            if (isset($seenCompartments[$key])) {
-                throw new InvalidArgumentException('Duplicate compartment_id in locations');
+            $key = $zoneId ?? '';
+            if (isset($seenZones[$key])) {
+                throw new InvalidArgumentException('Duplicate zone_id in locations');
             }
-            $seenCompartments[$key] = true;
+            $seenZones[$key] = true;
 
-            $out[] = new AdjustInventoryLocationDTO((int) $quantity, $compartmentId);
+            $out[] = new AdjustInventoryLocationDTO((int) $quantity, $zoneId);
         }
 
         return $out;

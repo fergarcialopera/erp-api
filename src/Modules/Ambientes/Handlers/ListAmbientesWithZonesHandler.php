@@ -1,16 +1,16 @@
 <?php
 
-namespace App\Modules\Compartments\Handlers;
+namespace App\Modules\Ambientes\Handlers;
 
 use App\Application\Http\ApiResponse;
 use App\Application\Http\Request;
 use App\Application\Http\Response;
-use App\Modules\Compartments\Services\CompartmentService;
+use App\Modules\Ambientes\Services\AmbienteService;
 use Throwable;
 
-final class ListCompartmentsHandler
+final class ListAmbientesWithZonesHandler
 {
-    public function __construct(private readonly CompartmentService $service)
+    public function __construct(private readonly AmbienteService $service)
     {
     }
 
@@ -23,13 +23,8 @@ final class ListCompartmentsHandler
                 return ApiResponse::error($request, 403, 'Forbidden', 'Missing clinic_id in user context');
             }
 
-            $qp = $request->getQueryParams();
-            $ambienteId = array_key_exists('ambiente_id', $qp) ? trim((string) $qp['ambiente_id']) : null;
-            if ($ambienteId === '') {
-                $ambienteId = null;
-            }
-
             $active = null;
+            $qp = $request->getQueryParams();
             if (array_key_exists('active', $qp)) {
                 $bool = filter_var($qp['active'], FILTER_VALIDATE_BOOL, FILTER_NULL_ON_FAILURE);
                 if ($bool === null) {
@@ -38,10 +33,9 @@ final class ListCompartmentsHandler
                 $active = (bool) $bool;
             }
 
-            return ApiResponse::success($request, $this->service->list($clinicId, $ambienteId, $active));
+            return ApiResponse::success($request, $this->service->listWithZones($clinicId, $active));
         } catch (Throwable $throwable) {
             return ApiResponse::error($request, 500, 'Internal Server Error', $throwable->getMessage());
         }
     }
 }
-

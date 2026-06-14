@@ -20,21 +20,21 @@ final class ExitLogLockPolicy
             );
         }
 
-        $compartmentId = $context['compartment_id'] ?? null;
-        if ($compartmentId === null || $compartmentId === '') {
-            throw new ExitLogLockDeniedException('Exit log has no compartment linked; lock cannot be opened.');
+        $zoneId = $context['zone_id'] ?? null;
+        if ($zoneId === null || $zoneId === '') {
+            throw new ExitLogLockDeniedException('Exit log has no zone linked; lock cannot be opened.');
         }
 
-        if (!self::isPostgresTruthy($context['compartment_resolved'] ?? false)) {
-            throw new ExitLogLockDeniedException('Linked compartment is missing or not in this clinic; lock cannot be opened.');
+        if (!self::isPostgresTruthy($context['zone_resolved'] ?? false)) {
+            throw new ExitLogLockDeniedException('Linked zone is missing or not in this clinic; lock cannot be opened.');
         }
 
-        if (!self::isPostgresTruthy($context['compartment_is_active'] ?? false)) {
-            throw new ExitLogLockDeniedException('Compartment is inactive; lock cannot be opened.');
+        if (!self::isPostgresTruthy($context['zone_is_active'] ?? false)) {
+            throw new ExitLogLockDeniedException('Zone is inactive; lock cannot be opened.');
         }
 
         if (!self::isPostgresTruthy($context['ambiente_resolved'] ?? false)) {
-            throw new ExitLogLockDeniedException('Ambiente for this compartment is missing; lock cannot be opened.');
+            throw new ExitLogLockDeniedException('Ambiente for this zone is missing; lock cannot be opened.');
         }
 
         if (!self::isPostgresTruthy($context['ambiente_is_active'] ?? false)) {

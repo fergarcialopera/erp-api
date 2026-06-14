@@ -18,8 +18,8 @@ final class EntryLogService
 
     public function create(string $clinicId, string $userId, CreateEntryLogDTO $dto): array
     {
-        if ($dto->compartmentId !== null) {
-            $this->locationValidator->assertCompartmentInClinic($clinicId, $dto->compartmentId);
+        if ($dto->zoneId !== null) {
+            $this->locationValidator->assertZoneInClinic($clinicId, $dto->zoneId);
         }
 
         $this->pdo->beginTransaction();
@@ -40,7 +40,7 @@ final class EntryLogService
             $inventoryItem = $this->findOrCreateInventoryRow(
                 $clinicId,
                 (string) $product['id'],
-                $dto->compartmentId
+                $dto->zoneId
             );
 
             $newQuantity = (int) $inventoryItem['quantity'] + $dto->quantity;
@@ -53,9 +53,9 @@ final class EntryLogService
             ]);
 
             $logStmt = $this->pdo->prepare(
-                'INSERT INTO entry_logs (clinic_id, product_id, quantity, note, created_by_user_id, compartment_id)
-                 VALUES (:clinic_id, :product_id, :quantity, :note, :created_by_user_id, :compartment_id)
-                 RETURNING id, clinic_id, product_id, quantity, note, created_by_user_id, compartment_id, created_at'
+                'INSERT INTO entry_logs (clinic_id, product_id, quantity, note, created_by_user_id, zone_id)
+                 VALUES (:clinic_id, :product_id, :quantity, :note, :created_by_user_id, :zone_id)
+                 RETURNING id, clinic_id, product_id, quantity, note, created_by_user_id, zone_id, created_at'
             );
             $logStmt->execute([
                 'clinic_id' => $clinicId,
@@ -63,14 +63,14 @@ final class EntryLogService
                 'quantity' => $dto->quantity,
                 'note' => $dto->note,
                 'created_by_user_id' => $userId,
-                'compartment_id' => $dto->compartmentId,
+                'zone_id' => $dto->zoneId,
             ]);
 
             $entryLog = $logStmt->fetch();
             $this->pdo->commit();
 
-            $location = $dto->compartmentId !== null
-                ? ($this->locationValidator->fetchLocationForCompartment($clinicId, $dto->compartmentId)
+            $location = $dto->zoneId !== null
+                ? ($this->locationValidator->fetchLocationForZone($clinicId, $dto->zoneId)
                     ?? LocationPresenter::empty())
                 : LocationPresenter::empty();
 
@@ -84,9 +84,9 @@ final class EntryLogService
                 'inventory' => [
                     'sku' => (string) $product['sku'],
                     'quantity' => $newQuantity,
-                    'compartment_id' => $dto->compartmentId,
+                    'zone_id' => $dto->zoneId,
                     'ambiente' => $location['ambiente'],
-                    'compartment' => $location['compartment'],
+                    'zone' => $location['zone'],
                 ],
             ];
         } catch (\Throwable $throwable) {
@@ -109,14 +109,14 @@ final class EntryLogService
                 el.note,
                 el.created_by_user_id AS created_by,
                 el.created_at,
-                el.compartment_id,
-                c.code AS compartment_code,
+                el.zone_id,
+                c.code AS zone_code,
                 l.id AS ambiente_id,
                 l.name AS ambiente_name,
                 l.device_id AS ambiente_device_id
              FROM entry_logs el
              INNER JOIN products p ON p.id = el.product_id
-             LEFT JOIN compartments c ON c.id = el.compartment_id AND c.clinic_id = :clinic_id
+             LEFT JOIN zones c ON c.id = el.zone_id AND c.clinic_id = :clinic_id
              LEFT JOIN ambientes l ON l.id = c.ambiente_id AND l.clinic_id = :clinic_id
              WHERE el.clinic_id = :clinic_id
              ORDER BY el.id DESC'
@@ -140,7 +140,7 @@ final class EntryLogService
                 'created_by' => $row['created_by'],
                 'created_at' => $row['created_at'],
                 'ambiente' => $location['ambiente'],
-                'compartment' => $location['compartment'],
+                'zone' => $location['zone'],
             ];
         }
 
@@ -150,34 +150,34 @@ final class EntryLogService
     /**
      * @return array<string, mixed>
      */
-    private function findOrCreateInventoryRow(string $clinicId, string $productId, ?string $compartmentId): array
+    private function findOrCreateInventoryRow(string $clinicId, string $productId, ?string $zoneId): array
     {
-        if ($compartmentId !== null) {
+        if ($zoneId !== null) {
             $inventoryStmt = $this->pdo->prepare(
                 'SELECT id, quantity
                  FROM inventory_items
                  WHERE clinic_id = :clinic_id
                    AND product_id = :product_id
-                   AND compartment_id = :compartment_id
+                   AND zone_id = :zone_id
                  LIMIT 1'
             );
             $inventoryStmt->execute([
                 'clinic_id' => $clinicId,
                 'product_id' => $productId,
-                'compartment_id' => $compartmentId,
+                'zone_id' => $zoneId,
             ]);
             $inventoryItem = $inventoryStmt->fetch();
 
             if (!$inventoryItem) {
                 $insStmt = $this->pdo->prepare(
-                    'INSERT INTO inventory_items (clinic_id, product_id, compartment_id, quantity, updated_at)
-                     VALUES (:clinic_id, :product_id, :compartment_id, 0, NOW())
+                    'INSERT INTO inventory_items (clinic_id, product_id, zone_id, quantity, updated_at)
+                     VALUES (:clinic_id, :product_id, :zone_id, 0, NOW())
                      RETURNING id, quantity'
                 );
                 $insStmt->execute([
                     'clinic_id' => $clinicId,
                     'product_id' => $productId,
-                    'compartment_id' => $compartmentId,
+                    'zone_id' => $zoneId,
                 ]);
                 $inventoryItem = $insStmt->fetch();
             }
@@ -187,7 +187,7 @@ final class EntryLogService
                  FROM inventory_items
                  WHERE clinic_id = :clinic_id
                    AND product_id = :product_id
-                   AND compartment_id IS NULL
+                   AND zone_id IS NULL
                  LIMIT 1'
             );
             $inventoryStmt->execute([
@@ -200,7 +200,7 @@ final class EntryLogService
                 $insStmt = $this->pdo->prepare(
                     'INSERT INTO inventory_items (clinic_id, product_id, quantity, updated_at)
                      VALUES (:clinic_id, :product_id, 0, NOW())
-                     ON CONFLICT (clinic_id, product_id) WHERE compartment_id IS NULL DO NOTHING'
+                     ON CONFLICT (clinic_id, product_id) WHERE zone_id IS NULL DO NOTHING'
                 );
                 $insStmt->execute([
                     'clinic_id' => $clinicId,
@@ -224,7 +224,7 @@ final class EntryLogService
 
     /**
      * @param array<string, mixed> $row
-     * @param array{ambiente: ?array, compartment: ?array} $location
+     * @param array{ambiente: ?array, zone: ?array} $location
      * @return array<string, mixed>
      */
     private function mapEntryLogRow(array $row, string $sku, string $name, array $location): array
@@ -239,7 +239,7 @@ final class EntryLogService
             'created_by' => $row['created_by_user_id'] ?? null,
             'created_at' => $row['created_at'] ?? null,
             'ambiente' => $location['ambiente'],
-            'compartment' => $location['compartment'],
+            'zone' => $location['zone'],
         ];
     }
 }

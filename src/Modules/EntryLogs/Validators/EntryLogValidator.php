@@ -27,14 +27,14 @@ final class EntryLogValidator
             throw new InvalidArgumentException('Invalid quantity');
         }
 
-        $compartmentId = $this->locationValidator->parseOptionalLocation($payload);
+        $zoneId = $this->locationValidator->parseOptionalLocation($payload);
 
         return new CreateEntryLogDTO(
             $sku,
             (int) $quantity,
             $name !== '' ? $name : null,
             $note !== '' ? $note : null,
-            $compartmentId
+            $zoneId
         );
     }
 }

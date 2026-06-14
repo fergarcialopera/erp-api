@@ -25,18 +25,18 @@ WITH resolved AS (
         el.id AS exit_log_id,
         el.status,
         COALESCE(
-            el.compartment_id,
+            el.zone_id,
             (
-                SELECT ei.compartment_id
+                SELECT ei.zone_id
                 FROM exit_log_items ei
                 WHERE ei.exit_log_id = el.id
                   AND ei.confirmed_quantity IS NOT NULL
                   AND ei.confirmed_quantity > 0
-                  AND ei.compartment_id IS NOT NULL
+                  AND ei.zone_id IS NOT NULL
                 ORDER BY ei.id ASC
                 LIMIT 1
             )
-        ) AS compartment_id
+        ) AS zone_id
     FROM exit_logs el
     WHERE el.id::text = :id AND el.clinic_id = CAST(:clinic_id AS UUID){$creatorFilter}
     LIMIT 1
@@ -44,15 +44,15 @@ WITH resolved AS (
 SELECT
     r.exit_log_id,
     r.status,
-    r.compartment_id,
-    (c.id IS NOT NULL) AS compartment_resolved,
-    COALESCE(c.is_active, FALSE) AS compartment_is_active,
+    r.zone_id,
+    (c.id IS NOT NULL) AS zone_resolved,
+    COALESCE(c.is_active, FALSE) AS zone_is_active,
     (a.id IS NOT NULL) AS ambiente_resolved,
     COALESCE(a.is_active, FALSE) AS ambiente_is_active,
     a.device_id
 FROM resolved r
-LEFT JOIN compartments c
-    ON c.id = r.compartment_id AND c.clinic_id = :clinic_id
+LEFT JOIN zones c
+    ON c.id = r.zone_id AND c.clinic_id = :clinic_id
 LEFT JOIN ambientes a
     ON a.id = c.ambiente_id AND a.clinic_id = :clinic_id
 SQL;

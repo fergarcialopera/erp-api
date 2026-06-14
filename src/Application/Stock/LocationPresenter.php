@@ -7,12 +7,12 @@ namespace App\Application\Stock;
 final class LocationPresenter
 {
     /**
-     * @param array<string, mixed> $row Keys: compartment_id, compartment_code, ambiente_id, ambiente_name, ambiente_device_id
-     * @return array{ambiente: ?array{id: string, name: string, device_id: ?string}, compartment: ?array{id: string, code: string}}
+     * @param array<string, mixed> $row Keys: zone_id, zone_code, ambiente_id, ambiente_name, ambiente_device_id
+     * @return array{ambiente: ?array{id: string, name: string, device_id: ?string}, zone: ?array{id: string, code: string}}
      */
     public static function fromJoinRow(array $row): array
     {
-        $compartmentId = $row['compartment_id'] ?? null;
+        $zoneId = $row['zone_id'] ?? null;
         $ambienteId = $row['ambiente_id'] ?? null;
 
         return [
@@ -25,20 +25,20 @@ final class LocationPresenter
                         : null,
                 ]
                 : null,
-            'compartment' => $compartmentId !== null && $compartmentId !== ''
+            'zone' => $zoneId !== null && $zoneId !== ''
                 ? [
-                    'id' => (string) $compartmentId,
-                    'code' => (string) ($row['compartment_code'] ?? ''),
+                    'id' => (string) $zoneId,
+                    'code' => (string) ($row['zone_code'] ?? ''),
                 ]
                 : null,
         ];
     }
 
     /**
-     * @return array{ambiente: ?array{id: string, name: string, device_id: ?string}, compartment: ?array{id: string, code: string}}
+     * @return array{ambiente: ?array{id: string, name: string, device_id: ?string}, zone: ?array{id: string, code: string}}
      */
     public static function empty(): array
     {
-        return ['ambiente' => null, 'compartment' => null];
+        return ['ambiente' => null, 'zone' => null];
     }
 }

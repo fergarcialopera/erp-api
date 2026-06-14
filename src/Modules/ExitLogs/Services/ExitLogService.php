@@ -29,9 +29,9 @@ final class ExitLogService
         $this->pdo->beginTransaction();
         try {
             $insLog = $this->pdo->prepare(
-                'INSERT INTO exit_logs (clinic_id, note, created_by_user_id, status, compartment_id)
+                'INSERT INTO exit_logs (clinic_id, note, created_by_user_id, status, zone_id)
                  VALUES (:clinic_id, :note, :created_by_user_id, :status, NULL)
-                 RETURNING id, clinic_id, status, note, created_by_user_id, created_at, confirmed_at, cancelled_at, compartment_id'
+                 RETURNING id, clinic_id, status, note, created_by_user_id, created_at, confirmed_at, cancelled_at, zone_id'
             );
             $insLog->execute([
                 'clinic_id' => $clinicId,
@@ -46,15 +46,15 @@ final class ExitLogService
             $exitLogId = (string) $header['id'];
 
             $insItem = $this->pdo->prepare(
-                'INSERT INTO exit_log_items (exit_log_id, product_id, compartment_id, requested_quantity)
-                 VALUES (:exit_log_id, :product_id, :compartment_id, :requested_quantity)'
+                'INSERT INTO exit_log_items (exit_log_id, product_id, zone_id, requested_quantity)
+                 VALUES (:exit_log_id, :product_id, :zone_id, :requested_quantity)'
             );
 
             foreach ($dto->lines as $line) {
                 $this->assertProductInClinic($clinicId, $line->productId);
-                if ($line->compartmentId !== null) {
+                if ($line->zoneId !== null) {
                     try {
-                        $this->locationValidator->assertCompartmentInClinic($clinicId, $line->compartmentId);
+                        $this->locationValidator->assertZoneInClinic($clinicId, $line->zoneId);
                     } catch (RuntimeException $e) {
                         throw new ExitLogBusinessRuleException($e->getMessage());
                     }
@@ -62,7 +62,7 @@ final class ExitLogService
                 $insItem->execute([
                     'exit_log_id' => $exitLogId,
                     'product_id' => $line->productId,
-                    'compartment_id' => $line->compartmentId,
+                    'zone_id' => $line->zoneId,
                     'requested_quantity' => $line->quantity,
                 ]);
             }
@@ -174,9 +174,9 @@ final class ExitLogService
                     continue;
                 }
                 $productId = (string) $it['product_id'];
-                $compartmentId = $it['compartment_id'] ?? null;
-                if ($compartmentId !== null && $compartmentId !== '') {
-                    $this->decrementInventoryAtCompartment($clinicId, $productId, (string) $compartmentId, $qty);
+                $zoneId = $it['zone_id'] ?? null;
+                if ($zoneId !== null && $zoneId !== '') {
+                    $this->decrementInventoryAtZone($clinicId, $productId, (string) $zoneId, $qty);
                 } else {
                     $this->decrementInventoryUnlocatedFifo($clinicId, $productId, $qty);
                 }
@@ -189,7 +189,7 @@ final class ExitLogService
             );
             $conf->execute(['exit_log_id' => $exitLogId]);
 
-            $this->syncHeaderCompartmentFromItems($clinicId, $exitLogId);
+            $this->syncHeaderZoneFromItems($clinicId, $exitLogId);
 
             $upd = $this->pdo->prepare(
                 'UPDATE exit_logs
@@ -245,7 +245,7 @@ final class ExitLogService
 
     public function list(string $clinicId, ?string $createdByUserId = null): array
     {
-        $sql = 'SELECT el.id, el.clinic_id, el.status, el.note, el.compartment_id,
+        $sql = 'SELECT el.id, el.clinic_id, el.status, el.note, el.zone_id,
                     el.created_by_user_id, el.created_at, el.confirmed_at, el.cancelled_at,
                     (SELECT COUNT(DISTINCT ei.product_id)::int FROM exit_log_items ei WHERE ei.exit_log_id = el.id) AS items_count,
                     (SELECT COUNT(*)::int FROM exit_log_items ei WHERE ei.exit_log_id = el.id) AS line_items_count
@@ -268,12 +268,12 @@ final class ExitLogService
                 continue;
             }
             $exitLogId = (string) $row['id'];
-            $compartmentId = $row['compartment_id'] ?? null;
-            if ($compartmentId === null || $compartmentId === '') {
-                $compartmentId = $this->fetchFirstItemCompartmentId($exitLogId);
+            $zoneId = $row['zone_id'] ?? null;
+            if ($zoneId === null || $zoneId === '') {
+                $zoneId = $this->fetchFirstItemZoneId($exitLogId);
             }
-            $location = $compartmentId !== null && $compartmentId !== ''
-                ? ($this->locationValidator->fetchLocationForCompartment($clinicId, (string) $compartmentId)
+            $location = $zoneId !== null && $zoneId !== ''
+                ? ($this->locationValidator->fetchLocationForZone($clinicId, (string) $zoneId)
                     ?? LocationPresenter::empty())
                 : LocationPresenter::empty();
 
@@ -288,7 +288,7 @@ final class ExitLogService
                 'cancelled_at' => $row['cancelled_at'],
                 'items_count' => (int) ($row['items_count'] ?? 0),
                 'line_items_count' => (int) ($row['line_items_count'] ?? 0),
-                'compartment_public_id' => $row['compartment_id'],
+                'zone_public_id' => $row['zone_id'],
                 'location' => $location,
             ];
         }
@@ -298,7 +298,7 @@ final class ExitLogService
 
     public function getDetail(string $clinicId, string $exitLogId, ?string $createdByUserId = null): ?array
     {
-        $sql = 'SELECT el.id, el.clinic_id, el.status, el.note, el.compartment_id,
+        $sql = 'SELECT el.id, el.clinic_id, el.status, el.note, el.zone_id,
                     el.created_by_user_id, el.created_at, el.confirmed_at, el.cancelled_at,
                     u.id AS creator_id, u.email AS creator_email, u.name AS creator_name
              FROM exit_logs el
@@ -322,12 +322,12 @@ final class ExitLogService
             'SELECT
                 ei.id,
                 ei.product_id,
-                ei.compartment_id,
+                ei.zone_id,
                 ei.requested_quantity,
                 ei.confirmed_quantity,
                 p.name AS product_name,
                 p.sku AS product_sku,
-                c.code AS compartment_code,
+                c.code AS zone_code,
                 l.id AS ambiente_id,
                 l.name AS ambiente_name,
                 l.device_id AS ambiente_device_id,
@@ -335,16 +335,16 @@ final class ExitLogService
              FROM exit_log_items ei
              INNER JOIN products p
                 ON p.id = ei.product_id AND p.clinic_id = :clinic_id
-             LEFT JOIN compartments c
-                ON c.id = ei.compartment_id AND c.clinic_id = :clinic_id
+             LEFT JOIN zones c
+                ON c.id = ei.zone_id AND c.clinic_id = :clinic_id
              LEFT JOIN ambientes l
                 ON l.id = c.ambiente_id AND l.clinic_id = :clinic_id
              LEFT JOIN inventory_items ii
                 ON ii.clinic_id = :clinic_id
                AND ii.product_id = p.id
                AND (
-                    (ei.compartment_id IS NULL AND ii.compartment_id IS NULL)
-                    OR ii.compartment_id = ei.compartment_id
+                    (ei.zone_id IS NULL AND ii.zone_id IS NULL)
+                    OR ii.zone_id = ei.zone_id
                )
              WHERE ei.exit_log_id::text = :exit_log_id
              ORDER BY ei.id ASC'
@@ -353,14 +353,14 @@ final class ExitLogService
         $rawItems = $itemsStmt->fetchAll() ?: [];
 
         $flatLines = [];
-        $headerCompartmentId = $header['compartment_id'] ?? null;
+        $headerZoneId = $header['zone_id'] ?? null;
         foreach ($rawItems as $it) {
             $location = LocationPresenter::fromJoinRow($it);
-            if (($headerCompartmentId === null || $headerCompartmentId === '')
-                && $it['compartment_id'] !== null
-                && $it['compartment_id'] !== ''
+            if (($headerZoneId === null || $headerZoneId === '')
+                && $it['zone_id'] !== null
+                && $it['zone_id'] !== ''
             ) {
-                $headerCompartmentId = (string) $it['compartment_id'];
+                $headerZoneId = (string) $it['zone_id'];
             }
 
             $flatLines[] = [
@@ -372,7 +372,7 @@ final class ExitLogService
                     'barcode' => null,
                 ],
                 'ambiente' => $location['ambiente'],
-                'compartment' => $location['compartment'],
+                'zone' => $location['zone'],
                 'requested_quantity' => (int) $it['requested_quantity'],
                 'confirmed_quantity' => $it['confirmed_quantity'] !== null ? (int) $it['confirmed_quantity'] : null,
                 'stock_available' => $it['stock_available'] !== null ? (int) $it['stock_available'] : null,
@@ -381,8 +381,8 @@ final class ExitLogService
 
         $items = ExitLogItemsPresenter::groupByProduct($flatLines);
 
-        $headerLocation = $headerCompartmentId !== null && $headerCompartmentId !== ''
-            ? ($this->locationValidator->fetchLocationForCompartment($clinicId, (string) $headerCompartmentId)
+        $headerLocation = $headerZoneId !== null && $headerZoneId !== ''
+            ? ($this->locationValidator->fetchLocationForZone($clinicId, (string) $headerZoneId)
                 ?? LocationPresenter::empty())
             : LocationPresenter::empty();
 
@@ -402,7 +402,7 @@ final class ExitLogService
                 'cancelled_at' => $header['cancelled_at'],
                 'legacy_sku' => null,
                 'legacy_quantity' => null,
-                'compartment_public_id' => $header['compartment_id'],
+                'zone_public_id' => $header['zone_id'],
                 'location' => $headerLocation,
             ],
             'items' => $items,
@@ -435,7 +435,7 @@ final class ExitLogService
     private function fetchItemsForExit(string $clinicId, string $exitLogId): array
     {
         $stmt = $this->pdo->prepare(
-            'SELECT ei.id, ei.requested_quantity, ei.compartment_id, p.id AS product_id
+            'SELECT ei.id, ei.requested_quantity, ei.zone_id, p.id AS product_id
              FROM exit_log_items ei
              INNER JOIN products p ON p.id = ei.product_id AND p.clinic_id = :clinic_id
              WHERE ei.exit_log_id::text = :id
@@ -447,28 +447,28 @@ final class ExitLogService
         return is_array($rows) ? $rows : [];
     }
 
-    private function fetchFirstItemCompartmentId(string $exitLogId): ?string
+    private function fetchFirstItemZoneId(string $exitLogId): ?string
     {
         $stmt = $this->pdo->prepare(
-            'SELECT compartment_id
+            'SELECT zone_id
              FROM exit_log_items
-             WHERE exit_log_id::text = :id AND compartment_id IS NOT NULL
+             WHERE exit_log_id::text = :id AND zone_id IS NOT NULL
              ORDER BY id ASC
              LIMIT 1'
         );
         $stmt->execute(['id' => $exitLogId]);
         $row = $stmt->fetch();
-        if (!is_array($row) || $row['compartment_id'] === null) {
+        if (!is_array($row) || $row['zone_id'] === null) {
             return null;
         }
 
-        return (string) $row['compartment_id'];
+        return (string) $row['zone_id'];
     }
 
-    private function decrementInventoryAtCompartment(
+    private function decrementInventoryAtZone(
         string $clinicId,
         string $productId,
-        string $compartmentId,
+        string $zoneId,
         int $delta
     ): void {
         $stmt = $this->pdo->prepare(
@@ -476,18 +476,18 @@ final class ExitLogService
              FROM inventory_items
              WHERE clinic_id = :clinic_id
                AND product_id = :product_id
-               AND compartment_id = :compartment_id
+               AND zone_id = :zone_id
              LIMIT 1'
         );
         $stmt->execute([
             'clinic_id' => $clinicId,
             'product_id' => $productId,
-            'compartment_id' => $compartmentId,
+            'zone_id' => $zoneId,
         ]);
         $row = $stmt->fetch();
         if (!is_array($row) || (int) $row['quantity'] < $delta) {
             throw new ExitLogBusinessRuleException(
-                'Insufficient stock for product at compartment: ' . $productId
+                'Insufficient stock for product at zone: ' . $productId
             );
         }
 
@@ -511,7 +511,7 @@ final class ExitLogService
                AND product_id = :product_id
                AND quantity > 0
              ORDER BY
-                CASE WHEN compartment_id IS NULL THEN 0 ELSE 1 END,
+                CASE WHEN zone_id IS NULL THEN 0 ELSE 1 END,
                 updated_at ASC,
                 id ASC'
         );
@@ -591,30 +591,30 @@ final class ExitLogService
         ]);
     }
 
-    private function syncHeaderCompartmentFromItems(string $clinicId, string $exitLogId): void
+    private function syncHeaderZoneFromItems(string $clinicId, string $exitLogId): void
     {
         $stmt = $this->pdo->prepare(
-            'SELECT ei.compartment_id
+            'SELECT ei.zone_id
              FROM exit_log_items ei
              INNER JOIN products p ON p.id = ei.product_id AND p.clinic_id = :clinic_id
              WHERE ei.exit_log_id::text = :eid
                AND ei.confirmed_quantity IS NOT NULL
                AND ei.confirmed_quantity > 0
-               AND ei.compartment_id IS NOT NULL
+               AND ei.zone_id IS NOT NULL
              ORDER BY ei.id ASC
              LIMIT 1'
         );
         $stmt->execute(['clinic_id' => $clinicId, 'eid' => $exitLogId]);
         $row = $stmt->fetch();
-        if (!is_array($row) || $row['compartment_id'] === null || $row['compartment_id'] === '') {
+        if (!is_array($row) || $row['zone_id'] === null || $row['zone_id'] === '') {
             return;
         }
-        $pub = (string) $row['compartment_id'];
+        $pub = (string) $row['zone_id'];
         $upd = $this->pdo->prepare(
             'UPDATE exit_logs
-             SET compartment_id = :c
+             SET zone_id = :c
              WHERE id::text = :id AND clinic_id = :clinic_id
-               AND compartment_id IS NULL'
+               AND zone_id IS NULL'
         );
         $upd->execute(['c' => $pub, 'id' => $exitLogId, 'clinic_id' => $clinicId]);
     }

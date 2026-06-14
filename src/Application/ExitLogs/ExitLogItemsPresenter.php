@@ -11,7 +11,7 @@ final class ExitLogItemsPresenter
      *     item_id: string,
      *     product: array{id: string, name: string, sku: ?string, barcode: null},
      *     ambiente: ?array{id: string, name: string, device_id: ?string},
-     *     compartment: ?array{id: string, code: string},
+     *     zone: ?array{id: string, code: string},
      *     requested_quantity: int,
      *     confirmed_quantity: ?int,
      *     stock_available: ?int
@@ -26,7 +26,7 @@ final class ExitLogItemsPresenter
      *         confirmed_quantity: ?int,
      *         stock_available: ?int,
      *         ambiente: ?array{id: string, name: string, device_id: ?string},
-     *         compartment: ?array{id: string, code: string}
+     *         zone: ?array{id: string, code: string}
      *     }>
      * }>
      */
@@ -64,7 +64,7 @@ final class ExitLogItemsPresenter
                 'confirmed_quantity' => $confirmed,
                 'stock_available' => $line['stock_available'],
                 'ambiente' => $line['ambiente'],
-                'compartment' => $line['compartment'],
+                'zone' => $line['zone'],
             ];
             unset($group);
         }

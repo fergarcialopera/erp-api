@@ -17,7 +17,7 @@ final class AmbientesTreeEndpointTest extends BaseApiTestCase
         $this->assertSame(401, $res['status']);
     }
 
-    public function testListAmbientesTreeReturnsNestedCompartmentsForClinic(): void
+    public function testListAmbientesTreeReturnsNestedZonesForClinic(): void
     {
         $res = $this->request('GET', '/api/v1/ambientes/tree', null, $this->authHeaderFor('staff@clinic.local'));
         $this->assertSame(200, $res['status']);
@@ -40,14 +40,14 @@ final class AmbientesTreeEndpointTest extends BaseApiTestCase
             }
         }
         $this->assertIsArray($ambiente);
-        $compartments = $ambiente['compartments'] ?? null;
-        $this->assertIsArray($compartments);
-        $this->assertCount(3, $compartments);
+        $zones = $ambiente['zones'] ?? null;
+        $this->assertIsArray($zones);
+        $this->assertCount(3, $zones);
 
-        foreach ($compartments as $compartment) {
-            $this->assertIsArray($compartment);
-            $this->assertSame(self::AMBIENTE_A1, (string) ($compartment['ambiente_id'] ?? ''));
-            $this->assertNotSame('', (string) ($compartment['code'] ?? ''));
+        foreach ($zones as $zone) {
+            $this->assertIsArray($zone);
+            $this->assertSame(self::AMBIENTE_A1, (string) ($zone['ambiente_id'] ?? ''));
+            $this->assertNotSame('', (string) ($zone['code'] ?? ''));
         }
     }
 
@@ -72,7 +72,7 @@ final class AmbientesTreeEndpointTest extends BaseApiTestCase
 
         $comp = $this->request(
             'POST',
-            '/api/v1/compartments',
+            '/api/v1/zones',
             ['ambiente_id' => $ambienteId, 'code' => 'X-' . bin2hex(random_bytes(2))],
             $this->authHeaderFor('tech@clinic.local')
         );

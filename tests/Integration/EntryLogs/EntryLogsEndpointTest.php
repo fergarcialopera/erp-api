@@ -8,7 +8,7 @@ use Tests\Integration\Support\BaseApiTestCase;
 
 final class EntryLogsEndpointTest extends BaseApiTestCase
 {
-    private const COMPARTMENT_A1 = '50000000-0000-4000-8000-000000000001';
+    private const ZONE_A1 = '50000000-0000-4000-8000-000000000001';
     private const AMBIENTE_A1 = '40000000-0000-4000-8000-000000000001';
     private const AMBIENTE_A2 = '40000000-0000-4000-8000-000000000002';
 
@@ -80,7 +80,7 @@ final class EntryLogsEndpointTest extends BaseApiTestCase
         $this->assertFalse($hasInB);
     }
 
-    public function testCreateEntryLogWithCompartmentReturnsLocation(): void
+    public function testCreateEntryLogWithZoneReturnsLocation(): void
     {
         $sku = $this->createProductSkuForClinicA();
         $res = $this->request(
@@ -89,7 +89,7 @@ final class EntryLogsEndpointTest extends BaseApiTestCase
             [
                 'sku' => $sku,
                 'quantity' => 2,
-                'compartment_id' => self::COMPARTMENT_A1,
+                'zone_id' => self::ZONE_A1,
                 'ambiente_id' => self::AMBIENTE_A1,
             ],
             $this->authHeaderFor('tech@clinic.local')
@@ -97,9 +97,9 @@ final class EntryLogsEndpointTest extends BaseApiTestCase
         $this->assertSame(201, $res['status'], $res['raw'] ?? '');
         $entry = $res['json']['data']['entry_log'] ?? null;
         $this->assertIsArray($entry);
-        $this->assertSame(self::COMPARTMENT_A1, $entry['compartment']['id'] ?? null);
+        $this->assertSame(self::ZONE_A1, $entry['zone']['id'] ?? null);
         $this->assertSame(self::AMBIENTE_A1, $entry['ambiente']['id'] ?? null);
-        $this->assertSame('A1-C1', $entry['compartment']['code'] ?? null);
+        $this->assertSame('A1-C1', $entry['zone']['code'] ?? null);
 
         $list = $this->request('GET', '/api/v1/entry-logs', null, $this->authHeaderFor('staff@clinic.local'));
         $found = null;
@@ -110,10 +110,10 @@ final class EntryLogsEndpointTest extends BaseApiTestCase
             }
         }
         $this->assertIsArray($found);
-        $this->assertSame(self::COMPARTMENT_A1, $found['compartment']['id'] ?? null);
+        $this->assertSame(self::ZONE_A1, $found['zone']['id'] ?? null);
     }
 
-    public function testCreateEntryLogAmbienteWithoutCompartmentReturns422(): void
+    public function testCreateEntryLogAmbienteWithoutZoneReturns422(): void
     {
         $sku = $this->createProductSkuForClinicA();
         $res = $this->request(
@@ -125,7 +125,7 @@ final class EntryLogsEndpointTest extends BaseApiTestCase
         $this->assertSame(422, $res['status']);
     }
 
-    public function testCreateEntryLogAmbienteCompartmentMismatchReturns422(): void
+    public function testCreateEntryLogAmbienteZoneMismatchReturns422(): void
     {
         $sku = $this->createProductSkuForClinicA();
         $res = $this->request(
@@ -134,7 +134,7 @@ final class EntryLogsEndpointTest extends BaseApiTestCase
             [
                 'sku' => $sku,
                 'quantity' => 1,
-                'compartment_id' => self::COMPARTMENT_A1,
+                'zone_id' => self::ZONE_A1,
                 'ambiente_id' => self::AMBIENTE_A2,
             ],
             $this->authHeaderFor('admin@clinic.local')

@@ -1,19 +1,19 @@
 <?php
 
-namespace App\Modules\Compartments\Handlers;
+namespace App\Modules\Zones\Handlers;
 
 use App\Application\Http\ApiResponse;
 use App\Application\Http\Request;
 use App\Application\Http\Response;
-use App\Modules\Compartments\Services\CompartmentService;
-use App\Modules\Compartments\Validators\CompartmentValidator;
+use App\Modules\Zones\Services\ZoneService;
+use App\Modules\Zones\Validators\ZoneValidator;
 use Throwable;
 
-final class PatchCompartmentHandler
+final class PatchZoneHandler
 {
     public function __construct(
-        private readonly CompartmentValidator $validator,
-        private readonly CompartmentService $service
+        private readonly ZoneValidator $validator,
+        private readonly ZoneService $service
     ) {
     }
 
@@ -25,14 +25,14 @@ final class PatchCompartmentHandler
             if ($clinicId === '') {
                 return ApiResponse::error($request, 403, 'Forbidden', 'Missing clinic_id in user context');
             }
-            $id = (string) $request->getAttribute('compartment_id', '');
+            $id = (string) $request->getAttribute('zone_id', '');
             if ($id === '') {
-                return ApiResponse::error($request, 404, 'Not Found', 'Compartment not found');
+                return ApiResponse::error($request, 404, 'Not Found', 'Zone not found');
             }
             $dto = $this->validator->validatePatch($request->getParsedBody());
             $updated = $this->service->patch($clinicId, $id, $dto);
             if ($updated === null) {
-                return ApiResponse::error($request, 404, 'Not Found', 'Compartment not found');
+                return ApiResponse::error($request, 404, 'Not Found', 'Zone not found');
             }
             return ApiResponse::success($request, $updated);
         } catch (Throwable $throwable) {

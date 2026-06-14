@@ -1,8 +1,8 @@
 <?php
 
-namespace App\Modules\Compartments\DTOs;
+namespace App\Modules\Zones\DTOs;
 
-final class CreateCompartmentDTO
+final class CreateZoneDTO
 {
     public function __construct(
         public readonly string $ambienteId,

@@ -44,13 +44,13 @@ use App\Modules\Clinic\Handlers\UploadClinicImageHandler;
 use App\Modules\Clinic\Services\ClinicService;
 use App\Modules\Clinic\Validators\ClinicSettingsValidator;
 use App\Modules\Clinic\Validators\ClinicValidator;
-use App\Modules\Compartments\Handlers\CreateCompartmentHandler;
-use App\Modules\Compartments\Handlers\DeleteCompartmentHandler;
-use App\Modules\Compartments\Handlers\GetCompartmentHandler;
-use App\Modules\Compartments\Handlers\ListCompartmentsHandler;
-use App\Modules\Compartments\Handlers\PatchCompartmentHandler;
-use App\Modules\Compartments\Services\CompartmentService;
-use App\Modules\Compartments\Validators\CompartmentValidator;
+use App\Modules\Zones\Handlers\CreateZoneHandler;
+use App\Modules\Zones\Handlers\DeleteZoneHandler;
+use App\Modules\Zones\Handlers\GetZoneHandler;
+use App\Modules\Zones\Handlers\ListZonesHandler;
+use App\Modules\Zones\Handlers\PatchZoneHandler;
+use App\Modules\Zones\Services\ZoneService;
+use App\Modules\Zones\Validators\ZoneValidator;
 use App\Modules\EntryLogs\Handlers\CreateEntryLogHandler;
 use App\Modules\EntryLogs\Handlers\ListEntryLogsHandler;
 use App\Modules\EntryLogs\Services\EntryLogService;
@@ -76,7 +76,7 @@ use App\Modules\Ambientes\Handlers\CreateAmbienteHandler;
 use App\Modules\Ambientes\Handlers\DeleteAmbienteHandler;
 use App\Modules\Ambientes\Handlers\GetAmbienteHandler;
 use App\Modules\Ambientes\Handlers\ListAmbientesHandler;
-use App\Modules\Ambientes\Handlers\ListAmbientesWithCompartmentsHandler;
+use App\Modules\Ambientes\Handlers\ListAmbientesWithZonesHandler;
 use App\Modules\Ambientes\Handlers\PatchAmbienteHandler;
 use App\Modules\Ambientes\Services\AmbienteService;
 use App\Modules\Ambientes\Validators\AmbienteValidator;
@@ -180,7 +180,7 @@ return static function (ApplicationConfig $appConfig): array {
     $productService = new ProductService($pdo);
     $userService = new UserService($pdo, $publicUrls, $loginAttempts);
     $ambienteService = new AmbienteService($pdo);
-    $compartmentService = new CompartmentService($pdo);
+    $zoneService = new ZoneService($pdo);
 
     return [
         'pdo' => $pdo,
@@ -233,16 +233,16 @@ return static function (ApplicationConfig $appConfig): array {
             'uploadUserImage' => new UploadUserImageHandler($userService, $imageStorage),
             'deleteUserImage' => new DeleteUserImageHandler($userService, $imageStorage),
             'listAmbientes' => new ListAmbientesHandler($ambienteService),
-            'listAmbientesWithCompartments' => new ListAmbientesWithCompartmentsHandler($ambienteService),
+            'listAmbientesWithZones' => new ListAmbientesWithZonesHandler($ambienteService),
             'getAmbiente' => new GetAmbienteHandler($ambienteService),
             'createAmbiente' => new CreateAmbienteHandler(new AmbienteValidator(), $ambienteService),
             'patchAmbiente' => new PatchAmbienteHandler(new AmbienteValidator(), $ambienteService),
             'deleteAmbiente' => new DeleteAmbienteHandler($ambienteService),
-            'listCompartments' => new ListCompartmentsHandler($compartmentService),
-            'getCompartment' => new GetCompartmentHandler($compartmentService),
-            'createCompartment' => new CreateCompartmentHandler(new CompartmentValidator(), $compartmentService),
-            'patchCompartment' => new PatchCompartmentHandler(new CompartmentValidator(), $compartmentService),
-            'deleteCompartment' => new DeleteCompartmentHandler($compartmentService),
+            'listZones' => new ListZonesHandler($zoneService),
+            'getZone' => new GetZoneHandler($zoneService),
+            'createZone' => new CreateZoneHandler(new ZoneValidator(), $zoneService),
+            'patchZone' => new PatchZoneHandler(new ZoneValidator(), $zoneService),
+            'deleteZone' => new DeleteZoneHandler($zoneService),
             'openApi' => new OpenApiController(),
         ],
     ];

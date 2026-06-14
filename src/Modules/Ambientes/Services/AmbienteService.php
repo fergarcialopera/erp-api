@@ -31,7 +31,7 @@ final class AmbienteService
     /**
      * @return list<array<string, mixed>>
      */
-    public function listWithCompartments(string $clinicId, ?bool $active): array
+    public function listWithZones(string $clinicId, ?bool $active): array
     {
         $ambientes = $this->list($clinicId, $active);
         if ($ambientes === []) {
@@ -39,7 +39,7 @@ final class AmbienteService
         }
 
         $sql = 'SELECT id, ambiente_id, code, is_active, created_at, updated_at
-                FROM compartments
+                FROM zones
                 WHERE clinic_id = :clinic_id';
         $params = ['clinic_id' => $clinicId];
         if ($active !== null) {
@@ -49,10 +49,10 @@ final class AmbienteService
         $sql .= ' ORDER BY created_at ASC';
         $stmt = $this->pdo->prepare($sql);
         $stmt->execute($params);
-        $compartments = $stmt->fetchAll() ?: [];
+        $zones = $stmt->fetchAll() ?: [];
 
         $byAmbienteId = [];
-        foreach ($compartments as $row) {
+        foreach ($zones as $row) {
             if (!is_array($row)) {
                 continue;
             }
@@ -69,7 +69,7 @@ final class AmbienteService
                 continue;
             }
             $ambienteId = (string) ($ambiente['id'] ?? '');
-            $ambiente['compartments'] = $byAmbienteId[$ambienteId] ?? [];
+            $ambiente['zones'] = $byAmbienteId[$ambienteId] ?? [];
             $result[] = $ambiente;
         }
 
@@ -90,12 +90,12 @@ final class AmbienteService
 
         $comp = $this->pdo->prepare(
             'SELECT id, ambiente_id, code, is_active, created_at, updated_at
-             FROM compartments
+             FROM zones
              WHERE clinic_id = :clinic_id AND ambiente_id = :ambiente_id
              ORDER BY created_at ASC'
         );
         $comp->execute(['clinic_id' => $clinicId, 'ambiente_id' => $ambienteId]);
-        $row['compartments'] = $comp->fetchAll() ?: [];
+        $row['zones'] = $comp->fetchAll() ?: [];
 
         return $row;
     }

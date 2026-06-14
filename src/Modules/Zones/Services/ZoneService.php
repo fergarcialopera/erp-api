@@ -1,14 +1,14 @@
 <?php
 
-namespace App\Modules\Compartments\Services;
+namespace App\Modules\Zones\Services;
 
-use App\Modules\Compartments\DTOs\CreateCompartmentDTO;
-use App\Modules\Compartments\DTOs\PatchCompartmentDTO;
+use App\Modules\Zones\DTOs\CreateZoneDTO;
+use App\Modules\Zones\DTOs\PatchZoneDTO;
 use PDO;
 use RuntimeException;
 use Symfony\Component\Uid\Uuid;
 
-final class CompartmentService
+final class ZoneService
 {
     public function __construct(private readonly PDO $pdo)
     {
@@ -17,7 +17,7 @@ final class CompartmentService
     public function list(string $clinicId, ?string $ambienteId, ?bool $active): array
     {
         $sql = 'SELECT id, clinic_id, ambiente_id, code, is_active, created_at, updated_at
-                FROM compartments
+                FROM zones
                 WHERE clinic_id = :clinic_id';
         $params = ['clinic_id' => $clinicId];
         if ($ambienteId !== null) {
@@ -34,20 +34,20 @@ final class CompartmentService
         return $stmt->fetchAll() ?: [];
     }
 
-    public function get(string $clinicId, string $compartmentId): ?array
+    public function get(string $clinicId, string $zoneId): ?array
     {
         $stmt = $this->pdo->prepare(
             'SELECT id, clinic_id, ambiente_id, code, is_active, created_at, updated_at
-             FROM compartments
+             FROM zones
              WHERE clinic_id = :clinic_id AND id::text = :id
              LIMIT 1'
         );
-        $stmt->execute(['clinic_id' => $clinicId, 'id' => $compartmentId]);
+        $stmt->execute(['clinic_id' => $clinicId, 'id' => $zoneId]);
         $row = $stmt->fetch();
         return is_array($row) ? $row : null;
     }
 
-    public function create(string $clinicId, CreateCompartmentDTO $dto): array
+    public function create(string $clinicId, CreateZoneDTO $dto): array
     {
         $ambiente = $this->pdo->prepare(
             'SELECT id FROM ambientes WHERE clinic_id = :clinic_id AND id::text = :id LIMIT 1'
@@ -59,7 +59,7 @@ final class CompartmentService
 
         $id = Uuid::v4()->toRfc4122();
         $stmt = $this->pdo->prepare(
-            'INSERT INTO compartments (id, clinic_id, ambiente_id, code, is_active, created_at, updated_at)
+            'INSERT INTO zones (id, clinic_id, ambiente_id, code, is_active, created_at, updated_at)
              VALUES (:id, :clinic_id, :ambiente_id, :code, :is_active, NOW(), NOW())
              RETURNING id, clinic_id, ambiente_id, code, is_active, created_at, updated_at'
         );
@@ -73,22 +73,22 @@ final class CompartmentService
         return (array) $stmt->fetch();
     }
 
-    public function patch(string $clinicId, string $compartmentId, PatchCompartmentDTO $dto): ?array
+    public function patch(string $clinicId, string $zoneId, PatchZoneDTO $dto): ?array
     {
-        $current = $this->get($clinicId, $compartmentId);
+        $current = $this->get($clinicId, $zoneId);
         if ($current === null) {
             return null;
         }
 
         $stmt = $this->pdo->prepare(
-            'UPDATE compartments
+            'UPDATE zones
              SET code = :code, is_active = :is_active, updated_at = NOW()
              WHERE clinic_id = :clinic_id AND id::text = :id
              RETURNING id, clinic_id, ambiente_id, code, is_active, created_at, updated_at'
         );
         $stmt->execute([
             'clinic_id' => $clinicId,
-            'id' => $compartmentId,
+            'id' => $zoneId,
             'code' => $dto->code ?? $current['code'],
             'is_active' => $dto->isActive ?? $current['is_active'],
         ]);
@@ -96,13 +96,13 @@ final class CompartmentService
         return is_array($row) ? $row : null;
     }
 
-    public function softDelete(string $clinicId, string $compartmentId): bool
+    public function softDelete(string $clinicId, string $zoneId): bool
     {
         $stmt = $this->pdo->prepare(
-            'UPDATE compartments SET is_active = FALSE, updated_at = NOW()
+            'UPDATE zones SET is_active = FALSE, updated_at = NOW()
              WHERE clinic_id = :clinic_id AND id::text = :id'
         );
-        $stmt->execute(['clinic_id' => $clinicId, 'id' => $compartmentId]);
+        $stmt->execute(['clinic_id' => $clinicId, 'id' => $zoneId]);
         return $stmt->rowCount() > 0;
     }
 }

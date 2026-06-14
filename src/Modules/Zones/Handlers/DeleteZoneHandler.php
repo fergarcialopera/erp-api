@@ -1,16 +1,16 @@
 <?php
 
-namespace App\Modules\Compartments\Handlers;
+namespace App\Modules\Zones\Handlers;
 
 use App\Application\Http\ApiResponse;
 use App\Application\Http\Request;
 use App\Application\Http\Response;
-use App\Modules\Compartments\Services\CompartmentService;
+use App\Modules\Zones\Services\ZoneService;
 use Throwable;
 
-final class DeleteCompartmentHandler
+final class DeleteZoneHandler
 {
-    public function __construct(private readonly CompartmentService $service)
+    public function __construct(private readonly ZoneService $service)
     {
     }
 
@@ -22,13 +22,13 @@ final class DeleteCompartmentHandler
             if ($clinicId === '') {
                 return ApiResponse::error($request, 403, 'Forbidden', 'Missing clinic_id in user context');
             }
-            $id = (string) $request->getAttribute('compartment_id', '');
+            $id = (string) $request->getAttribute('zone_id', '');
             if ($id === '') {
-                return ApiResponse::error($request, 404, 'Not Found', 'Compartment not found');
+                return ApiResponse::error($request, 404, 'Not Found', 'Zone not found');
             }
             $deleted = $this->service->softDelete($clinicId, $id);
             if (!$deleted) {
-                return ApiResponse::error($request, 404, 'Not Found', 'Compartment not found');
+                return ApiResponse::error($request, 404, 'Not Found', 'Zone not found');
             }
             return ApiResponse::success($request, ['deleted' => true]);
         } catch (Throwable $throwable) {

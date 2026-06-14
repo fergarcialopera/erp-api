@@ -62,7 +62,7 @@ CREATE UNIQUE INDEX ambientes_device_id_unique
     ON ambientes (device_id)
     WHERE device_id IS NOT NULL;
 
-CREATE TABLE compartments (
+CREATE TABLE zones (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     clinic_id UUID NOT NULL REFERENCES clinics(id) ON DELETE CASCADE,
     ambiente_id UUID NOT NULL REFERENCES ambientes(id) ON DELETE CASCADE,
@@ -77,7 +77,7 @@ CREATE TABLE inventory_items (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     clinic_id UUID NOT NULL REFERENCES clinics(id) ON DELETE CASCADE,
     product_id UUID NOT NULL REFERENCES products(id) ON DELETE CASCADE,
-    compartment_id UUID NULL REFERENCES compartments(id) ON DELETE SET NULL,
+    zone_id UUID NULL REFERENCES zones(id) ON DELETE SET NULL,
     quantity INTEGER NOT NULL DEFAULT 0 CHECK (quantity >= 0),
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
 );
@@ -102,14 +102,14 @@ CREATE TABLE exit_logs (
     confirmed_at TIMESTAMP WITH TIME ZONE NULL,
     cancelled_at TIMESTAMP WITH TIME ZONE NULL,
     metadata JSONB NULL,
-    compartment_id UUID NULL REFERENCES compartments(id) ON DELETE SET NULL
+    zone_id UUID NULL REFERENCES zones(id) ON DELETE SET NULL
 );
 
 CREATE TABLE exit_log_items (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     exit_log_id UUID NOT NULL REFERENCES exit_logs(id) ON DELETE CASCADE,
     product_id UUID NOT NULL REFERENCES products(id) ON DELETE RESTRICT,
-    compartment_id UUID NULL REFERENCES compartments(id) ON DELETE SET NULL,
+    zone_id UUID NULL REFERENCES zones(id) ON DELETE SET NULL,
     requested_quantity INTEGER NOT NULL CHECK (requested_quantity >= 0),
     confirmed_quantity INTEGER NULL CHECK (confirmed_quantity IS NULL OR confirmed_quantity >= 0),
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
@@ -154,20 +154,20 @@ CREATE INDEX users_clinic_role_active_idx ON users (clinic_id, role, is_active);
 CREATE INDEX products_clinic_active_idx ON products (clinic_id, is_active);
 CREATE INDEX inventory_items_clinic_idx ON inventory_items (clinic_id);
 CREATE INDEX inventory_items_product_idx ON inventory_items (product_id);
-CREATE INDEX inventory_items_compartment_idx ON inventory_items (compartment_id);
+CREATE INDEX inventory_items_zone_idx ON inventory_items (zone_id);
 CREATE UNIQUE INDEX inventory_items_unassigned_unique_idx
     ON inventory_items (clinic_id, product_id)
-    WHERE compartment_id IS NULL;
-CREATE UNIQUE INDEX inventory_items_compartment_unique_idx
-    ON inventory_items (clinic_id, product_id, compartment_id)
-    WHERE compartment_id IS NOT NULL;
+    WHERE zone_id IS NULL;
+CREATE UNIQUE INDEX inventory_items_zone_unique_idx
+    ON inventory_items (clinic_id, product_id, zone_id)
+    WHERE zone_id IS NOT NULL;
 CREATE INDEX entry_logs_clinic_created_at_idx ON entry_logs (clinic_id, created_at DESC);
 CREATE INDEX entry_logs_product_created_at_idx ON entry_logs (product_id, created_at DESC);
 CREATE INDEX exit_logs_clinic_status_created_at_idx ON exit_logs (clinic_id, status, created_at DESC);
-CREATE INDEX exit_logs_compartment_idx ON exit_logs (compartment_id);
+CREATE INDEX exit_logs_zone_idx ON exit_logs (zone_id);
 CREATE INDEX exit_log_items_exit_log_idx ON exit_log_items (exit_log_id);
 CREATE INDEX exit_log_items_product_idx ON exit_log_items (product_id);
-CREATE INDEX compartments_clinic_ambiente_idx ON compartments (clinic_id, ambiente_id);
+CREATE INDEX zones_clinic_ambiente_idx ON zones (clinic_id, ambiente_id);
 CREATE INDEX settings_clinic_idx ON settings (clinic_id);
 CREATE INDEX incidents_clinic_created_at_idx ON incidents (clinic_id, created_at DESC);
 CREATE INDEX exit_log_lock_commands_exit_log_idx ON exit_log_lock_commands (exit_log_id);

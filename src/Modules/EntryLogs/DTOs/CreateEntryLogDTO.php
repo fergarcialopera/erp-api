@@ -9,7 +9,7 @@ final class CreateEntryLogDTO
         public readonly int $quantity,
         public readonly ?string $name,
         public readonly ?string $note,
-        public readonly ?string $compartmentId
+        public readonly ?string $zoneId
     ) {
     }
 }
