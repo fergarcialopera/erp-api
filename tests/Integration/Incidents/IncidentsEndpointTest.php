@@ -23,10 +23,10 @@ final class IncidentsEndpointTest extends BaseApiTestCase
     {
         $payload = ['title' => 'Inc', 'description' => 'Desc', 'severity' => 'HIGH', 'source' => 'ambiente'];
 
-        $staff = $this->request('POST', '/api/v1/incidents', $payload, $this->authHeaderFor('staff@clinic.local'));
+        $staff = $this->request('POST', '/api/v1/incidents', $payload, $this->authHeaderFor('staff@clinic-erp.com'));
         $this->assertSame(403, $staff['status']);
 
-        $tech = $this->request('POST', '/api/v1/incidents', $payload, $this->authHeaderFor('tech@clinic.local'));
+        $tech = $this->request('POST', '/api/v1/incidents', $payload, $this->authHeaderFor('tech@clinic-erp.com'));
         $this->assertSame(201, $tech['status']);
     }
 
@@ -36,17 +36,17 @@ final class IncidentsEndpointTest extends BaseApiTestCase
             'POST',
             '/api/v1/incidents',
             ['title' => '', 'description' => '', 'severity' => 'WRONG', 'source' => 'INVALID'],
-            $this->authHeaderFor('admin@clinic.local')
+            $this->authHeaderFor('admin@clinic-erp.com')
         );
         $this->assertSame(422, $res['status']);
     }
 
     public function testListIncidentsRequiresTechnicianOrAdmin(): void
     {
-        $staff = $this->request('GET', '/api/v1/incidents', null, $this->authHeaderFor('staff@clinic.local'));
+        $staff = $this->request('GET', '/api/v1/incidents', null, $this->authHeaderFor('staff@clinic-erp.com'));
         $this->assertSame(403, $staff['status']);
 
-        $admin = $this->request('GET', '/api/v1/incidents', null, $this->authHeaderFor('admin@clinic.local'));
+        $admin = $this->request('GET', '/api/v1/incidents', null, $this->authHeaderFor('admin@clinic-erp.com'));
         $this->assertSame(200, $admin['status']);
     }
 
@@ -57,11 +57,11 @@ final class IncidentsEndpointTest extends BaseApiTestCase
             'POST',
             '/api/v1/incidents',
             ['title' => $title, 'description' => 'Tenant A only', 'severity' => 'LOW', 'source' => 'ERP'],
-            $this->authHeaderFor('admin@clinic.local')
+            $this->authHeaderFor('admin@clinic-erp.com')
         );
 
-        $listA = $this->request('GET', '/api/v1/incidents', null, $this->authHeaderFor('admin@clinic.local'));
-        $listB = $this->request('GET', '/api/v1/incidents', null, $this->authHeaderFor('admin2@clinic.local'));
+        $listA = $this->request('GET', '/api/v1/incidents', null, $this->authHeaderFor('admin@clinic-erp.com'));
+        $listB = $this->request('GET', '/api/v1/incidents', null, $this->authHeaderFor('admin2@clinic-erp.com'));
 
         $hasInA = false;
         $hasInB = false;

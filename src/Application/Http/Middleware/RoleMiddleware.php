@@ -5,18 +5,12 @@ namespace App\Application\Http\Middleware;
 use App\Application\Http\ApiResponse;
 use App\Application\Http\Request;
 use App\Application\Http\Response;
+use App\Domain\Auth\Role;
 
 final class RoleMiddleware implements MiddlewareInterface
 {
     /** @var array<string, array<int, string>> */
     private array $rules;
-
-    /** @var array<string, int> */
-    private array $weights = [
-        'STAFF' => 1,
-        'TECHNICIAN' => 2,
-        'ADMIN' => 3,
-    ];
 
     /**
      * @param array<string, array<int, string>> $rules
@@ -36,17 +30,16 @@ final class RoleMiddleware implements MiddlewareInterface
 
         $user = (array) $request->getAttribute('user', []);
         $role = strtoupper((string) ($user['role'] ?? ''));
-        if ($role === '' || !isset($this->weights[$role])) {
+        if ($role === '' || Role::weight($role) === 0) {
             return ApiResponse::error($request, 403, 'Forbidden', 'Insufficient role');
         }
 
         $allowedWeight = 0;
         foreach ($allowedRoles as $allowedRole) {
-            $normalized = strtoupper($allowedRole);
-            $allowedWeight = max($allowedWeight, $this->weights[$normalized] ?? 0);
+            $allowedWeight = max($allowedWeight, Role::weight($allowedRole));
         }
 
-        if ($allowedWeight === 0 || $this->weights[$role] < $allowedWeight) {
+        if ($allowedWeight === 0 || Role::weight($role) < $allowedWeight) {
             return ApiResponse::error($request, 403, 'Forbidden', 'Insufficient role');
         }
 

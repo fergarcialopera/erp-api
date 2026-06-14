@@ -4,11 +4,27 @@ declare(strict_types=1);
 
 namespace App\Modules\Clinic\Validators;
 
+use App\Modules\Clinic\DTOs\CreateClinicDTO;
 use App\Modules\Clinic\DTOs\PatchClinicDTO;
 use InvalidArgumentException;
 
 final class ClinicValidator
 {
+    public function validateCreate(array $payload): CreateClinicDTO
+    {
+        $name = trim((string) ($payload['name'] ?? ''));
+        $password = (string) ($payload['password'] ?? '');
+
+        if ($name === '') {
+            throw new InvalidArgumentException('Invalid name');
+        }
+        if (strlen($password) < 6) {
+            throw new InvalidArgumentException('Invalid password');
+        }
+
+        return new CreateClinicDTO($name, $password);
+    }
+
     public function validatePatch(array $payload): PatchClinicDTO
     {
         $visible = null;

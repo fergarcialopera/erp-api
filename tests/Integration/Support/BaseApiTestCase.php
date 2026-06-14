@@ -235,13 +235,140 @@ abstract class BaseApiTestCase extends TestCase
         self::ensureClinic($adminClinic, 'Clinic A', $clinicPasswordHash);
         self::ensureClinic($otherClinic, 'Clinic B', $clinicPasswordHash);
 
-        self::upsertUser('22222222-2222-2222-2222-222222222222', $adminClinic, 'admin@clinic.local', 'ADMIN', $passwordHash, $pinHash);
-        self::upsertUser('33333333-3333-3333-3333-333333333333', $adminClinic, 'tech@clinic.local', 'TECHNICIAN', $passwordHash, $pinHash);
-        self::upsertUser('44444444-4444-4444-4444-444444444444', $adminClinic, 'staff@clinic.local', 'STAFF', $passwordHash, $pinHash);
+        self::upsertUser('88888888-8888-8888-8888-888888888888', null, 'super@clinic-erp.com', 'SUPER_ADMIN', $passwordHash);
+        self::upsertUser('22222222-2222-2222-2222-222222222222', $adminClinic, 'admin@clinic-erp.com', 'ADMIN', $passwordHash, $pinHash);
+        self::upsertUser('33333333-3333-3333-3333-333333333333', $adminClinic, 'tech@clinic-erp.com', 'TECHNICIAN', $passwordHash, $pinHash);
+        self::upsertUser('44444444-4444-4444-4444-444444444444', $adminClinic, 'staff@clinic-erp.com', 'STAFF', $passwordHash, $pinHash);
 
-        self::upsertUser('55555555-5555-5555-5555-555555555555', $otherClinic, 'admin2@clinic.local', 'ADMIN', $passwordHash, $pinHash);
-        self::upsertUser('66666666-6666-6666-6666-666666666666', $otherClinic, 'tech2@clinic.local', 'TECHNICIAN', $passwordHash, $pinHash);
-        self::upsertUser('77777777-7777-7777-7777-777777777777', $otherClinic, 'staff2@clinic.local', 'STAFF', $passwordHash, $pinHash);
+        self::upsertUser('55555555-5555-5555-5555-555555555555', $otherClinic, 'admin2@clinic-erp.com', 'ADMIN', $passwordHash, $pinHash);
+        self::upsertUser('66666666-6666-6666-6666-666666666666', $otherClinic, 'tech2@clinic-erp.com', 'TECHNICIAN', $passwordHash, $pinHash);
+        self::upsertUser('77777777-7777-7777-7777-777777777777', $otherClinic, 'staff2@clinic-erp.com', 'STAFF', $passwordHash, $pinHash);
+
+        self::syncUserClinic('22222222-2222-2222-2222-222222222222', $adminClinic);
+        self::syncUserClinic('55555555-5555-5555-5555-555555555555', $otherClinic);
+    }
+
+    protected function authHeaderForSuperAdmin(): array
+    {
+        $login = $this->login('super@clinic-erp.com');
+        $this->assertSame(200, $login['status'], 'Login failed for super@clinic-erp.com');
+        $this->assertIsArray($login['json']);
+        $this->assertArrayHasKey('data', $login['json']);
+        $this->assertIsArray($login['json']['data']);
+        $this->assertArrayHasKey('access_token', $login['json']['data']);
+
+        return ['Authorization' => 'Bearer ' . $login['json']['data']['access_token']];
+    }
+
+    protected function createAmbienteLinkedToClinicA(?string $name = null): string
+    {
+        $name ??= 'Ambiente-' . bin2hex(random_bytes(2));
+        $created = $this->request('POST', '/api/v1/ambientes', ['name' => $name], $this->authHeaderForSuperAdmin());
+        $this->assertSame(201, $created['status'], 'Failed to create ambiente');
+        $id = (string) ($created['json']['data']['id'] ?? '');
+        $this->assertNotSame('', $id);
+
+        $linked = $this->request(
+            'POST',
+            '/api/v1/clinics/11111111-1111-1111-1111-111111111111/ambientes',
+            ['ambiente_id' => $id],
+            $this->authHeaderForSuperAdmin()
+        );
+        $this->assertSame(201, $linked['status'], 'Failed to link ambiente to clinic');
+
+        $visible = $this->request(
+            'PATCH',
+            '/api/v1/clinic/ambientes/' . $id,
+            ['visible' => true],
+            $this->authHeaderFor('admin@clinic-erp.com')
+        );
+        $this->assertSame(200, $visible['status'], 'Failed to make ambiente visible');
+
+        return $id;
+    }
+
+    /**
+     * @return array{id: string, sku: string}
+     */
+    protected function createProductVisibleInClinicA(?string $name = null): array
+    {
+        $name ??= 'Product-' . bin2hex(random_bytes(2));
+        $created = $this->request('POST', '/api/v1/products', ['name' => $name], $this->authHeaderForSuperAdmin());
+        $this->assertSame(201, $created['status']);
+        $id = (string) ($created['json']['data']['id'] ?? '');
+        $sku = (string) ($created['json']['data']['sku'] ?? '');
+        $this->assertNotSame('', $id);
+        $this->assertNotSame('', $sku);
+
+        $visible = $this->request(
+            'PATCH',
+            '/api/v1/clinic/products/' . $id,
+            ['visible' => true],
+            $this->authHeaderFor('admin@clinic-erp.com')
+        );
+        $this->assertSame(200, $visible['status']);
+
+        return ['id' => $id, 'sku' => $sku];
+    }
+
+    protected function insertAmbienteAndZoneForClinic(string $clinicId, string $ambienteName, string $zoneCode): array
+    {
+        $pdo = self::testPdo();
+        $ambienteStmt = $pdo->prepare(
+            'INSERT INTO ambientes (name, location, device_id, is_active, created_at, updated_at)
+             VALUES (:name, :location, :device_id, TRUE, NOW(), NOW())
+             RETURNING id::text AS id, name'
+        );
+        $ambienteStmt->execute([
+            'name' => $ambienteName,
+            'location' => 'Planta X',
+            'device_id' => 'DEV-' . bin2hex(random_bytes(3)),
+        ]);
+        $ambiente = $ambienteStmt->fetch();
+        $this->assertIsArray($ambiente);
+        $ambienteId = (string) ($ambiente['id'] ?? '');
+
+        $pdo->prepare(
+            'INSERT INTO clinic_ambientes (clinic_id, ambiente_id, visible)
+             VALUES (:clinic_id, :ambiente_id, TRUE)'
+        )->execute(['clinic_id' => $clinicId, 'ambiente_id' => $ambienteId]);
+
+        $zoneStmt = $pdo->prepare(
+            'INSERT INTO zones (ambiente_id, code, is_active, created_at, updated_at)
+             VALUES (:ambiente_id, :code, TRUE, NOW(), NOW())
+             RETURNING id::text AS id, code'
+        );
+        $zoneStmt->execute(['ambiente_id' => $ambienteId, 'code' => $zoneCode]);
+        $zone = $zoneStmt->fetch();
+        $this->assertIsArray($zone);
+
+        return [
+            'ambiente_id' => $ambienteId,
+            'ambiente_name' => (string) ($ambiente['name'] ?? ''),
+            'zone_id' => (string) ($zone['id'] ?? ''),
+            'zone_code' => (string) ($zone['code'] ?? ''),
+        ];
+    }
+
+    private static function syncUserClinic(string $userId, string $clinicId): void
+    {
+        $columns = self::tableColumns('user_clinics');
+        if ($columns === []) {
+            return;
+        }
+
+        $check = self::$pdo->prepare(
+            'SELECT 1 FROM user_clinics WHERE user_id = :user_id AND clinic_id = :clinic_id LIMIT 1'
+        );
+        $check->execute(['user_id' => $userId, 'clinic_id' => $clinicId]);
+        if ($check->fetch()) {
+            return;
+        }
+
+        $ins = self::$pdo->prepare(
+            'INSERT INTO user_clinics (user_id, clinic_id) VALUES (:user_id, :clinic_id)'
+        );
+        $ins->execute(['user_id' => $userId, 'clinic_id' => $clinicId]);
     }
 
     protected static function ensureClinic(string $id, string $name, string $passwordHash): void
@@ -286,7 +413,7 @@ abstract class BaseApiTestCase extends TestCase
 
     protected static function upsertUser(
         string $id,
-        string $clinicId,
+        ?string $clinicId,
         string $email,
         string $role,
         string $hash,
@@ -303,13 +430,17 @@ abstract class BaseApiTestCase extends TestCase
         $existing = $checkStmt->fetch();
 
         if ($existing) {
-            $sets = ['clinic_id = :clinic_id', 'password_hash = :password_hash', 'role = :role'];
             $params = [
-                'clinic_id' => $clinicId,
                 'password_hash' => $hash,
                 'role' => $role,
                 'email' => $email,
             ];
+            if ($clinicId !== null) {
+                $sets = ['clinic_id = :clinic_id', 'password_hash = :password_hash', 'role = :role'];
+                $params['clinic_id'] = $clinicId;
+            } else {
+                $sets = ['clinic_id = NULL', 'password_hash = :password_hash', 'role = :role'];
+            }
             if ($hasIsActive) {
                 $sets[] = 'is_active = TRUE';
             }
@@ -333,15 +464,19 @@ abstract class BaseApiTestCase extends TestCase
             return;
         }
 
-        $fields = ['id', 'clinic_id', 'email', 'password_hash', 'role'];
-        $values = [':id', ':clinic_id', ':email', ':password_hash', ':role'];
+        $fields = ['id', 'email', 'password_hash', 'role'];
+        $values = [':id', ':email', ':password_hash', ':role'];
         $params = [
             'id' => $id,
-            'clinic_id' => $clinicId,
             'email' => $email,
             'password_hash' => $hash,
             'role' => $role,
         ];
+        if ($clinicId !== null) {
+            $fields[] = 'clinic_id';
+            $values[] = ':clinic_id';
+            $params['clinic_id'] = $clinicId;
+        }
         if ($hasPinHash && $pinHash !== null) {
             $fields[] = 'pin_hash';
             $values[] = ':pin_hash';

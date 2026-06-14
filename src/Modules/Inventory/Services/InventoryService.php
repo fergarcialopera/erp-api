@@ -38,9 +38,10 @@ final class InventoryService
     public function stockLocationsForProduct(string $clinicId, string $productId): ?array
     {
         $productStmt = $this->pdo->prepare(
-            'SELECT id::text AS id, sku, name
-             FROM products
-             WHERE clinic_id = :clinic_id AND id::text = :product_id
+            'SELECT p.id::text AS id, p.sku, p.name
+             FROM products p
+             INNER JOIN clinic_products cp ON cp.product_id = p.id AND cp.clinic_id = :clinic_id
+             WHERE p.id::text = :product_id AND cp.visible = TRUE AND p.is_active = TRUE
              LIMIT 1'
         );
         $productStmt->execute(['clinic_id' => $clinicId, 'product_id' => $productId]);
@@ -79,7 +80,11 @@ final class InventoryService
     public function adjustProductQuantities(string $clinicId, string $productId, array $locations): ?array
     {
         $productStmt = $this->pdo->prepare(
-            'SELECT id FROM products WHERE clinic_id = :clinic_id AND id::text = :product_id LIMIT 1'
+            'SELECT p.id
+             FROM products p
+             INNER JOIN clinic_products cp ON cp.product_id = p.id AND cp.clinic_id = :clinic_id
+             WHERE p.id::text = :product_id AND cp.visible = TRUE AND p.is_active = TRUE
+             LIMIT 1'
         );
         $productStmt->execute(['clinic_id' => $clinicId, 'product_id' => $productId]);
         if (!$productStmt->fetch()) {
@@ -122,7 +127,11 @@ final class InventoryService
         );
 
         $productStmt = $this->pdo->prepare(
-            'SELECT id FROM products WHERE clinic_id = :clinic_id AND sku = :sku LIMIT 1'
+            'SELECT p.id
+             FROM products p
+             INNER JOIN clinic_products cp ON cp.product_id = p.id AND cp.clinic_id = :clinic_id
+             WHERE p.sku = :sku AND cp.visible = TRUE AND p.is_active = TRUE
+             LIMIT 1'
         );
         $productStmt->execute([
             'clinic_id' => $clinicId,
@@ -151,7 +160,11 @@ final class InventoryService
     ): void {
         if ($zoneId !== null) {
             $zoneStmt = $this->pdo->prepare(
-                'SELECT is_active FROM zones WHERE id = :id AND clinic_id = :clinic_id LIMIT 1'
+                'SELECT z.is_active
+                 FROM zones z
+                 INNER JOIN clinic_ambientes ca ON ca.ambiente_id = z.ambiente_id AND ca.clinic_id = :clinic_id
+                 WHERE z.id = :id
+                 LIMIT 1'
             );
             $zoneStmt->execute(['id' => $zoneId, 'clinic_id' => $clinicId]);
             $zone = $zoneStmt->fetch();

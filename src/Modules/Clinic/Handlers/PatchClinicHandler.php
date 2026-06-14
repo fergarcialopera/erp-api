@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Modules\Clinic\Handlers;
 
+use App\Application\Auth\AccessDeniedException;
+use App\Application\Auth\ClinicAccessService;
 use App\Application\Http\ApiResponse;
 use App\Application\Http\Request;
 use App\Application\Http\Response;
@@ -14,6 +16,7 @@ use Throwable;
 final class PatchClinicHandler
 {
     public function __construct(
+        private readonly ClinicAccessService $access,
         private readonly ClinicValidator $validator,
         private readonly ClinicService $service
     ) {
@@ -23,7 +26,9 @@ final class PatchClinicHandler
     {
         try {
             $user = (array) $request->getAttribute('user', []);
-            $clinicId = (string) ($user['clinic_id'] ?? '');
+            $this->access->assertSuperAdmin($user);
+
+            $clinicId = $this->access->clinicIdFromToken($user);
             if ($clinicId === '') {
                 return ApiResponse::error($request, 403, 'Forbidden', 'Missing clinic_id in user context');
             }
@@ -35,6 +40,8 @@ final class PatchClinicHandler
             }
 
             return ApiResponse::success($request, $updated);
+        } catch (AccessDeniedException $e) {
+            return ApiResponse::error($request, 403, 'Forbidden', $e->getMessage());
         } catch (Throwable $throwable) {
             return ApiResponse::error($request, 422, 'Unprocessable Entity', $throwable->getMessage());
         }

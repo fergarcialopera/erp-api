@@ -19,7 +19,7 @@ final class OpenExitLogLockEndpointTest extends BaseApiTestCase
     public function testOpenLockReturns404WhenExitLogMissing(): void
     {
         $missingId = '9999999999999999';
-        $res = $this->request('POST', '/api/v1/exit-logs/' . $missingId . '/open-lock', null, $this->authHeaderFor('staff@clinic.local'));
+        $res = $this->request('POST', '/api/v1/exit-logs/' . $missingId . '/open-lock', null, $this->authHeaderFor('staff@clinic-erp.com'));
         $this->assertSame(404, $res['status']);
     }
 
@@ -29,18 +29,18 @@ final class OpenExitLogLockEndpointTest extends BaseApiTestCase
             'POST',
             '/api/v1/exit-logs',
             ['items' => [['product_id' => self::PRODUCT_A1, 'quantity' => 1]]],
-            $this->authHeaderFor('staff@clinic.local')
+            $this->authHeaderFor('staff@clinic-erp.com')
         );
         $this->assertSame(201, $created['status']);
         $exitId = (string) ($created['json']['data']['exit_log']['id'] ?? '');
 
-        $open = $this->request('POST', '/api/v1/exit-logs/' . $exitId . '/open-lock', null, $this->authHeaderFor('staff@clinic.local'));
+        $open = $this->request('POST', '/api/v1/exit-logs/' . $exitId . '/open-lock', null, $this->authHeaderFor('staff@clinic-erp.com'));
         $this->assertSame(422, $open['status']);
     }
 
     public function testOpenLockReturns422WhenNoZoneLinkedAfterConfirm(): void
     {
-        $staffAuth = $this->authHeaderFor('staff@clinic.local');
+        $staffAuth = $this->authHeaderFor('staff@clinic-erp.com');
         $created = $this->request(
             'POST',
             '/api/v1/exit-logs',
@@ -59,16 +59,18 @@ final class OpenExitLogLockEndpointTest extends BaseApiTestCase
 
     public function testOpenLockSuccessWithZoneAndDevice(): void
     {
-        $ambiente = $this->request('POST', '/api/v1/ambientes', ['name' => 'L-' . bin2hex(random_bytes(2))], $this->authHeaderFor('tech@clinic.local'));
-        $this->assertSame(201, $ambiente['status']);
-        $ambienteId = (string) ($ambiente['json']['data']['id'] ?? '');
-        $this->assertNotSame('', $ambienteId);
+        $ambienteId = $this->createAmbienteLinkedToClinicA('L-' . bin2hex(random_bytes(2)));
 
         $deviceId = 'dev-' . bin2hex(random_bytes(4));
-        $patch = $this->request('PATCH', '/api/v1/ambientes/' . $ambienteId, ['device_id' => $deviceId], $this->authHeaderFor('tech@clinic.local'));
+        $patch = $this->request('PATCH', '/api/v1/ambientes/' . $ambienteId, ['device_id' => $deviceId], $this->authHeaderForSuperAdmin());
         $this->assertSame(200, $patch['status']);
 
-        $comp = $this->request('POST', '/api/v1/zones', ['ambiente_id' => $ambienteId, 'code' => 'C-' . bin2hex(random_bytes(2))], $this->authHeaderFor('tech@clinic.local'));
+        $comp = $this->request(
+            'POST',
+            '/api/v1/zones',
+            ['ambiente_id' => $ambienteId, 'code' => 'C-' . bin2hex(random_bytes(2))],
+            $this->authHeaderForSuperAdmin()
+        );
         $this->assertSame(201, $comp['status']);
         $zoneId = (string) ($comp['json']['data']['id'] ?? '');
         $this->assertNotSame('', $zoneId);
@@ -82,11 +84,11 @@ final class OpenExitLogLockEndpointTest extends BaseApiTestCase
                 'zone_id' => $zoneId,
                 'ambiente_id' => $ambienteId,
             ],
-            $this->authHeaderFor('tech@clinic.local')
+            $this->authHeaderFor('tech@clinic-erp.com')
         );
         $this->assertSame(201, $entry['status'], $entry['raw'] ?? '');
 
-        $staffAuth = $this->authHeaderFor('staff@clinic.local');
+        $staffAuth = $this->authHeaderFor('staff@clinic-erp.com');
         $created = $this->request(
             'POST',
             '/api/v1/exit-logs',

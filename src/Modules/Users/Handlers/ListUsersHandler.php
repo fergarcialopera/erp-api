@@ -2,6 +2,8 @@
 
 namespace App\Modules\Users\Handlers;
 
+use App\Application\Auth\AccessDeniedException;
+use App\Application\Auth\ClinicAccessService;
 use App\Application\Http\ApiResponse;
 use App\Application\Http\Request;
 use App\Application\Http\Response;
@@ -10,23 +12,25 @@ use Throwable;
 
 final class ListUsersHandler
 {
-    public function __construct(private readonly UserService $service)
-    {
+    public function __construct(
+        private readonly ClinicAccessService $access,
+        private readonly UserService $service
+    ) {
     }
 
     public function __invoke(Request $request): Response
     {
         try {
             $user = (array) $request->getAttribute('user', []);
-            $clinicId = (string) ($user['clinic_id'] ?? '');
-            if ($clinicId === '') {
-                return ApiResponse::error($request, 403, 'Forbidden', 'Missing clinic_id in user context');
-            }
+            $this->access->assertSuperAdmin($user);
 
-            return ApiResponse::success($request, $this->service->list($clinicId));
+            $clinicId = trim((string) ($request->getQueryParams()['clinic_id'] ?? ''));
+
+            return ApiResponse::success($request, $this->service->list($clinicId !== '' ? $clinicId : null));
+        } catch (AccessDeniedException $e) {
+            return ApiResponse::error($request, 403, 'Forbidden', $e->getMessage());
         } catch (Throwable $throwable) {
             return ApiResponse::error($request, 500, 'Internal Server Error', $throwable->getMessage());
         }
     }
 }
-

@@ -28,7 +28,7 @@ final class ExitLogsEndpointTest extends BaseApiTestCase
             'POST',
             '/api/v1/exit-logs',
             ['items' => [['product_id' => self::PRODUCT_A1, 'quantity' => 1]]],
-            $this->authHeaderFor('staff@clinic.local')
+            $this->authHeaderFor('staff@clinic-erp.com')
         );
         $this->assertSame(201, $created['status'], $created['raw'] ?? '');
         $this->assertSame('DRAFT', $created['json']['data']['exit_log']['status'] ?? null);
@@ -40,7 +40,7 @@ final class ExitLogsEndpointTest extends BaseApiTestCase
             'POST',
             '/api/v1/exit-logs',
             ['items' => [['product_id' => self::PRODUCT_A1, 'quantity' => 99999]]],
-            $this->authHeaderFor('tech@clinic.local')
+            $this->authHeaderFor('tech@clinic-erp.com')
         );
         $this->assertSame(201, $created['status']);
         $exitId = (string) ($created['json']['data']['exit_log']['id'] ?? '');
@@ -50,7 +50,7 @@ final class ExitLogsEndpointTest extends BaseApiTestCase
             'POST',
             '/api/v1/exit-logs/' . $exitId . '/confirm',
             null,
-            $this->authHeaderFor('admin@clinic.local')
+            $this->authHeaderFor('admin@clinic-erp.com')
         );
         $this->assertSame(422, $res['status']);
     }
@@ -61,13 +61,13 @@ final class ExitLogsEndpointTest extends BaseApiTestCase
             'POST',
             '/api/v1/exit-logs',
             ['items' => [['product_id' => self::PRODUCT_A1, 'quantity' => 1]]],
-            $this->authHeaderFor('admin@clinic.local')
+            $this->authHeaderFor('admin@clinic-erp.com')
         );
         $this->assertSame(201, $created['status']);
         $exitId = (string) ($created['json']['data']['exit_log']['id'] ?? '');
 
-        $listAdmin = $this->request('GET', '/api/v1/exit-logs', null, $this->authHeaderFor('admin@clinic.local'));
-        $listB = $this->request('GET', '/api/v1/exit-logs', null, $this->authHeaderFor('staff2@clinic.local'));
+        $listAdmin = $this->request('GET', '/api/v1/exit-logs', null, $this->authHeaderFor('admin@clinic-erp.com'));
+        $listB = $this->request('GET', '/api/v1/exit-logs', null, $this->authHeaderFor('staff2@clinic-erp.com'));
 
         $idsAdmin = array_map(static fn (array $r): string => (string) ($r['id'] ?? ''), $listAdmin['json']['data'] ?? []);
         $idsB = array_map(static fn (array $r): string => (string) ($r['id'] ?? ''), $listB['json']['data'] ?? []);
@@ -82,7 +82,7 @@ final class ExitLogsEndpointTest extends BaseApiTestCase
             'POST',
             '/api/v1/exit-logs',
             ['items' => [['product_id' => self::PRODUCT_A1, 'quantity' => 1]]],
-            $this->authHeaderFor('admin@clinic.local')
+            $this->authHeaderFor('admin@clinic-erp.com')
         );
         $this->assertSame(201, $adminCreated['status']);
         $adminExitId = (string) ($adminCreated['json']['data']['exit_log']['id'] ?? '');
@@ -91,12 +91,12 @@ final class ExitLogsEndpointTest extends BaseApiTestCase
             'POST',
             '/api/v1/exit-logs',
             ['items' => [['product_id' => self::PRODUCT_A1, 'quantity' => 1]]],
-            $this->authHeaderFor('staff@clinic.local')
+            $this->authHeaderFor('staff@clinic-erp.com')
         );
         $this->assertSame(201, $staffCreated['status']);
         $staffExitId = (string) ($staffCreated['json']['data']['exit_log']['id'] ?? '');
 
-        $listStaff = $this->request('GET', '/api/v1/exit-logs', null, $this->authHeaderFor('staff@clinic.local'));
+        $listStaff = $this->request('GET', '/api/v1/exit-logs', null, $this->authHeaderFor('staff@clinic-erp.com'));
         $this->assertSame(200, $listStaff['status']);
         $ids = array_map(static fn (array $r): string => (string) ($r['id'] ?? ''), $listStaff['json']['data'] ?? []);
 
@@ -117,7 +117,7 @@ final class ExitLogsEndpointTest extends BaseApiTestCase
             'POST',
             '/api/v1/exit-logs',
             ['items' => [['product_id' => self::PRODUCT_A1, 'quantity' => 1]]],
-            $this->authHeaderFor('tech@clinic.local')
+            $this->authHeaderFor('tech@clinic-erp.com')
         );
         $this->assertSame(201, $created['status']);
         $exitId = (string) ($created['json']['data']['exit_log']['id'] ?? '');
@@ -126,7 +126,7 @@ final class ExitLogsEndpointTest extends BaseApiTestCase
             'GET',
             '/api/v1/exit-logs/' . $exitId,
             null,
-            $this->authHeaderFor('staff@clinic.local')
+            $this->authHeaderFor('staff@clinic-erp.com')
         );
         $this->assertSame(404, $res['status']);
     }
@@ -137,7 +137,7 @@ final class ExitLogsEndpointTest extends BaseApiTestCase
             'POST',
             '/api/v1/exit-logs',
             ['items' => [['product_id' => self::PRODUCT_A1, 'quantity' => 2]]],
-            $this->authHeaderFor('tech@clinic.local')
+            $this->authHeaderFor('tech@clinic-erp.com')
         );
         $this->assertSame(201, $created['status']);
         $exitId = (string) ($created['json']['data']['exit_log']['id'] ?? '');
@@ -147,7 +147,7 @@ final class ExitLogsEndpointTest extends BaseApiTestCase
             'PATCH',
             '/api/v1/exit-logs/' . $exitId,
             ['items' => [['item_id' => $itemId, 'quantity' => 0]]],
-            $this->authHeaderFor('tech@clinic.local')
+            $this->authHeaderFor('tech@clinic-erp.com')
         );
         $this->assertSame(200, $patch['status'], $patch['raw'] ?? '');
         $this->assertSame('CANCELLED', $patch['json']['data']['exit_log']['status'] ?? null);
@@ -159,11 +159,11 @@ final class ExitLogsEndpointTest extends BaseApiTestCase
             'POST',
             '/api/v1/exit-logs',
             ['items' => [['product_id' => self::PRODUCT_A1, 'quantity' => 1]]],
-            $this->authHeaderFor('admin@clinic.local')
+            $this->authHeaderFor('admin@clinic-erp.com')
         );
         $exitId = (string) ($created['json']['data']['exit_log']['id'] ?? '');
 
-        $get = $this->request('GET', '/api/v1/exit-logs/' . $exitId, null, $this->authHeaderFor('admin@clinic.local'));
+        $get = $this->request('GET', '/api/v1/exit-logs/' . $exitId, null, $this->authHeaderFor('admin@clinic-erp.com'));
         $this->assertSame(200, $get['status']);
         $item = $get['json']['data']['items'][0] ?? null;
         $this->assertIsArray($item);
@@ -185,7 +185,7 @@ final class ExitLogsEndpointTest extends BaseApiTestCase
                     'ambiente_id' => self::AMBIENTE_A1,
                 ]],
             ],
-            $this->authHeaderFor('admin@clinic.local')
+            $this->authHeaderFor('admin@clinic-erp.com')
         );
         $this->assertSame(201, $created['status']);
         $exitId = (string) ($created['json']['data']['exit_log']['id'] ?? '');
@@ -196,7 +196,7 @@ final class ExitLogsEndpointTest extends BaseApiTestCase
         $this->assertSame(self::ZONE_A1, $location['zone']['id'] ?? null);
         $this->assertSame(self::AMBIENTE_A1, $location['ambiente']['id'] ?? null);
 
-        $list = $this->request('GET', '/api/v1/exit-logs', null, $this->authHeaderFor('admin@clinic.local'));
+        $list = $this->request('GET', '/api/v1/exit-logs', null, $this->authHeaderFor('admin@clinic-erp.com'));
         $row = null;
         foreach (($list['json']['data'] ?? []) as $r) {
             if (($r['id'] ?? '') === $exitId) {
@@ -207,7 +207,7 @@ final class ExitLogsEndpointTest extends BaseApiTestCase
         $this->assertIsArray($row);
         $this->assertSame(self::ZONE_A1, $row['location']['zone']['id'] ?? null);
 
-        $get = $this->request('GET', '/api/v1/exit-logs/' . $exitId, null, $this->authHeaderFor('admin@clinic.local'));
+        $get = $this->request('GET', '/api/v1/exit-logs/' . $exitId, null, $this->authHeaderFor('admin@clinic-erp.com'));
         $this->assertSame(200, $get['status']);
         $this->assertSame(self::ZONE_A1, $get['json']['data']['exit_log']['location']['zone']['id'] ?? null);
     }
@@ -237,7 +237,7 @@ final class ExitLogsEndpointTest extends BaseApiTestCase
                     'zone_id' => self::ZONE_A1,
                 ]],
             ],
-            $this->authHeaderFor('tech@clinic.local')
+            $this->authHeaderFor('tech@clinic-erp.com')
         );
         $this->assertSame(201, $created['status']);
         $exitId = (string) ($created['json']['data']['exit_log']['id'] ?? '');
@@ -246,7 +246,7 @@ final class ExitLogsEndpointTest extends BaseApiTestCase
             'POST',
             '/api/v1/exit-logs/' . $exitId . '/confirm',
             null,
-            $this->authHeaderFor('admin@clinic.local')
+            $this->authHeaderFor('admin@clinic-erp.com')
         );
         $this->assertSame(200, $confirm['status'], $confirm['raw'] ?? '');
 
@@ -280,7 +280,7 @@ final class ExitLogsEndpointTest extends BaseApiTestCase
                     ],
                 ]],
             ],
-            $this->authHeaderFor('admin@clinic.local')
+            $this->authHeaderFor('admin@clinic-erp.com')
         );
         $this->assertSame(201, $created['status'], $created['raw'] ?? '');
 
@@ -370,7 +370,7 @@ final class ExitLogsEndpointTest extends BaseApiTestCase
                     ],
                 ]],
             ],
-            $this->authHeaderFor('tech@clinic.local')
+            $this->authHeaderFor('tech@clinic-erp.com')
         );
         $this->assertSame(201, $created['status'], $created['raw'] ?? '');
         $exitId = (string) ($created['json']['data']['exit_log']['id'] ?? '');
@@ -379,7 +379,7 @@ final class ExitLogsEndpointTest extends BaseApiTestCase
             'POST',
             '/api/v1/exit-logs/' . $exitId . '/confirm',
             null,
-            $this->authHeaderFor('admin@clinic.local')
+            $this->authHeaderFor('admin@clinic-erp.com')
         );
         $this->assertSame(200, $confirm['status'], $confirm['raw'] ?? '');
 
@@ -401,7 +401,7 @@ final class ExitLogsEndpointTest extends BaseApiTestCase
                     ],
                 ]],
             ],
-            $this->authHeaderFor('admin@clinic.local')
+            $this->authHeaderFor('admin@clinic-erp.com')
         );
         $this->assertSame(422, $res['status']);
     }
@@ -420,7 +420,7 @@ final class ExitLogsEndpointTest extends BaseApiTestCase
                     ],
                 ]],
             ],
-            $this->authHeaderFor('admin@clinic.local')
+            $this->authHeaderFor('admin@clinic-erp.com')
         );
         $this->assertSame(422, $res['status']);
     }
@@ -437,7 +437,7 @@ final class ExitLogsEndpointTest extends BaseApiTestCase
                     'zone_id' => self::ZONE_A1,
                 ]],
             ],
-            $this->authHeaderFor('admin@clinic.local')
+            $this->authHeaderFor('admin@clinic-erp.com')
         );
         $this->assertSame(201, $created['status'], $created['raw'] ?? '');
         $this->assertCount(1, $created['json']['data']['items'] ?? []);

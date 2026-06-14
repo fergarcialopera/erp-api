@@ -2,6 +2,8 @@
 
 namespace App\Modules\Users\Handlers;
 
+use App\Application\Auth\AccessDeniedException;
+use App\Application\Auth\ClinicAccessService;
 use App\Application\Http\ApiResponse;
 use App\Application\Http\Request;
 use App\Application\Http\Response;
@@ -12,6 +14,7 @@ use Throwable;
 final class CreateUserHandler
 {
     public function __construct(
+        private readonly ClinicAccessService $access,
         private readonly UserValidator $validator,
         private readonly UserService $service
     ) {
@@ -21,17 +24,16 @@ final class CreateUserHandler
     {
         try {
             $user = (array) $request->getAttribute('user', []);
-            $clinicId = (string) ($user['clinic_id'] ?? '');
-            if ($clinicId === '') {
-                return ApiResponse::error($request, 403, 'Forbidden', 'Missing clinic_id in user context');
-            }
+            $this->access->assertSuperAdmin($user);
 
             $dto = $this->validator->validateCreate($request->getParsedBody());
-            $created = $this->service->create($clinicId, $dto);
+            $created = $this->service->create($dto);
+
             return ApiResponse::success($request, $created, status: 201);
+        } catch (AccessDeniedException $e) {
+            return ApiResponse::error($request, 403, 'Forbidden', $e->getMessage());
         } catch (Throwable $throwable) {
             return ApiResponse::error($request, 422, 'Unprocessable Entity', $throwable->getMessage());
         }
     }
 }
-

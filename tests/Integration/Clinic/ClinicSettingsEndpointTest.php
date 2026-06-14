@@ -20,7 +20,7 @@ final class ClinicSettingsEndpointTest extends BaseApiTestCase
             'PATCH',
             '/api/v1/clinic/settings',
             ['open_latency_ms' => 10],
-            $this->authHeaderFor('staff@clinic.local')
+            $this->authHeaderFor('staff@clinic-erp.com')
         );
         $this->assertSame(403, $staff['status']);
 
@@ -28,7 +28,7 @@ final class ClinicSettingsEndpointTest extends BaseApiTestCase
             'PATCH',
             '/api/v1/clinic/settings',
             ['open_latency_ms' => 10],
-            $this->authHeaderFor('admin@clinic.local')
+            $this->authHeaderFor('admin@clinic-erp.com')
         );
         $this->assertSame(200, $admin['status']);
         $this->assertIsArray($admin['json']);
@@ -41,7 +41,7 @@ final class ClinicSettingsEndpointTest extends BaseApiTestCase
             'PATCH',
             '/api/v1/clinic/settings',
             ['open_latency_ms' => -1],
-            $this->authHeaderFor('admin@clinic.local')
+            $this->authHeaderFor('admin@clinic-erp.com')
         );
         $this->assertSame(422, $res['status']);
         $this->assertIsArray($res['json']);

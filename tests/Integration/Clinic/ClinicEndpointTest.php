@@ -18,7 +18,7 @@ final class ClinicEndpointTest extends BaseApiTestCase
 
     public function testGetClinicReturnsClinicForAuthenticatedUser(): void
     {
-        $res = $this->request('GET', '/api/v1/clinic', null, $this->authHeaderFor('staff@clinic.local'));
+        $res = $this->request('GET', '/api/v1/clinic', null, $this->authHeaderFor('staff@clinic-erp.com'));
         $this->assertSame(200, $res['status']);
         $this->assertIsArray($res['json']);
         $this->assertArrayHasKey('data', $res['json']);

@@ -8,29 +8,23 @@ use Tests\Integration\Support\BaseApiTestCase;
 
 final class InventoryEndpointTest extends BaseApiTestCase
 {
-    private function createProductSku(string $email, string $namePrefix): string
+    private function createProductSku(string $namePrefix): string
     {
-        $created = $this->request(
-            'POST',
-            '/api/v1/products',
-            ['name' => $namePrefix . '-' . bin2hex(random_bytes(2))],
-            $this->authHeaderFor($email)
-        );
-        $this->assertSame(201, $created['status']);
-        $sku = (string) ($created['json']['data']['sku'] ?? '');
-        $this->assertNotSame('', $sku);
-        return $sku;
+        $product = $this->createProductVisibleInClinicA($namePrefix . '-' . bin2hex(random_bytes(2)));
+
+        return $product['sku'];
     }
 
-    private function productIdForSku(string $clinicId, string $sku): string
+    private function productIdForSku(string $sku): string
     {
         $pdo = self::testPdo();
-        $stmt = $pdo->prepare('SELECT id::text AS id FROM products WHERE clinic_id = :clinic_id AND sku = :sku LIMIT 1');
-        $stmt->execute(['clinic_id' => $clinicId, 'sku' => $sku]);
+        $stmt = $pdo->prepare('SELECT id::text AS id FROM products WHERE sku = :sku LIMIT 1');
+        $stmt->execute(['sku' => $sku]);
         $row = $stmt->fetch();
         $this->assertIsArray($row);
         $id = (string) ($row['id'] ?? '');
         $this->assertNotSame('', $id);
+
         return $id;
     }
 
@@ -42,14 +36,22 @@ final class InventoryEndpointTest extends BaseApiTestCase
 
     public function testInventoryIsIsolatedByClinic(): void
     {
-        $skuA = $this->createProductSku('tech@clinic.local', 'A');
-        $skuB = $this->createProductSku('tech2@clinic.local', 'B');
+        $skuA = $this->createProductSku('A');
+        $productB = $this->createProductVisibleInClinicA('B-' . bin2hex(random_bytes(2)));
+        $visibleB = $this->request(
+            'PATCH',
+            '/api/v1/clinic/products/' . $productB['id'],
+            ['visible' => true],
+            $this->authHeaderFor('admin2@clinic-erp.com')
+        );
+        $this->assertSame(200, $visibleB['status']);
+        $skuB = $productB['sku'];
 
-        $this->request('POST', '/api/v1/entry-logs', ['sku' => $skuA, 'name' => 'A', 'quantity' => 11], $this->authHeaderFor('admin@clinic.local'));
-        $this->request('POST', '/api/v1/entry-logs', ['sku' => $skuB, 'name' => 'B', 'quantity' => 22], $this->authHeaderFor('admin2@clinic.local'));
+        $this->request('POST', '/api/v1/entry-logs', ['sku' => $skuA, 'name' => 'A', 'quantity' => 11], $this->authHeaderFor('admin@clinic-erp.com'));
+        $this->request('POST', '/api/v1/entry-logs', ['sku' => $skuB, 'name' => 'B', 'quantity' => 22], $this->authHeaderFor('admin2@clinic-erp.com'));
 
-        $clinicA = $this->request('GET', '/api/v1/inventory', null, $this->authHeaderFor('staff@clinic.local'));
-        $clinicB = $this->request('GET', '/api/v1/inventory', null, $this->authHeaderFor('staff2@clinic.local'));
+        $clinicA = $this->request('GET', '/api/v1/inventory', null, $this->authHeaderFor('staff@clinic-erp.com'));
+        $clinicB = $this->request('GET', '/api/v1/inventory', null, $this->authHeaderFor('staff2@clinic-erp.com'));
 
         $dataA = $clinicA['json']['data'] ?? [];
         $dataB = $clinicB['json']['data'] ?? [];
@@ -75,49 +77,20 @@ final class InventoryEndpointTest extends BaseApiTestCase
     {
         $clinicAId = '11111111-1111-1111-1111-111111111111';
 
-        $sku = $this->createProductSku('tech@clinic.local', 'LOC');
+        $sku = $this->createProductSku('LOC');
         $this->request(
             'POST',
             '/api/v1/entry-logs',
             ['sku' => $sku, 'name' => 'LOC', 'quantity' => 11],
-            $this->authHeaderFor('admin@clinic.local')
+            $this->authHeaderFor('admin@clinic-erp.com')
         );
 
-        $productId = $this->productIdForSku($clinicAId, $sku);
+        $productId = $this->productIdForSku($sku);
+        $location = $this->insertAmbienteAndZoneForClinic($clinicAId, 'Ambiente Test', 'C-TEST');
+        $ambienteId = $location['ambiente_id'];
+        $zoneId = $location['zone_id'];
 
-        $pdo = self::testPdo();
-        $ambienteStmt = $pdo->prepare(
-            'INSERT INTO ambientes (clinic_id, name, location, device_id, is_active, created_at, updated_at)
-             VALUES (:clinic_id, :name, :location, :device_id, TRUE, NOW(), NOW())
-             RETURNING id::text AS id, name'
-        );
-        $ambienteStmt->execute([
-            'clinic_id' => $clinicAId,
-            'name' => 'Ambiente Test',
-            'location' => 'Planta X',
-            'device_id' => 'DEV-' . bin2hex(random_bytes(3)),
-        ]);
-        $ambiente = $ambienteStmt->fetch();
-        $this->assertIsArray($ambiente);
-        $ambienteId = (string) ($ambiente['id'] ?? '');
-        $this->assertNotSame('', $ambienteId);
-
-        $compStmt = $pdo->prepare(
-            'INSERT INTO zones (clinic_id, ambiente_id, code, is_active, created_at, updated_at)
-             VALUES (:clinic_id, :ambiente_id, :code, TRUE, NOW(), NOW())
-             RETURNING id::text AS id, code'
-        );
-        $compStmt->execute([
-            'clinic_id' => $clinicAId,
-            'ambiente_id' => $ambienteId,
-            'code' => 'C-TEST',
-        ]);
-        $comp = $compStmt->fetch();
-        $this->assertIsArray($comp);
-        $zoneId = (string) ($comp['id'] ?? '');
-        $this->assertNotSame('', $zoneId);
-
-        $invStmt = $pdo->prepare(
+        $invStmt = self::testPdo()->prepare(
             'INSERT INTO inventory_items (clinic_id, product_id, zone_id, quantity, updated_at)
              VALUES (:clinic_id, :product_id, :zone_id, :quantity, NOW())'
         );
@@ -128,7 +101,7 @@ final class InventoryEndpointTest extends BaseApiTestCase
             'quantity' => 5,
         ]);
 
-        $res = $this->request('GET', '/api/v1/inventory', null, $this->authHeaderFor('staff@clinic.local'));
+        $res = $this->request('GET', '/api/v1/inventory', null, $this->authHeaderFor('staff@clinic-erp.com'));
         $this->assertSame(200, $res['status']);
         $data = $res['json']['data'] ?? [];
         $this->assertIsArray($data);
@@ -184,14 +157,14 @@ final class InventoryEndpointTest extends BaseApiTestCase
 
     public function testPatchInventoryProductAsStaffReturns403(): void
     {
-        $sku = $this->createProductSku('tech@clinic.local', 'ADJ');
-        $productId = $this->productIdForSku('11111111-1111-1111-1111-111111111111', $sku);
+        $sku = $this->createProductSku('ADJ');
+        $productId = $this->productIdForSku($sku);
 
         $res = $this->request(
             'PATCH',
             '/api/v1/inventory/products/' . $productId,
             ['locations' => [['quantity' => 9]]],
-            $this->authHeaderFor('staff@clinic.local')
+            $this->authHeaderFor('staff@clinic-erp.com')
         );
         $this->assertSame(403, $res['status']);
     }
@@ -199,45 +172,18 @@ final class InventoryEndpointTest extends BaseApiTestCase
     public function testPatchInventoryProductAsAdminSetsQuantitiesByLocation(): void
     {
         $clinicAId = '11111111-1111-1111-1111-111111111111';
-        $sku = $this->createProductSku('tech@clinic.local', 'ADJ-ADMIN');
-        $productId = $this->productIdForSku($clinicAId, $sku);
+        $sku = $this->createProductSku('ADJ-ADMIN');
+        $productId = $this->productIdForSku($sku);
 
         $this->request(
             'POST',
             '/api/v1/entry-logs',
             ['sku' => $sku, 'name' => 'ADJ-ADMIN', 'quantity' => 4],
-            $this->authHeaderFor('admin@clinic.local')
+            $this->authHeaderFor('admin@clinic-erp.com')
         );
 
-        $pdo = self::testPdo();
-        $ambienteStmt = $pdo->prepare(
-            'INSERT INTO ambientes (clinic_id, name, location, device_id, is_active, created_at, updated_at)
-             VALUES (:clinic_id, :name, :location, :device_id, TRUE, NOW(), NOW())
-             RETURNING id::text AS id'
-        );
-        $ambienteStmt->execute([
-            'clinic_id' => $clinicAId,
-            'name' => 'Ambiente Adj',
-            'location' => 'Planta',
-            'device_id' => 'DEV-ADJ-' . bin2hex(random_bytes(2)),
-        ]);
-        $ambiente = $ambienteStmt->fetch();
-        $this->assertIsArray($ambiente);
-        $ambienteId = (string) ($ambiente['id'] ?? '');
-
-        $compStmt = $pdo->prepare(
-            'INSERT INTO zones (clinic_id, ambiente_id, code, is_active, created_at, updated_at)
-             VALUES (:clinic_id, :ambiente_id, :code, TRUE, NOW(), NOW())
-             RETURNING id::text AS id'
-        );
-        $compStmt->execute([
-            'clinic_id' => $clinicAId,
-            'ambiente_id' => $ambienteId,
-            'code' => 'ADJ-C1',
-        ]);
-        $comp = $compStmt->fetch();
-        $this->assertIsArray($comp);
-        $zoneId = (string) ($comp['id'] ?? '');
+        $location = $this->insertAmbienteAndZoneForClinic($clinicAId, 'Ambiente Adj', 'ADJ-C1');
+        $zoneId = $location['zone_id'];
 
         $res = $this->request(
             'PATCH',
@@ -248,7 +194,7 @@ final class InventoryEndpointTest extends BaseApiTestCase
                     ['quantity' => 2, 'zone_id' => null],
                 ],
             ],
-            $this->authHeaderFor('admin@clinic.local')
+            $this->authHeaderFor('admin@clinic-erp.com')
         );
         $this->assertSame(200, $res['status']);
 
@@ -274,7 +220,7 @@ final class InventoryEndpointTest extends BaseApiTestCase
         $this->assertTrue($foundAssigned);
         $this->assertTrue($foundUnassigned);
 
-        $list = $this->request('GET', '/api/v1/inventory', null, $this->authHeaderFor('staff@clinic.local'));
+        $list = $this->request('GET', '/api/v1/inventory', null, $this->authHeaderFor('staff@clinic-erp.com'));
         $this->assertSame(200, $list['status']);
         $row = null;
         foreach ($list['json']['data'] ?? [] as $r) {

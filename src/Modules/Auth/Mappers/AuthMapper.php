@@ -17,7 +17,7 @@ final class AuthMapper
     {
         return [
             'user_id' => $userRow['id'],
-            'clinic_id' => $userRow['clinic_id'],
+            'clinic_id' => $userRow['clinic_id'] ?? null,
             'role' => (string) $userRow['role'],
             'email' => (string) $userRow['email'],
             'name' => (string) ($userRow['name'] ?? ''),
@@ -31,8 +31,10 @@ final class AuthMapper
             'token_type' => 'Bearer',
             'expires_in' => $expiresIn,
             'user' => [
-                'id' => (string) $userRow['id'],
-                'clinic_id' => (string) $userRow['clinic_id'],
+                'id' => (string) ($userRow['user_id'] ?? $userRow['id'] ?? ''),
+                'clinic_id' => isset($userRow['clinic_id']) && $userRow['clinic_id'] !== null
+                    ? (string) $userRow['clinic_id']
+                    : null,
                 'name' => (string) ($userRow['name'] ?? ''),
                 'role' => (string) $userRow['role'],
                 'email' => (string) $userRow['email'],

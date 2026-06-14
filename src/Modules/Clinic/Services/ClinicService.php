@@ -28,6 +28,38 @@ final class ClinicService
         return is_array($row) ? $this->presentClinic($row) : null;
     }
 
+    /**
+     * @return list<array<string, mixed>>
+     */
+    public function listAll(): array
+    {
+        $stmt = $this->pdo->query(
+            'SELECT id, name, visible, image_path, password_hash IS NOT NULL AS has_password, created_at
+             FROM clinics ORDER BY name ASC'
+        );
+        $rows = $stmt->fetchAll() ?: [];
+
+        return array_map(fn (array $row): array => $this->presentClinic($row), $rows);
+    }
+
+    public function create(string $name, string $password): array
+    {
+        $id = \Symfony\Component\Uid\Uuid::v4()->toRfc4122();
+        $hash = password_hash($password, PASSWORD_BCRYPT);
+        $stmt = $this->pdo->prepare(
+            'INSERT INTO clinics (id, name, visible, password_hash, created_at)
+             VALUES (:id, :name, TRUE, :password_hash, NOW())
+             RETURNING id, name, visible, image_path, password_hash IS NOT NULL AS has_password, created_at'
+        );
+        $stmt->execute([
+            'id' => $id,
+            'name' => $name,
+            'password_hash' => $hash,
+        ]);
+
+        return $this->presentClinic((array) $stmt->fetch());
+    }
+
     public function patch(string $clinicId, ?bool $visible, ?string $password, ?string $name): ?array
     {
         $current = $this->pdo->prepare('SELECT id, name, visible, image_path FROM clinics WHERE id::text = :id LIMIT 1');

@@ -2,6 +2,9 @@
 
 namespace App\Modules\Products\Handlers;
 
+use App\Application\Auth\AccessDeniedException;
+use App\Application\Auth\ClinicAccessService;
+use App\Application\Auth\RequestClinicResolver;
 use App\Application\Http\ApiResponse;
 use App\Application\Http\Request;
 use App\Application\Http\Response;
@@ -10,19 +13,17 @@ use Throwable;
 
 final class ListProductsHandler
 {
-    public function __construct(private readonly ProductService $service)
-    {
+    public function __construct(
+        private readonly ClinicAccessService $access,
+        private readonly RequestClinicResolver $clinicResolver,
+        private readonly ProductService $service
+    ) {
     }
 
     public function __invoke(Request $request): Response
     {
         try {
             $user = (array) $request->getAttribute('user', []);
-            $clinicId = (string) ($user['clinic_id'] ?? '');
-            if ($clinicId === '') {
-                return ApiResponse::error($request, 403, 'Forbidden', 'Missing clinic_id in user context');
-            }
-
             $active = null;
             $qp = $request->getQueryParams();
             if (array_key_exists('active', $qp)) {
@@ -33,10 +34,18 @@ final class ListProductsHandler
                 $active = (bool) $bool;
             }
 
-            return ApiResponse::success($request, $this->service->list($clinicId, $active));
+            if ($this->access->isSuperAdmin($user) && $this->access->clinicIdFromToken($user) === '') {
+                return ApiResponse::success($request, $this->service->listGlobal($active));
+            }
+
+            $clinicId = $this->clinicResolver->requireClinicId($request, $user);
+            $adminView = $this->clinicResolver->isAdminView($user);
+
+            return ApiResponse::success($request, $this->service->listForClinic($clinicId, $active, $adminView));
+        } catch (AccessDeniedException $e) {
+            return ApiResponse::error($request, 403, 'Forbidden', $e->getMessage());
         } catch (Throwable $throwable) {
             return ApiResponse::error($request, 500, 'Internal Server Error', $throwable->getMessage());
         }
     }
 }
-

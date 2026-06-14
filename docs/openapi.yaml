@@ -240,9 +240,123 @@ paths:
           description: Unauthorized
         '404':
           description: Not Found
+  /api/v1/clinic/products/{product_id}:
     patch:
-      summary: Update clinic settings (visible, password, name)
+      summary: Toggle product visibility for a clinic (ADMIN of clinic or SUPER_ADMIN)
+      tags: [Products]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [visible]
+              properties:
+                visible:
+                  type: boolean
+                clinic_id:
+                  type: string
+                  description: Required for SUPER_ADMIN without active clinic in token
+      responses:
+        '200':
+          description: Updated
+        '403':
+          description: Forbidden
+  /api/v1/clinic/ambientes/{ambiente_id}:
+    patch:
+      summary: Toggle ambiente visibility for a clinic (ADMIN of clinic or SUPER_ADMIN)
+      tags: [Ambientes]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [visible]
+              properties:
+                visible:
+                  type: boolean
+                clinic_id:
+                  type: string
+                  description: Required for SUPER_ADMIN without active clinic in token
+      responses:
+        '200':
+          description: Updated
+        '403':
+          description: Forbidden
+  /api/v1/clinics:
+    get:
+      summary: List all clinics (SUPER_ADMIN)
       tags: [Clinic]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Clinics
+        '403':
+          description: Forbidden
+    post:
+      summary: Create clinic (SUPER_ADMIN)
+      tags: [Clinic]
+      security:
+        - bearerAuth: []
+      responses:
+        '201':
+          description: Created
+        '403':
+          description: Forbidden
+  /api/v1/clinics/{clinic_id}:
+    patch:
+      summary: Update clinic (SUPER_ADMIN)
+      tags: [Clinic]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Updated
+        '403':
+          description: Forbidden
+  /api/v1/clinics/{clinic_id}/ambientes:
+    post:
+      summary: Associate ambiente to clinic (SUPER_ADMIN)
+      tags: [Ambientes]
+      security:
+        - bearerAuth: []
+      responses:
+        '201':
+          description: Associated
+        '403':
+          description: Forbidden
+  /api/v1/clinics/{clinic_id}/ambientes/{ambiente_id}:
+    delete:
+      summary: Disassociate ambiente from clinic (SUPER_ADMIN)
+      tags: [Ambientes]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Deleted
+        '403':
+          description: Forbidden
+  /api/v1/clinics/{clinic_id}/products/{product_id}:
+    patch:
+      summary: Toggle product visibility in a specific clinic (ADMIN or SUPER_ADMIN)
+      tags: [Products]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Updated
+        '403':
+          description: Forbidden
+  /api/v1/clinics/{clinic_id}/ambientes/{ambiente_id}:
+    patch:
+      summary: Toggle ambiente visibility in a specific clinic (ADMIN or SUPER_ADMIN)
+      tags: [Ambientes]
       security:
         - bearerAuth: []
       responses:
@@ -624,7 +738,7 @@ paths:
                   type: string
                 role:
                   type: string
-                  enum: [ADMIN, TECHNICIAN, STAFF]
+                  enum: [SUPER_ADMIN, ADMIN, TECHNICIAN, STAFF]
                 is_active:
                   type: boolean
       responses:
@@ -679,7 +793,7 @@ paths:
                   type: string
                 role:
                   type: string
-                  enum: [ADMIN, TECHNICIAN, STAFF]
+                  enum: [SUPER_ADMIN, ADMIN, TECHNICIAN, STAFF]
                 is_active:
                   type: boolean
                 password:
@@ -1345,6 +1459,19 @@ paths:
           description: Forbidden
         '422':
           description: Validation error
+  /api/v1/incidents/{incident_id}:
+    patch:
+      summary: Update incident (SUPER_ADMIN)
+      tags: [Incidents]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Updated
+        '403':
+          description: Forbidden
+        '404':
+          description: Not Found
   /api/v1/settings:
     get:
       summary: List settings by clinic

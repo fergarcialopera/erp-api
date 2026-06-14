@@ -14,84 +14,114 @@ final class ProductsEndpointTest extends BaseApiTestCase
         $this->assertSame(401, $res['status']);
     }
 
-    public function testCreateProductRequiresTechnicianOrAdmin(): void
+    public function testCreateProductRequiresSuperAdmin(): void
     {
         $payload = ['name' => 'Producto-' . bin2hex(random_bytes(3))];
 
-        $staff = $this->request('POST', '/api/v1/products', $payload, $this->authHeaderFor('staff@clinic.local'));
+        $staff = $this->request('POST', '/api/v1/products', $payload, $this->authHeaderFor('staff@clinic-erp.com'));
         $this->assertSame(403, $staff['status']);
 
-        $tech = $this->request('POST', '/api/v1/products', $payload, $this->authHeaderFor('tech@clinic.local'));
-        $this->assertSame(201, $tech['status']);
-        $this->assertIsArray($tech['json']);
-        $this->assertArrayHasKey('data', $tech['json']);
-        $this->assertNotEmpty($tech['json']['data']['id'] ?? null);
+        $tech = $this->request('POST', '/api/v1/products', $payload, $this->authHeaderFor('tech@clinic-erp.com'));
+        $this->assertSame(403, $tech['status']);
+
+        $admin = $this->request('POST', '/api/v1/products', $payload, $this->authHeaderFor('admin@clinic-erp.com'));
+        $this->assertSame(403, $admin['status']);
+
+        $super = $this->request('POST', '/api/v1/products', $payload, $this->authHeaderForSuperAdmin());
+        $this->assertSame(201, $super['status']);
+        $this->assertIsArray($super['json']);
+        $this->assertArrayHasKey('data', $super['json']);
+        $this->assertNotEmpty($super['json']['data']['id'] ?? null);
     }
 
     public function testCreateProductValidation(): void
     {
-        $res = $this->request('POST', '/api/v1/products', ['name' => ''], $this->authHeaderFor('admin@clinic.local'));
+        $res = $this->request('POST', '/api/v1/products', ['name' => ''], $this->authHeaderForSuperAdmin());
         $this->assertSame(422, $res['status']);
     }
 
     public function testGetProductNotFound(): void
     {
-        $res = $this->request('GET', '/api/v1/products/01ARZ3NDEKTSV4RRFFQ69G5FAV', null, $this->authHeaderFor('staff@clinic.local'));
+        $res = $this->request('GET', '/api/v1/products/01ARZ3NDEKTSV4RRFFQ69G5FAV', null, $this->authHeaderFor('staff@clinic-erp.com'));
         $this->assertSame(404, $res['status']);
     }
 
-    public function testProductIsIsolatedByClinicReturns404(): void
+    public function testProductHiddenUntilAdminEnablesVisibility(): void
     {
         $created = $this->request(
             'POST',
             '/api/v1/products',
-            ['name' => 'TenantA-' . bin2hex(random_bytes(3))],
-            $this->authHeaderFor('admin@clinic.local')
+            ['name' => 'Hidden-' . bin2hex(random_bytes(3))],
+            $this->authHeaderForSuperAdmin()
         );
         $this->assertSame(201, $created['status']);
         $id = (string) ($created['json']['data']['id'] ?? '');
         $this->assertNotSame('', $id);
 
-        $otherClinicGet = $this->request('GET', '/api/v1/products/' . $id, null, $this->authHeaderFor('admin2@clinic.local'));
-        $this->assertSame(404, $otherClinicGet['status']);
+        $staffGet = $this->request('GET', '/api/v1/products/' . $id, null, $this->authHeaderFor('staff@clinic-erp.com'));
+        $this->assertSame(404, $staffGet['status']);
+
+        $visible = $this->request(
+            'PATCH',
+            '/api/v1/clinic/products/' . $id,
+            ['visible' => true],
+            $this->authHeaderFor('admin@clinic-erp.com')
+        );
+        $this->assertSame(200, $visible['status']);
+
+        $staffGetVisible = $this->request('GET', '/api/v1/products/' . $id, null, $this->authHeaderFor('staff@clinic-erp.com'));
+        $this->assertSame(200, $staffGetVisible['status']);
     }
 
     public function testActiveFilter(): void
     {
-        $p1 = $this->request('POST', '/api/v1/products', ['name' => 'Active-' . bin2hex(random_bytes(2))], $this->authHeaderFor('tech@clinic.local'));
-        $p2 = $this->request('POST', '/api/v1/products', ['name' => 'Inactive-' . bin2hex(random_bytes(2))], $this->authHeaderFor('tech@clinic.local'));
+        $p1 = $this->request('POST', '/api/v1/products', ['name' => 'Active-' . bin2hex(random_bytes(2))], $this->authHeaderForSuperAdmin());
+        $p2 = $this->request('POST', '/api/v1/products', ['name' => 'Inactive-' . bin2hex(random_bytes(2))], $this->authHeaderForSuperAdmin());
         $this->assertSame(201, $p1['status']);
         $this->assertSame(201, $p2['status']);
 
+        foreach ([$p1, $p2] as $productResponse) {
+            $productId = (string) ($productResponse['json']['data']['id'] ?? '');
+            $this->request(
+                'PATCH',
+                '/api/v1/clinic/products/' . $productId,
+                ['visible' => true],
+                $this->authHeaderFor('admin@clinic-erp.com')
+            );
+        }
+
         $inactiveId = (string) ($p2['json']['data']['id'] ?? '');
         $this->assertNotSame('', $inactiveId);
-        $deleted = $this->request('DELETE', '/api/v1/products/' . $inactiveId, null, $this->authHeaderFor('admin@clinic.local'));
+        $deleted = $this->request('DELETE', '/api/v1/products/' . $inactiveId, null, $this->authHeaderForSuperAdmin());
         $this->assertSame(200, $deleted['status']);
 
-        $activeOnly = $this->request('GET', '/api/v1/products?active=true', null, $this->authHeaderFor('staff@clinic.local'));
+        $activeOnly = $this->request('GET', '/api/v1/products?active=true', null, $this->authHeaderFor('admin@clinic-erp.com'));
         $this->assertSame(200, $activeOnly['status']);
 
-        $inactiveOnly = $this->request('GET', '/api/v1/products?active=false', null, $this->authHeaderFor('staff@clinic.local'));
+        $inactiveOnly = $this->request('GET', '/api/v1/products?active=false', null, $this->authHeaderFor('admin@clinic-erp.com'));
         $this->assertSame(200, $inactiveOnly['status']);
     }
 
     public function testPatchAndDeleteAuthorization(): void
     {
-        $created = $this->request('POST', '/api/v1/products', ['name' => 'ToUpdate-' . bin2hex(random_bytes(2))], $this->authHeaderFor('admin@clinic.local'));
+        $created = $this->request('POST', '/api/v1/products', ['name' => 'ToUpdate-' . bin2hex(random_bytes(2))], $this->authHeaderForSuperAdmin());
         $id = (string) ($created['json']['data']['id'] ?? '');
         $this->assertNotSame('', $id);
 
-        $patchStaff = $this->request('PATCH', '/api/v1/products/' . $id, ['name' => 'Nope'], $this->authHeaderFor('staff@clinic.local'));
+        $patchStaff = $this->request('PATCH', '/api/v1/products/' . $id, ['name' => 'Nope'], $this->authHeaderFor('staff@clinic-erp.com'));
         $this->assertSame(403, $patchStaff['status']);
 
-        $patchTech = $this->request('PATCH', '/api/v1/products/' . $id, ['name' => 'Updated'], $this->authHeaderFor('tech@clinic.local'));
-        $this->assertSame(200, $patchTech['status']);
+        $patchAdmin = $this->request('PATCH', '/api/v1/products/' . $id, ['name' => 'Updated'], $this->authHeaderFor('admin@clinic-erp.com'));
+        $this->assertSame(403, $patchAdmin['status']);
 
-        $deleteTech = $this->request('DELETE', '/api/v1/products/' . $id, null, $this->authHeaderFor('tech@clinic.local'));
-        $this->assertSame(403, $deleteTech['status']);
+        $patchSuper = $this->request('PATCH', '/api/v1/products/' . $id, ['name' => 'Updated'], $this->authHeaderForSuperAdmin());
+        $this->assertSame(200, $patchSuper['status']);
 
-        $deleteAdmin = $this->request('DELETE', '/api/v1/products/' . $id, null, $this->authHeaderFor('admin@clinic.local'));
-        $this->assertSame(200, $deleteAdmin['status']);
+        $deleteAdmin = $this->request('DELETE', '/api/v1/products/' . $id, null, $this->authHeaderFor('admin@clinic-erp.com'));
+        $this->assertSame(403, $deleteAdmin['status']);
+
+        $deleteSuper = $this->request('DELETE', '/api/v1/products/' . $id, null, $this->authHeaderForSuperAdmin());
+        $this->assertSame(200, $deleteSuper['status']);
     }
 
     public function testPatchProductCanSetIsActiveFalse(): void
@@ -100,7 +130,7 @@ final class ProductsEndpointTest extends BaseApiTestCase
             'POST',
             '/api/v1/products',
             ['name' => 'BoolPatch-' . bin2hex(random_bytes(2)), 'is_active' => true],
-            $this->authHeaderFor('admin@clinic.local')
+            $this->authHeaderForSuperAdmin()
         );
         $this->assertSame(201, $created['status']);
         $id = (string) ($created['json']['data']['id'] ?? '');
@@ -110,12 +140,33 @@ final class ProductsEndpointTest extends BaseApiTestCase
             'PATCH',
             '/api/v1/products/' . $id,
             ['is_active' => false],
-            $this->authHeaderFor('tech@clinic.local')
+            $this->authHeaderForSuperAdmin()
         );
         $this->assertSame(200, $patched['status']);
         $this->assertIsArray($patched['json']);
         $this->assertArrayHasKey('data', $patched['json']);
         $this->assertFalse((bool) ($patched['json']['data']['is_active'] ?? true));
     }
-}
 
+    public function testSuperAdminCanToggleProductVisibilityInAnyClinic(): void
+    {
+        $created = $this->request(
+            'POST',
+            '/api/v1/products',
+            ['name' => 'SuperVis-' . bin2hex(random_bytes(2))],
+            $this->authHeaderForSuperAdmin()
+        );
+        $this->assertSame(201, $created['status']);
+        $productId = (string) ($created['json']['data']['id'] ?? '');
+        $clinicB = '99999999-9999-9999-9999-999999999999';
+
+        $visible = $this->request(
+            'PATCH',
+            '/api/v1/clinics/' . $clinicB . '/products/' . $productId,
+            ['visible' => true],
+            $this->authHeaderForSuperAdmin()
+        );
+        $this->assertSame(200, $visible['status']);
+        $this->assertTrue((bool) ($visible['json']['data']['visible'] ?? false));
+    }
+}

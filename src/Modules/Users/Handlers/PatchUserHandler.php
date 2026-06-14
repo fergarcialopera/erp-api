@@ -2,6 +2,8 @@
 
 namespace App\Modules\Users\Handlers;
 
+use App\Application\Auth\AccessDeniedException;
+use App\Application\Auth\ClinicAccessService;
 use App\Application\Http\ApiResponse;
 use App\Application\Http\Request;
 use App\Application\Http\Response;
@@ -12,6 +14,7 @@ use Throwable;
 final class PatchUserHandler
 {
     public function __construct(
+        private readonly ClinicAccessService $access,
         private readonly UserValidator $validator,
         private readonly UserService $service
     ) {
@@ -21,26 +24,24 @@ final class PatchUserHandler
     {
         try {
             $user = (array) $request->getAttribute('user', []);
-            $clinicId = (string) ($user['clinic_id'] ?? '');
-            if ($clinicId === '') {
-                return ApiResponse::error($request, 403, 'Forbidden', 'Missing clinic_id in user context');
-            }
+            $this->access->assertSuperAdmin($user);
 
-            $id = (string) $request->getAttribute('user_id', '');
-            if ($id === '') {
+            $userId = (string) $request->getAttribute('user_id', '');
+            if ($userId === '') {
                 return ApiResponse::error($request, 404, 'Not Found', 'User not found');
             }
 
             $dto = $this->validator->validatePatch($request->getParsedBody());
-            $updated = $this->service->patch($clinicId, $id, $dto);
+            $updated = $this->service->patch($userId, $dto);
             if ($updated === null) {
                 return ApiResponse::error($request, 404, 'Not Found', 'User not found');
             }
 
             return ApiResponse::success($request, $updated);
+        } catch (AccessDeniedException $e) {
+            return ApiResponse::error($request, 403, 'Forbidden', $e->getMessage());
         } catch (Throwable $throwable) {
             return ApiResponse::error($request, 422, 'Unprocessable Entity', $throwable->getMessage());
         }
     }
 }
-

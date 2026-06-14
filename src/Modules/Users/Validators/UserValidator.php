@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Users\Validators;
 
 use App\Application\Support\PinValidator;
+use App\Domain\Auth\Role;
 use App\Modules\Auth\Services\RecoveryService;
 use App\Modules\Users\DTOs\CreateUserDTO;
 use App\Modules\Users\DTOs\PatchUserDTO;
@@ -12,18 +13,20 @@ use InvalidArgumentException;
 
 final class UserValidator
 {
-    private const ALLOWED_ROLES = ['ADMIN', 'TECHNICIAN', 'STAFF'];
+    private const ASSIGNABLE_ROLES = [Role::ADMIN, Role::TECHNICIAN, Role::STAFF];
 
     public function validateCreate(array $payload): CreateUserDTO
     {
         $name = trim((string) ($payload['name'] ?? ''));
         $email = strtolower(trim((string) ($payload['email'] ?? '')));
         $password = (string) ($payload['password'] ?? '');
-        $role = strtoupper(trim((string) ($payload['role'] ?? '')));
+        $role = Role::normalize((string) ($payload['role'] ?? ''));
         $isActive = array_key_exists('is_active', $payload)
             ? (is_bool($payload['is_active']) ? $payload['is_active'] : filter_var($payload['is_active'], FILTER_VALIDATE_BOOL, FILTER_NULL_ON_FAILURE))
             : true;
         $pin = array_key_exists('pin', $payload) ? (string) $payload['pin'] : null;
+        $clinicId = array_key_exists('clinic_id', $payload) ? trim((string) $payload['clinic_id']) : null;
+        $clinicIds = $this->parseClinicIds($payload);
 
         if ($name === '') {
             throw new InvalidArgumentException('Invalid name');
@@ -34,7 +37,7 @@ final class UserValidator
         if (strlen($password) < 6) {
             throw new InvalidArgumentException('Invalid password');
         }
-        if (!in_array($role, self::ALLOWED_ROLES, true)) {
+        if (!in_array($role, self::ASSIGNABLE_ROLES, true)) {
             throw new InvalidArgumentException('Invalid role');
         }
         if ($isActive === null) {
@@ -44,15 +47,37 @@ final class UserValidator
             PinValidator::assertValid($pin);
         }
 
-        return new CreateUserDTO($name, $email, $password, $role, (bool) $isActive, $pin !== '' ? $pin : null);
+        if ($role === Role::ADMIN) {
+            if ($clinicIds === [] && ($clinicId === null || $clinicId === '')) {
+                throw new InvalidArgumentException('clinic_ids required for ADMIN');
+            }
+            if ($clinicIds === [] && $clinicId !== null && $clinicId !== '') {
+                $clinicIds = [$clinicId];
+            }
+            $clinicId = $clinicIds[0] ?? null;
+        } elseif ($clinicId === null || $clinicId === '') {
+            throw new InvalidArgumentException('clinic_id required');
+        }
+
+        return new CreateUserDTO(
+            $name,
+            $email,
+            $password,
+            $role,
+            (bool) $isActive,
+            $pin !== '' ? $pin : null,
+            $clinicId !== '' ? $clinicId : null,
+            $clinicIds
+        );
     }
 
     public function validatePatch(array $payload): PatchUserDTO
     {
         $name = array_key_exists('name', $payload) ? trim((string) $payload['name']) : null;
-        $role = array_key_exists('role', $payload) ? strtoupper(trim((string) $payload['role'])) : null;
+        $role = array_key_exists('role', $payload) ? Role::normalize((string) $payload['role']) : null;
         $password = array_key_exists('password', $payload) ? (string) $payload['password'] : null;
         $pin = array_key_exists('pin', $payload) ? (string) $payload['pin'] : null;
+        $clinicIds = array_key_exists('clinic_ids', $payload) ? $this->parseClinicIds($payload) : null;
 
         if (array_key_exists('is_active', $payload)) {
             $raw = $payload['is_active'];
@@ -70,7 +95,7 @@ final class UserValidator
         if ($name !== null && $name === '') {
             throw new InvalidArgumentException('Invalid name');
         }
-        if ($role !== null && !in_array($role, self::ALLOWED_ROLES, true)) {
+        if ($role !== null && !in_array($role, self::ASSIGNABLE_ROLES, true)) {
             throw new InvalidArgumentException('Invalid role');
         }
         if (array_key_exists('is_active', $payload) && $isActive === null) {
@@ -86,7 +111,7 @@ final class UserValidator
             throw new InvalidArgumentException('Invalid unlock');
         }
 
-        if ($name === null && $role === null && $isActive === null && $password === null && ($pin === null || $pin === '') && $unlock === null) {
+        if ($name === null && $role === null && $isActive === null && $password === null && ($pin === null || $pin === '') && $unlock === null && $clinicIds === null) {
             throw new InvalidArgumentException('No fields to update');
         }
 
@@ -96,7 +121,8 @@ final class UserValidator
             $isActive,
             $password !== '' ? $password : null,
             $pin !== '' ? $pin : null,
-            $unlock
+            $unlock,
+            $clinicIds
         );
     }
 
@@ -108,5 +134,31 @@ final class UserValidator
         }
 
         return $type;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function parseClinicIds(array $payload): array
+    {
+        if (!array_key_exists('clinic_ids', $payload)) {
+            return [];
+        }
+
+        $raw = $payload['clinic_ids'];
+        if (!is_array($raw)) {
+            throw new InvalidArgumentException('Invalid clinic_ids');
+        }
+
+        $ids = [];
+        foreach ($raw as $value) {
+            $id = trim((string) $value);
+            if ($id === '') {
+                throw new InvalidArgumentException('Invalid clinic_ids');
+            }
+            $ids[$id] = $id;
+        }
+
+        return array_values($ids);
     }
 }

@@ -57,7 +57,12 @@ final class LocationValidator
     public function assertZoneInClinic(string $clinicId, string $zoneId): void
     {
         $stmt = $this->pdo->prepare(
-            'SELECT is_active FROM zones WHERE id = :id AND clinic_id = :clinic_id LIMIT 1'
+            'SELECT z.is_active
+             FROM zones z
+             INNER JOIN clinic_ambientes ca ON ca.ambiente_id = z.ambiente_id AND ca.clinic_id = :clinic_id
+             INNER JOIN ambientes a ON a.id = z.ambiente_id
+             WHERE z.id = :id AND ca.visible = TRUE AND a.is_active = TRUE
+             LIMIT 1'
         );
         $stmt->execute(['id' => $zoneId, 'clinic_id' => $clinicId]);
         $row = $stmt->fetch();
@@ -93,8 +98,9 @@ final class LocationValidator
                 a.name AS ambiente_name,
                 a.device_id AS ambiente_device_id
              FROM zones c
-             LEFT JOIN ambientes a ON a.id = c.ambiente_id AND a.clinic_id = :clinic_id
-             WHERE c.id = :zone_id AND c.clinic_id = :clinic_id
+             INNER JOIN ambientes a ON a.id = c.ambiente_id
+             INNER JOIN clinic_ambientes ca ON ca.ambiente_id = a.id AND ca.clinic_id = :clinic_id
+             WHERE c.id = :zone_id AND ca.visible = TRUE AND a.is_active = TRUE
              LIMIT 1'
         );
         $stmt->execute(['clinic_id' => $clinicId, 'zone_id' => $zoneId]);

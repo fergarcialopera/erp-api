@@ -92,11 +92,19 @@ final class RecoveryService
             throw new RuntimeException('Invalid recovery type');
         }
 
-        $stmt = $this->pdo->prepare(
-            'SELECT id, email, name FROM users
-             WHERE id::text = :id AND clinic_id::text = :clinic_id AND is_active = TRUE LIMIT 1'
-        );
-        $stmt->execute(['id' => $userId, 'clinic_id' => $clinicId]);
+        if ($clinicId === '') {
+            $stmt = $this->pdo->prepare(
+                'SELECT id, email, name FROM users
+                 WHERE id::text = :id AND is_active = TRUE LIMIT 1'
+            );
+            $stmt->execute(['id' => $userId]);
+        } else {
+            $stmt = $this->pdo->prepare(
+                'SELECT id, email, name FROM users
+                 WHERE id::text = :id AND clinic_id::text = :clinic_id AND is_active = TRUE LIMIT 1'
+            );
+            $stmt->execute(['id' => $userId, 'clinic_id' => $clinicId]);
+        }
         $row = $stmt->fetch();
 
         if (!$row) {

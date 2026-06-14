@@ -2,6 +2,8 @@
 
 namespace App\Modules\Products\Handlers;
 
+use App\Application\Auth\AccessDeniedException;
+use App\Application\Auth\ClinicAccessService;
 use App\Application\Http\ApiResponse;
 use App\Application\Http\Request;
 use App\Application\Http\Response;
@@ -12,6 +14,7 @@ use Throwable;
 final class PatchProductHandler
 {
     public function __construct(
+        private readonly ClinicAccessService $access,
         private readonly ProductValidator $validator,
         private readonly ProductService $service
     ) {
@@ -21,10 +24,7 @@ final class PatchProductHandler
     {
         try {
             $user = (array) $request->getAttribute('user', []);
-            $clinicId = (string) ($user['clinic_id'] ?? '');
-            if ($clinicId === '') {
-                return ApiResponse::error($request, 403, 'Forbidden', 'Missing clinic_id in user context');
-            }
+            $this->access->assertSuperAdmin($user);
 
             $id = (string) $request->getAttribute('product_id', '');
             if ($id === '') {
@@ -32,15 +32,16 @@ final class PatchProductHandler
             }
 
             $dto = $this->validator->validatePatch($request->getParsedBody());
-            $product = $this->service->patch($clinicId, $id, $dto);
+            $product = $this->service->patch($id, $dto);
             if ($product === null) {
                 return ApiResponse::error($request, 404, 'Not Found', 'Product not found');
             }
 
             return ApiResponse::success($request, $product);
+        } catch (AccessDeniedException $e) {
+            return ApiResponse::error($request, 403, 'Forbidden', $e->getMessage());
         } catch (Throwable $throwable) {
             return ApiResponse::error($request, 422, 'Unprocessable Entity', $throwable->getMessage());
         }
     }
 }
-

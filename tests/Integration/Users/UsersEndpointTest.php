@@ -8,25 +8,30 @@ use Tests\Integration\Support\BaseApiTestCase;
 
 final class UsersEndpointTest extends BaseApiTestCase
 {
+    private const CLINIC_A = '11111111-1111-1111-1111-111111111111';
+
     public function testListUsersRequiresAuth(): void
     {
         $res = $this->request('GET', '/api/v1/users');
         $this->assertSame(401, $res['status']);
     }
 
-    public function testListUsersRequiresAdmin(): void
+    public function testListUsersRequiresSuperAdmin(): void
     {
-        $staff = $this->request('GET', '/api/v1/users', null, $this->authHeaderFor('staff@clinic.local'));
+        $staff = $this->request('GET', '/api/v1/users', null, $this->authHeaderFor('staff@clinic-erp.com'));
         $this->assertSame(403, $staff['status']);
 
-        $tech = $this->request('GET', '/api/v1/users', null, $this->authHeaderFor('tech@clinic.local'));
+        $tech = $this->request('GET', '/api/v1/users', null, $this->authHeaderFor('tech@clinic-erp.com'));
         $this->assertSame(403, $tech['status']);
 
-        $admin = $this->request('GET', '/api/v1/users', null, $this->authHeaderFor('admin@clinic.local'));
-        $this->assertSame(200, $admin['status']);
-        $this->assertIsArray($admin['json']);
-        $this->assertArrayHasKey('data', $admin['json']);
-        $this->assertIsArray($admin['json']['data']);
+        $admin = $this->request('GET', '/api/v1/users', null, $this->authHeaderFor('admin@clinic-erp.com'));
+        $this->assertSame(403, $admin['status']);
+
+        $super = $this->request('GET', '/api/v1/users', null, $this->authHeaderForSuperAdmin());
+        $this->assertSame(200, $super['status']);
+        $this->assertIsArray($super['json']);
+        $this->assertArrayHasKey('data', $super['json']);
+        $this->assertIsArray($super['json']['data']);
     }
 
     public function testCreateUserValidation(): void
@@ -36,7 +41,7 @@ final class UsersEndpointTest extends BaseApiTestCase
             'email' => 'not-an-email',
             'password' => '123',
             'role' => 'NOPE',
-        ], $this->authHeaderFor('admin@clinic.local'));
+        ], $this->authHeaderForSuperAdmin());
 
         $this->assertSame(422, $res['status']);
         $this->assertIsArray($res['json']);
@@ -45,20 +50,21 @@ final class UsersEndpointTest extends BaseApiTestCase
 
     public function testCreateGetPatchDeleteUserHappyPath(): void
     {
-        $email = 'user+' . bin2hex(random_bytes(4)) . '@clinic.local';
+        $email = 'user+' . bin2hex(random_bytes(4)) . '@clinic-erp.com';
 
         $created = $this->request('POST', '/api/v1/users', [
             'name' => 'User Test',
             'email' => $email,
             'password' => 'secret12',
             'role' => 'STAFF',
-        ], $this->authHeaderFor('admin@clinic.local'));
+            'clinic_id' => self::CLINIC_A,
+        ], $this->authHeaderForSuperAdmin());
 
         $this->assertSame(201, $created['status']);
         $id = (string) ($created['json']['data']['id'] ?? '');
         $this->assertNotSame('', $id);
 
-        $get = $this->request('GET', '/api/v1/users/' . $id, null, $this->authHeaderFor('admin@clinic.local'));
+        $get = $this->request('GET', '/api/v1/users/' . $id, null, $this->authHeaderForSuperAdmin());
         $this->assertSame(200, $get['status']);
         $this->assertSame($email, $get['json']['data']['email'] ?? null);
 
@@ -66,33 +72,35 @@ final class UsersEndpointTest extends BaseApiTestCase
             'role' => 'TECHNICIAN',
             'is_active' => true,
             'password' => 'newpass12',
-        ], $this->authHeaderFor('admin@clinic.local'));
+        ], $this->authHeaderForSuperAdmin());
         $this->assertSame(200, $patched['status']);
         $this->assertSame('TECHNICIAN', $patched['json']['data']['role'] ?? null);
 
-        $deleted = $this->request('DELETE', '/api/v1/users/' . $id, null, $this->authHeaderFor('admin@clinic.local'));
+        $deleted = $this->request('DELETE', '/api/v1/users/' . $id, null, $this->authHeaderForSuperAdmin());
         $this->assertSame(200, $deleted['status']);
 
-        $getAfter = $this->request('GET', '/api/v1/users/' . $id, null, $this->authHeaderFor('admin@clinic.local'));
+        $getAfter = $this->request('GET', '/api/v1/users/' . $id, null, $this->authHeaderForSuperAdmin());
         $this->assertSame(200, $getAfter['status']);
         $this->assertFalse((bool) ($getAfter['json']['data']['is_active'] ?? true));
     }
 
-    public function testUserIsIsolatedByClinicReturns404(): void
+    public function testSuperAdminCanAssignAdminToMultipleClinics(): void
     {
-        $email = 'user+' . bin2hex(random_bytes(4)) . '@clinic.local';
+        $email = 'multi-admin+' . bin2hex(random_bytes(4)) . '@clinic-erp.com';
 
         $created = $this->request('POST', '/api/v1/users', [
-            'name' => 'Other Clinic User',
+            'name' => 'Multi Clinic Admin',
             'email' => $email,
             'password' => 'secret12',
-            'role' => 'STAFF',
-        ], $this->authHeaderFor('admin@clinic.local'));
-        $this->assertSame(201, $created['status']);
-        $id = (string) ($created['json']['data']['id'] ?? '');
+            'role' => 'ADMIN',
+            'clinic_ids' => [
+                self::CLINIC_A,
+                '99999999-9999-9999-9999-999999999999',
+            ],
+        ], $this->authHeaderForSuperAdmin());
 
-        $otherClinicGet = $this->request('GET', '/api/v1/users/' . $id, null, $this->authHeaderFor('admin2@clinic.local'));
-        $this->assertSame(404, $otherClinicGet['status']);
+        $this->assertSame(201, $created['status']);
+        $clinicIds = $created['json']['data']['clinic_ids'] ?? [];
+        $this->assertCount(2, $clinicIds);
     }
 }
-

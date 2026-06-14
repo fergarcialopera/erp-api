@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+use App\Application\Auth\ClinicAccessService;
+use App\Application\Auth\RequestClinicResolver;
 use App\Application\ExitLogs\OpenExitLogLockAction;
 use App\Application\Stock\LocationValidator;
 use App\Application\Support\PublicUrlBuilder;
@@ -35,9 +37,11 @@ use App\Modules\Auth\Validators\ClinicLoginValidator;
 use App\Modules\Auth\Validators\LoginValidator;
 use App\Modules\Auth\Validators\PinLoginValidator;
 use App\Modules\Auth\Validators\RecoveryValidator;
+use App\Modules\Clinic\Handlers\CreateClinicHandler;
 use App\Modules\Clinic\Handlers\DeleteClinicImageHandler;
 use App\Modules\Clinic\Handlers\GetClinicHandler;
-use App\Modules\Clinic\Handlers\PatchClinicHandler;
+use App\Modules\Clinic\Handlers\ListClinicsHandler;
+use App\Modules\Clinic\Handlers\PatchClinicByIdHandler;
 use App\Modules\Clinic\Handlers\PatchClinicSettingsHandler;
 use App\Modules\Clinic\Handlers\RequestClinicRecoveryHandler;
 use App\Modules\Clinic\Handlers\UploadClinicImageHandler;
@@ -66,18 +70,22 @@ use App\Modules\ExitLogs\Services\ExitLogService;
 use App\Modules\ExitLogs\Validators\ExitLogValidator;
 use App\Modules\Incidents\Handlers\CreateIncidentHandler;
 use App\Modules\Incidents\Handlers\ListIncidentsHandler;
+use App\Modules\Incidents\Handlers\PatchIncidentHandler;
 use App\Modules\Incidents\Services\IncidentService;
 use App\Modules\Incidents\Validators\IncidentValidator;
 use App\Modules\Inventory\Handlers\ListInventoryHandler;
 use App\Modules\Inventory\Handlers\PatchInventoryProductHandler;
 use App\Modules\Inventory\Services\InventoryService;
 use App\Modules\Inventory\Validators\InventoryValidator;
+use App\Modules\Ambientes\Handlers\AssociateClinicAmbienteHandler;
 use App\Modules\Ambientes\Handlers\CreateAmbienteHandler;
 use App\Modules\Ambientes\Handlers\DeleteAmbienteHandler;
+use App\Modules\Ambientes\Handlers\DisassociateClinicAmbienteHandler;
 use App\Modules\Ambientes\Handlers\GetAmbienteHandler;
 use App\Modules\Ambientes\Handlers\ListAmbientesHandler;
 use App\Modules\Ambientes\Handlers\ListAmbientesWithZonesHandler;
 use App\Modules\Ambientes\Handlers\PatchAmbienteHandler;
+use App\Modules\Ambientes\Handlers\PatchClinicAmbienteVisibilityHandler;
 use App\Modules\Ambientes\Services\AmbienteService;
 use App\Modules\Ambientes\Validators\AmbienteValidator;
 use App\Modules\Products\Handlers\CreateProductHandler;
@@ -85,6 +93,7 @@ use App\Modules\Products\Handlers\DeleteProductHandler;
 use App\Modules\Products\Handlers\GetProductHandler;
 use App\Modules\Products\Handlers\GetProductStockLocationsHandler;
 use App\Modules\Products\Handlers\ListProductsHandler;
+use App\Modules\Products\Handlers\PatchClinicProductVisibilityHandler;
 use App\Modules\Products\Handlers\PatchProductHandler;
 use App\Modules\Products\Services\ProductService;
 use App\Modules\Products\Validators\ProductValidator;
@@ -181,6 +190,8 @@ return static function (ApplicationConfig $appConfig): array {
     $userService = new UserService($pdo, $publicUrls, $loginAttempts);
     $ambienteService = new AmbienteService($pdo);
     $zoneService = new ZoneService($pdo);
+    $clinicAccess = new ClinicAccessService($pdo);
+    $clinicResolver = new RequestClinicResolver($clinicAccess);
 
     return [
         'pdo' => $pdo,
@@ -209,40 +220,47 @@ return static function (ApplicationConfig $appConfig): array {
             'cancelExitLog' => new CancelExitLogHandler($exitLogService),
             'openExitLogLock' => new OpenExitLogLockHandler($openExitLogLockAction),
             'createIncident' => new CreateIncidentHandler(new IncidentValidator(), $incidentService),
-            'listIncidents' => new ListIncidentsHandler($incidentService),
+            'listIncidents' => new ListIncidentsHandler($clinicAccess, $clinicResolver, $incidentService),
+            'patchIncident' => new PatchIncidentHandler($clinicAccess, new IncidentValidator(), $incidentService),
             'upsertSetting' => new UpsertSettingHandler(new SettingValidator(), $settingService),
             'listSettings' => new ListSettingsHandler($settingService),
-            'getClinic' => new GetClinicHandler($clinicService),
-            'patchClinic' => new PatchClinicHandler(new ClinicValidator(), $clinicService),
+            'getClinic' => new GetClinicHandler($clinicResolver, $clinicService),
+            'listClinics' => new ListClinicsHandler($clinicAccess, $clinicService),
+            'createClinic' => new CreateClinicHandler($clinicAccess, new ClinicValidator(), $clinicService),
+            'patchClinicById' => new PatchClinicByIdHandler($clinicAccess, new ClinicValidator(), $clinicService),
             'uploadClinicImage' => new UploadClinicImageHandler($clinicService, $imageStorage),
             'deleteClinicImage' => new DeleteClinicImageHandler($clinicService, $imageStorage),
             'requestClinicRecovery' => new RequestClinicRecoveryHandler(new RecoveryValidator(), $recoveryService),
             'patchClinicSettings' => new PatchClinicSettingsHandler(new ClinicSettingsValidator(), $settingService),
-            'listProducts' => new ListProductsHandler($productService),
-            'getProduct' => new GetProductHandler($productService),
+            'patchClinicProductVisibility' => new PatchClinicProductVisibilityHandler($clinicResolver, $productService),
+            'patchClinicAmbienteVisibility' => new PatchClinicAmbienteVisibilityHandler($clinicResolver, $ambienteService),
+            'associateClinicAmbiente' => new AssociateClinicAmbienteHandler($clinicAccess, $ambienteService),
+            'disassociateClinicAmbiente' => new DisassociateClinicAmbienteHandler($clinicAccess, $ambienteService),
+            'listProducts' => new ListProductsHandler($clinicAccess, $clinicResolver, $productService),
+            'getProduct' => new GetProductHandler($clinicAccess, $clinicResolver, $productService),
             'getProductStockLocations' => new GetProductStockLocationsHandler($inventoryService),
-            'createProduct' => new CreateProductHandler(new ProductValidator(), $productService),
-            'patchProduct' => new PatchProductHandler(new ProductValidator(), $productService),
-            'deleteProduct' => new DeleteProductHandler($productService),
-            'listUsers' => new ListUsersHandler($userService),
-            'getUser' => new GetUserHandler($userService),
-            'createUser' => new CreateUserHandler(new UserValidator(), $userService),
-            'patchUser' => new PatchUserHandler(new UserValidator(), $userService),
-            'deleteUser' => new DeleteUserHandler($userService),
+            'createProduct' => new CreateProductHandler($clinicAccess, new ProductValidator(), $productService),
+            'patchProduct' => new PatchProductHandler($clinicAccess, new ProductValidator(), $productService),
+            'deleteProduct' => new DeleteProductHandler($clinicAccess, $productService),
+            'listUsers' => new ListUsersHandler($clinicAccess, $userService),
+            'getUser' => new GetUserHandler($clinicAccess, $userService),
+            'createUser' => new CreateUserHandler($clinicAccess, new UserValidator(), $userService),
+            'patchUser' => new PatchUserHandler($clinicAccess, new UserValidator(), $userService),
+            'deleteUser' => new DeleteUserHandler($clinicAccess, $userService),
             'sendUserRecovery' => new SendUserRecoveryHandler(new UserValidator(), $recoveryService),
             'uploadUserImage' => new UploadUserImageHandler($userService, $imageStorage),
             'deleteUserImage' => new DeleteUserImageHandler($userService, $imageStorage),
-            'listAmbientes' => new ListAmbientesHandler($ambienteService),
-            'listAmbientesWithZones' => new ListAmbientesWithZonesHandler($ambienteService),
-            'getAmbiente' => new GetAmbienteHandler($ambienteService),
-            'createAmbiente' => new CreateAmbienteHandler(new AmbienteValidator(), $ambienteService),
-            'patchAmbiente' => new PatchAmbienteHandler(new AmbienteValidator(), $ambienteService),
-            'deleteAmbiente' => new DeleteAmbienteHandler($ambienteService),
-            'listZones' => new ListZonesHandler($zoneService),
-            'getZone' => new GetZoneHandler($zoneService),
-            'createZone' => new CreateZoneHandler(new ZoneValidator(), $zoneService),
-            'patchZone' => new PatchZoneHandler(new ZoneValidator(), $zoneService),
-            'deleteZone' => new DeleteZoneHandler($zoneService),
+            'listAmbientes' => new ListAmbientesHandler($clinicAccess, $clinicResolver, $ambienteService),
+            'listAmbientesWithZones' => new ListAmbientesWithZonesHandler($clinicAccess, $clinicResolver, $ambienteService),
+            'getAmbiente' => new GetAmbienteHandler($clinicAccess, $clinicResolver, $ambienteService),
+            'createAmbiente' => new CreateAmbienteHandler($clinicAccess, new AmbienteValidator(), $ambienteService),
+            'patchAmbiente' => new PatchAmbienteHandler($clinicAccess, new AmbienteValidator(), $ambienteService),
+            'deleteAmbiente' => new DeleteAmbienteHandler($clinicAccess, $ambienteService),
+            'listZones' => new ListZonesHandler($clinicAccess, $clinicResolver, $zoneService),
+            'getZone' => new GetZoneHandler($clinicAccess, $clinicResolver, $zoneService),
+            'createZone' => new CreateZoneHandler($clinicAccess, new ZoneValidator(), $zoneService),
+            'patchZone' => new PatchZoneHandler($clinicAccess, new ZoneValidator(), $zoneService),
+            'deleteZone' => new DeleteZoneHandler($clinicAccess, $zoneService),
             'openApi' => new OpenApiController(),
         ],
     ];

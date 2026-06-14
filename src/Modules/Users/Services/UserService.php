@@ -6,6 +6,7 @@ namespace App\Modules\Users\Services;
 
 use App\Application\Support\DisplayName;
 use App\Application\Support\PublicUrlBuilder;
+use App\Domain\Auth\Role;
 use App\Infrastructure\Auth\LoginAttemptService;
 use App\Modules\Users\DTOs\CreateUserDTO;
 use App\Modules\Users\DTOs\PatchUserDTO;
@@ -22,35 +23,47 @@ final class UserService
     ) {
     }
 
-    public function list(string $clinicId): array
+    /**
+     * @return list<array<string, mixed>>
+     */
+    public function list(?string $clinicId = null): array
     {
-        $stmt = $this->pdo->prepare(
-            'SELECT id, clinic_id, name, email, role, is_active, is_locked, image_path, created_at, updated_at
-             FROM users
-             WHERE clinic_id = :clinic_id
-             ORDER BY created_at DESC'
-        );
-        $stmt->execute(['clinic_id' => $clinicId]);
+        if ($clinicId !== null && $clinicId !== '') {
+            $stmt = $this->pdo->prepare(
+                'SELECT DISTINCT u.id, u.clinic_id, u.name, u.email, u.role, u.is_active, u.is_locked, u.image_path, u.created_at, u.updated_at
+                 FROM users u
+                 LEFT JOIN user_clinics uc ON uc.user_id = u.id
+                 WHERE u.clinic_id::text = :clinic_id OR uc.clinic_id::text = :clinic_id
+                 ORDER BY u.created_at DESC'
+            );
+            $stmt->execute(['clinic_id' => $clinicId]);
+        } else {
+            $stmt = $this->pdo->query(
+                'SELECT id, clinic_id, name, email, role, is_active, is_locked, image_path, created_at, updated_at
+                 FROM users
+                 WHERE role <> \'SUPER_ADMIN\'
+                 ORDER BY created_at DESC'
+            );
+        }
+
         $rows = $stmt->fetchAll() ?: [];
 
         return array_map(fn (array $row): array => $this->presentUser($row), $rows);
     }
 
-    public function get(string $clinicId, string $userId): ?array
+    public function get(string $userId): ?array
     {
         $stmt = $this->pdo->prepare(
             'SELECT id, clinic_id, name, email, role, is_active, is_locked, image_path, created_at, updated_at
-             FROM users
-             WHERE clinic_id = :clinic_id AND id::text = :id
-             LIMIT 1'
+             FROM users WHERE id::text = :id AND role <> \'SUPER_ADMIN\' LIMIT 1'
         );
-        $stmt->execute(['clinic_id' => $clinicId, 'id' => $userId]);
+        $stmt->execute(['id' => $userId]);
         $row = $stmt->fetch();
 
         return is_array($row) ? $this->presentUser($row) : null;
     }
 
-    public function create(string $clinicId, CreateUserDTO $dto): array
+    public function create(CreateUserDTO $dto): array
     {
         $existing = $this->pdo->prepare('SELECT id FROM users WHERE email = :email LIMIT 1');
         $existing->execute(['email' => $dto->email]);
@@ -62,28 +75,42 @@ final class UserService
         $hash = password_hash($dto->password, PASSWORD_BCRYPT);
         $pinHash = $dto->pin !== null ? password_hash($dto->pin, PASSWORD_BCRYPT) : null;
 
-        $stmt = $this->pdo->prepare(
-            'INSERT INTO users (id, clinic_id, name, email, password_hash, pin_hash, role, is_active, created_at, updated_at)
-             VALUES (:id, :clinic_id, :name, :email, :password_hash, :pin_hash, :role, :is_active, NOW(), NOW())
-             RETURNING id, clinic_id, name, email, role, is_active, is_locked, image_path, created_at, updated_at'
-        );
-        $stmt->execute([
-            'id' => $id,
-            'clinic_id' => $clinicId,
-            'name' => $dto->name,
-            'email' => $dto->email,
-            'password_hash' => $hash,
-            'pin_hash' => $pinHash,
-            'role' => $dto->role,
-            'is_active' => $dto->isActive,
-        ]);
+        $this->pdo->beginTransaction();
+        try {
+            $stmt = $this->pdo->prepare(
+                'INSERT INTO users (id, clinic_id, name, email, password_hash, pin_hash, role, is_active, created_at, updated_at)
+                 VALUES (:id, :clinic_id, :name, :email, :password_hash, :pin_hash, :role, :is_active, NOW(), NOW())
+                 RETURNING id, clinic_id, name, email, role, is_active, is_locked, image_path, created_at, updated_at'
+            );
+            $stmt->execute([
+                'id' => $id,
+                'clinic_id' => $dto->clinicId,
+                'name' => $dto->name,
+                'email' => $dto->email,
+                'password_hash' => $hash,
+                'pin_hash' => $pinHash,
+                'role' => $dto->role,
+                'is_active' => $dto->isActive,
+            ]);
 
-        return $this->presentUser((array) $stmt->fetch());
+            if ($dto->role === Role::ADMIN) {
+                $this->syncClinicLinks($id, $dto->clinicIds !== [] ? $dto->clinicIds : array_filter([$dto->clinicId]));
+            }
+
+            $this->pdo->commit();
+
+            return $this->presentUser((array) $stmt->fetch());
+        } catch (\Throwable $e) {
+            if ($this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
+            throw $e;
+        }
     }
 
-    public function patch(string $clinicId, string $userId, PatchUserDTO $dto): ?array
+    public function patch(string $userId, PatchUserDTO $dto): ?array
     {
-        $current = $this->getRaw($clinicId, $userId);
+        $current = $this->getRaw($userId);
         if ($current === null) {
             return null;
         }
@@ -110,46 +137,78 @@ final class UserService
             $pinHash = password_hash($dto->pin, PASSWORD_BCRYPT);
         }
 
-        $stmt = $this->pdo->prepare(
-            'UPDATE users
-             SET name = :name, role = :role, is_active = :is_active, password_hash = :password_hash,
-                 pin_hash = :pin_hash, is_locked = :is_locked, locked_at = :locked_at, updated_at = NOW()
-             WHERE clinic_id = :clinic_id AND id::text = :id
-             RETURNING id, clinic_id, name, email, role, is_active, is_locked, image_path, created_at, updated_at'
-        );
-        $stmt->bindValue(':clinic_id', $clinicId);
-        $stmt->bindValue(':id', $userId);
-        $stmt->bindValue(':name', $name);
-        $stmt->bindValue(':role', $role);
-        $stmt->bindValue(':is_active', $isActive, PDO::PARAM_BOOL);
-        $stmt->bindValue(':password_hash', $passwordHash);
-        if ($pinHash === null) {
-            $stmt->bindValue(':pin_hash', null, PDO::PARAM_NULL);
-        } else {
-            $stmt->bindValue(':pin_hash', $pinHash);
+        $clinicId = $current['clinic_id'];
+        if ($dto->clinicIds !== null && $role === Role::ADMIN) {
+            $clinicId = $dto->clinicIds[0] ?? null;
         }
-        $stmt->bindValue(':is_locked', $isLocked, PDO::PARAM_BOOL);
-        if ($lockedAt === null) {
-            $stmt->bindValue(':locked_at', null, PDO::PARAM_NULL);
-        } else {
-            $stmt->bindValue(':locked_at', $lockedAt);
+
+        $this->pdo->beginTransaction();
+        try {
+            $stmt = $this->pdo->prepare(
+                'UPDATE users
+                 SET name = :name, role = :role, clinic_id = :clinic_id, is_active = :is_active, password_hash = :password_hash,
+                     pin_hash = :pin_hash, is_locked = :is_locked, locked_at = :locked_at, updated_at = NOW()
+                 WHERE id::text = :id
+                 RETURNING id, clinic_id, name, email, role, is_active, is_locked, image_path, created_at, updated_at'
+            );
+            $stmt->bindValue(':id', $userId);
+            $stmt->bindValue(':name', $name);
+            $stmt->bindValue(':role', $role);
+            if ($clinicId === null) {
+                $stmt->bindValue(':clinic_id', null, PDO::PARAM_NULL);
+            } else {
+                $stmt->bindValue(':clinic_id', $clinicId);
+            }
+            $stmt->bindValue(':is_active', $isActive, PDO::PARAM_BOOL);
+            $stmt->bindValue(':password_hash', $passwordHash);
+            if ($pinHash === null) {
+                $stmt->bindValue(':pin_hash', null, PDO::PARAM_NULL);
+            } else {
+                $stmt->bindValue(':pin_hash', $pinHash);
+            }
+            $stmt->bindValue(':is_locked', $isLocked, PDO::PARAM_BOOL);
+            if ($lockedAt === null) {
+                $stmt->bindValue(':locked_at', null, PDO::PARAM_NULL);
+            } else {
+                $stmt->bindValue(':locked_at', $lockedAt);
+            }
+            $stmt->execute();
+            $row = $stmt->fetch();
+
+            if ($dto->clinicIds !== null && $role === Role::ADMIN) {
+                $this->syncClinicLinks($userId, $dto->clinicIds);
+            } elseif ($role !== Role::ADMIN) {
+                $this->clearClinicLinks($userId);
+            }
+
+            $this->pdo->commit();
+
+            return is_array($row) ? $this->presentUser($row) : null;
+        } catch (\Throwable $e) {
+            if ($this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
+            throw $e;
         }
-        $stmt->execute();
-
-        $row = $stmt->fetch();
-
-        return is_array($row) ? $this->presentUser($row) : null;
     }
 
     public function updateImagePath(string $clinicId, string $userId, ?string $imagePath): ?array
     {
+        $user = $this->getRaw($userId);
+        if ($user === null) {
+            return null;
+        }
+
+        if ((string) ($user['clinic_id'] ?? '') !== $clinicId && !$this->isLinkedToClinic($userId, $clinicId)) {
+            return null;
+        }
+
         $stmt = $this->pdo->prepare(
             'UPDATE users SET image_path = :image_path, updated_at = NOW()
-             WHERE clinic_id = :clinic_id AND id::text = :id
+             WHERE id::text = :id
              RETURNING id, clinic_id, name, email, role, is_active, is_locked, image_path, created_at, updated_at'
         );
         $stmt->execute([
-            'clinic_id' => $clinicId,
             'id' => $userId,
             'image_path' => $imagePath,
         ]);
@@ -158,13 +217,12 @@ final class UserService
         return is_array($row) ? $this->presentUser($row) : null;
     }
 
-    public function softDelete(string $clinicId, string $userId): bool
+    public function softDelete(string $userId): bool
     {
         $stmt = $this->pdo->prepare(
-            'UPDATE users SET is_active = FALSE, updated_at = NOW()
-             WHERE clinic_id = :clinic_id AND id::text = :id'
+            'UPDATE users SET is_active = FALSE, updated_at = NOW() WHERE id::text = :id AND role <> \'SUPER_ADMIN\''
         );
-        $stmt->execute(['clinic_id' => $clinicId, 'id' => $userId]);
+        $stmt->execute(['id' => $userId]);
 
         return $stmt->rowCount() > 0;
     }
@@ -172,16 +230,52 @@ final class UserService
     /**
      * @return array<string, mixed>|null
      */
-    private function getRaw(string $clinicId, string $userId): ?array
+    private function getRaw(string $userId): ?array
     {
         $stmt = $this->pdo->prepare(
             'SELECT id, clinic_id, name, email, password_hash, pin_hash, role, is_active, is_locked, locked_at
-             FROM users WHERE clinic_id = :clinic_id AND id::text = :id LIMIT 1'
+             FROM users WHERE id::text = :id AND role <> \'SUPER_ADMIN\' LIMIT 1'
         );
-        $stmt->execute(['clinic_id' => $clinicId, 'id' => $userId]);
+        $stmt->execute(['id' => $userId]);
         $row = $stmt->fetch();
 
         return is_array($row) ? $row : null;
+    }
+
+    /**
+     * @param list<string> $clinicIds
+     */
+    private function syncClinicLinks(string $userId, array $clinicIds): void
+    {
+        if ($clinicIds === []) {
+            throw new RuntimeException('At least one clinic required for ADMIN');
+        }
+
+        $delete = $this->pdo->prepare('DELETE FROM user_clinics WHERE user_id::text = :user_id');
+        $delete->execute(['user_id' => $userId]);
+
+        $insert = $this->pdo->prepare(
+            'INSERT INTO user_clinics (user_id, clinic_id) VALUES (:user_id, :clinic_id)'
+        );
+        foreach ($clinicIds as $clinicId) {
+            $insert->execute(['user_id' => $userId, 'clinic_id' => $clinicId]);
+        }
+    }
+
+    private function clearClinicLinks(string $userId): void
+    {
+        $delete = $this->pdo->prepare('DELETE FROM user_clinics WHERE user_id::text = :user_id');
+        $delete->execute(['user_id' => $userId]);
+    }
+
+    private function isLinkedToClinic(string $userId, string $clinicId): bool
+    {
+        $stmt = $this->pdo->prepare(
+            'SELECT 1 FROM user_clinics WHERE user_id::text = :user_id AND clinic_id::text = :clinic_id LIMIT 1'
+        );
+        $stmt->execute(['user_id' => $userId, 'clinic_id' => $clinicId]);
+
+        return (bool) $stmt->fetch();
     }
 
     /**
@@ -192,10 +286,12 @@ final class UserService
     {
         $name = (string) ($row['name'] ?? '');
         $imagePath = isset($row['image_path']) ? (string) $row['image_path'] : null;
+        $userId = (string) $row['id'];
 
         return [
-            'id' => (string) $row['id'],
-            'clinic_id' => (string) $row['clinic_id'],
+            'id' => $userId,
+            'clinic_id' => $row['clinic_id'] !== null ? (string) $row['clinic_id'] : null,
+            'clinic_ids' => $this->fetchClinicIds($userId, (string) ($row['role'] ?? '')),
             'name' => $name,
             'email' => (string) $row['email'],
             'role' => (string) $row['role'],
@@ -207,5 +303,23 @@ final class UserService
             'created_at' => (string) ($row['created_at'] ?? ''),
             'updated_at' => (string) ($row['updated_at'] ?? ''),
         ];
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function fetchClinicIds(string $userId, string $role): array
+    {
+        if ($role !== Role::ADMIN) {
+            return [];
+        }
+
+        $stmt = $this->pdo->prepare(
+            'SELECT clinic_id::text AS clinic_id FROM user_clinics WHERE user_id::text = :user_id ORDER BY clinic_id'
+        );
+        $stmt->execute(['user_id' => $userId]);
+        $rows = $stmt->fetchAll() ?: [];
+
+        return array_values(array_map(static fn (array $row): string => (string) $row['clinic_id'], $rows));
     }
 }

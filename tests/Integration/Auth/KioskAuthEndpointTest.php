@@ -86,7 +86,7 @@ final class KioskAuthEndpointTest extends BaseApiTestCase
     {
         $clinicToken = $this->clinicToken();
         $login = $this->request('POST', '/api/v1/auth/login', [
-            'email' => 'staff@clinic.local',
+            'email' => 'staff@clinic-erp.com',
             'password' => 'admin123',
         ], ['Authorization' => 'Bearer ' . $clinicToken]);
 

@@ -26,7 +26,11 @@ final class EntryLogService
 
         try {
             $productStmt = $this->pdo->prepare(
-                'SELECT id, sku, name FROM products WHERE clinic_id = :clinic_id AND sku = :sku LIMIT 1'
+                'SELECT p.id, p.sku, p.name
+                 FROM products p
+                 INNER JOIN clinic_products cp ON cp.product_id = p.id AND cp.clinic_id = :clinic_id
+                 WHERE p.sku = :sku AND cp.visible = TRUE AND p.is_active = TRUE
+                 LIMIT 1'
             );
             $productStmt->execute([
                 'clinic_id' => $clinicId,
@@ -116,8 +120,9 @@ final class EntryLogService
                 l.device_id AS ambiente_device_id
              FROM entry_logs el
              INNER JOIN products p ON p.id = el.product_id
-             LEFT JOIN zones c ON c.id = el.zone_id AND c.clinic_id = :clinic_id
-             LEFT JOIN ambientes l ON l.id = c.ambiente_id AND l.clinic_id = :clinic_id
+             LEFT JOIN zones c ON c.id = el.zone_id
+             LEFT JOIN ambientes l ON l.id = c.ambiente_id
+             LEFT JOIN clinic_ambientes ca ON ca.ambiente_id = l.id AND ca.clinic_id = :clinic_id
              WHERE el.clinic_id = :clinic_id
              ORDER BY el.id DESC'
         );

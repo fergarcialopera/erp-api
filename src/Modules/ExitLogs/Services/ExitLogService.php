@@ -334,11 +334,15 @@ final class ExitLogService
                 ii.quantity AS stock_available
              FROM exit_log_items ei
              INNER JOIN products p
-                ON p.id = ei.product_id AND p.clinic_id = :clinic_id
+                ON p.id = ei.product_id
+             INNER JOIN clinic_products cp
+                ON cp.product_id = p.id AND cp.clinic_id = :clinic_id
              LEFT JOIN zones c
-                ON c.id = ei.zone_id AND c.clinic_id = :clinic_id
+                ON c.id = ei.zone_id
              LEFT JOIN ambientes l
-                ON l.id = c.ambiente_id AND l.clinic_id = :clinic_id
+                ON l.id = c.ambiente_id
+             LEFT JOIN clinic_ambientes ca
+                ON ca.ambiente_id = l.id AND ca.clinic_id = :clinic_id
              LEFT JOIN inventory_items ii
                 ON ii.clinic_id = :clinic_id
                AND ii.product_id = p.id
@@ -437,7 +441,8 @@ final class ExitLogService
         $stmt = $this->pdo->prepare(
             'SELECT ei.id, ei.requested_quantity, ei.zone_id, p.id AS product_id
              FROM exit_log_items ei
-             INNER JOIN products p ON p.id = ei.product_id AND p.clinic_id = :clinic_id
+             INNER JOIN products p ON p.id = ei.product_id
+             INNER JOIN clinic_products cp ON cp.product_id = p.id AND cp.clinic_id = :clinic_id
              WHERE ei.exit_log_id::text = :id
              ORDER BY ei.id'
         );
@@ -551,7 +556,11 @@ final class ExitLogService
     private function assertProductInClinic(string $clinicId, string $productId): void
     {
         $stmt = $this->pdo->prepare(
-            'SELECT 1 FROM products WHERE id = :id AND clinic_id = :clinic_id LIMIT 1'
+            'SELECT 1
+             FROM products p
+             INNER JOIN clinic_products cp ON cp.product_id = p.id AND cp.clinic_id = :clinic_id
+             WHERE p.id = :id AND cp.visible = TRUE AND p.is_active = TRUE
+             LIMIT 1'
         );
         $stmt->execute(['id' => $productId, 'clinic_id' => $clinicId]);
         if (!$stmt->fetch()) {
@@ -596,7 +605,8 @@ final class ExitLogService
         $stmt = $this->pdo->prepare(
             'SELECT ei.zone_id
              FROM exit_log_items ei
-             INNER JOIN products p ON p.id = ei.product_id AND p.clinic_id = :clinic_id
+             INNER JOIN products p ON p.id = ei.product_id
+             INNER JOIN clinic_products cp ON cp.product_id = p.id AND cp.clinic_id = :clinic_id
              WHERE ei.exit_log_id::text = :eid
                AND ei.confirmed_quantity IS NOT NULL
                AND ei.confirmed_quantity > 0

@@ -19,7 +19,7 @@ final class AmbientesTreeEndpointTest extends BaseApiTestCase
 
     public function testListAmbientesTreeReturnsNestedZonesForClinic(): void
     {
-        $res = $this->request('GET', '/api/v1/ambientes/tree', null, $this->authHeaderFor('staff@clinic.local'));
+        $res = $this->request('GET', '/api/v1/ambientes/tree', null, $this->authHeaderFor('staff@clinic-erp.com'));
         $this->assertSame(200, $res['status']);
 
         $data = $res['json']['data'] ?? null;
@@ -57,7 +57,7 @@ final class AmbientesTreeEndpointTest extends BaseApiTestCase
             'POST',
             '/api/v1/ambientes',
             ['name' => 'Inactive-' . bin2hex(random_bytes(2))],
-            $this->authHeaderFor('tech@clinic.local')
+            $this->authHeaderFor('tech@clinic-erp.com')
         );
         $this->assertSame(201, $ambiente['status']);
         $ambienteId = (string) ($ambiente['json']['data']['id'] ?? '');
@@ -66,7 +66,7 @@ final class AmbientesTreeEndpointTest extends BaseApiTestCase
             'DELETE',
             '/api/v1/ambientes/' . $ambienteId,
             null,
-            $this->authHeaderFor('admin@clinic.local')
+            $this->authHeaderFor('admin@clinic-erp.com')
         );
         $this->assertSame(200, $deactivate['status']);
 
@@ -74,11 +74,11 @@ final class AmbientesTreeEndpointTest extends BaseApiTestCase
             'POST',
             '/api/v1/zones',
             ['ambiente_id' => $ambienteId, 'code' => 'X-' . bin2hex(random_bytes(2))],
-            $this->authHeaderFor('tech@clinic.local')
+            $this->authHeaderFor('tech@clinic-erp.com')
         );
         $this->assertSame(201, $comp['status']);
 
-        $all = $this->request('GET', '/api/v1/ambientes/tree', null, $this->authHeaderFor('staff@clinic.local'));
+        $all = $this->request('GET', '/api/v1/ambientes/tree', null, $this->authHeaderFor('staff@clinic-erp.com'));
         $this->assertSame(200, $all['status']);
         $allIds = array_map(
             static fn (array $row): string => (string) ($row['id'] ?? ''),
@@ -90,7 +90,7 @@ final class AmbientesTreeEndpointTest extends BaseApiTestCase
             'GET',
             '/api/v1/ambientes/tree?active=true',
             null,
-            $this->authHeaderFor('staff@clinic.local')
+            $this->authHeaderFor('staff@clinic-erp.com')
         );
         $this->assertSame(200, $activeOnly['status']);
         $activeIds = array_map(
@@ -103,14 +103,14 @@ final class AmbientesTreeEndpointTest extends BaseApiTestCase
             'GET',
             '/api/v1/ambientes/tree?active=maybe',
             null,
-            $this->authHeaderFor('staff@clinic.local')
+            $this->authHeaderFor('staff@clinic-erp.com')
         );
         $this->assertSame(422, $invalid['status']);
     }
 
     public function testListAmbientesTreeIsolationByClinic(): void
     {
-        $res = $this->request('GET', '/api/v1/ambientes/tree', null, $this->authHeaderFor('admin2@clinic.local'));
+        $res = $this->request('GET', '/api/v1/ambientes/tree', null, $this->authHeaderFor('admin2@clinic-erp.com'));
         $this->assertSame(200, $res['status']);
 
         $ids = array_map(

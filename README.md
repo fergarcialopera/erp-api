@@ -118,7 +118,7 @@ Debe responder `200` con un JSON similar a:
 
 ```json
 {
-  "email": "admin@clinic.local",
+  "email": "admin@clinic-erp.com",
   "password": "admin123"
 }
 ```

@@ -24,16 +24,19 @@ final class SendUserRecoveryHandler
     {
         try {
             $admin = (array) $request->getAttribute('user', []);
-            $clinicId = (string) ($admin['clinic_id'] ?? '');
-            $adminUserId = (string) ($admin['user_id'] ?? '');
             $targetUserId = (string) $request->getAttribute('user_id', '');
 
-            if ($clinicId === '' || $adminUserId === '' || $targetUserId === '') {
+            if ($targetUserId === '') {
                 return ApiResponse::error($request, 403, 'Forbidden', 'Missing context');
             }
 
             $type = $this->validator->validateRecoveryRequest($request->getParsedBody());
-            $this->recoveryService->sendUserRecoveryByAdmin($targetUserId, $clinicId, $type, $adminUserId);
+            $this->recoveryService->sendUserRecoveryByAdmin(
+                $targetUserId,
+                (string) ($admin['clinic_id'] ?? ''),
+                $type,
+                (string) ($admin['user_id'] ?? '')
+            );
 
             return ApiResponse::success($request, [
                 'message' => 'Recovery email sent if applicable.',

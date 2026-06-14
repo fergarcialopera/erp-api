@@ -52,9 +52,11 @@ SELECT
     a.device_id
 FROM resolved r
 LEFT JOIN zones c
-    ON c.id = r.zone_id AND c.clinic_id = :clinic_id
+    ON c.id = r.zone_id
 LEFT JOIN ambientes a
-    ON a.id = c.ambiente_id AND a.clinic_id = :clinic_id
+    ON a.id = c.ambiente_id
+LEFT JOIN clinic_ambientes ca
+    ON ca.ambiente_id = a.id AND ca.clinic_id = :clinic_id
 SQL;
 
         $stmt = $this->pdo->prepare($sql);

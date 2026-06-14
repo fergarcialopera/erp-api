@@ -18,7 +18,7 @@ final class LogoutEndpointTest extends BaseApiTestCase
 
     public function testLogoutInvalidatesToken(): void
     {
-        $login = $this->login('staff@clinic.local');
+        $login = $this->login('staff@clinic-erp.com');
         $this->assertSame(200, $login['status']);
         $token = (string) ($login['json']['data']['access_token'] ?? '');
         $this->assertNotSame('', $token);

@@ -2,6 +2,8 @@
 
 namespace App\Modules\Zones\Handlers;
 
+use App\Application\Auth\AccessDeniedException;
+use App\Application\Auth\ClinicAccessService;
 use App\Application\Http\ApiResponse;
 use App\Application\Http\Request;
 use App\Application\Http\Response;
@@ -12,6 +14,7 @@ use Throwable;
 final class CreateZoneHandler
 {
     public function __construct(
+        private readonly ClinicAccessService $access,
         private readonly ZoneValidator $validator,
         private readonly ZoneService $service
     ) {
@@ -21,15 +24,15 @@ final class CreateZoneHandler
     {
         try {
             $user = (array) $request->getAttribute('user', []);
-            $clinicId = (string) ($user['clinic_id'] ?? '');
-            if ($clinicId === '') {
-                return ApiResponse::error($request, 403, 'Forbidden', 'Missing clinic_id in user context');
-            }
+            $this->access->assertSuperAdmin($user);
+
             $dto = $this->validator->validateCreate($request->getParsedBody());
-            return ApiResponse::success($request, $this->service->create($clinicId, $dto), status: 201);
+
+            return ApiResponse::success($request, $this->service->create($dto), status: 201);
+        } catch (AccessDeniedException $e) {
+            return ApiResponse::error($request, 403, 'Forbidden', $e->getMessage());
         } catch (Throwable $throwable) {
             return ApiResponse::error($request, 422, 'Unprocessable Entity', $throwable->getMessage());
         }
     }
 }
-

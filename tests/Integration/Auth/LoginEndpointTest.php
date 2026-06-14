@@ -10,7 +10,7 @@ final class LoginEndpointTest extends BaseApiTestCase
 {
     public function testLoginSuccess(): void
     {
-        $res = $this->login('admin@clinic.local');
+        $res = $this->login('admin@clinic-erp.com');
 
         $this->assertSame(200, $res['status']);
         $this->assertIsArray($res['json']);
@@ -23,14 +23,14 @@ final class LoginEndpointTest extends BaseApiTestCase
 
     public function testLoginWithUnknownUserFails(): void
     {
-        $res = $this->login('unknown@clinic.local');
+        $res = $this->login('unknown@clinic-erp.com');
         $this->assertSame(401, $res['status']);
         $this->assertIsArray($res['json']);
     }
 
     public function testLoginWithWrongPasswordFails(): void
     {
-        $res = $this->login('admin@clinic.local', 'wrong-password');
+        $res = $this->login('admin@clinic-erp.com', 'wrong-password');
         $this->assertSame(401, $res['status']);
         $this->assertIsArray($res['json']);
     }
