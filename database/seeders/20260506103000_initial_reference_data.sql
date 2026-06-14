@@ -32,12 +32,12 @@ VALUES
     ('20000000-0000-4000-8000-000000000004', '22222222-2222-2222-2222-222222222222', 'PL-TIR-004', 'Tiras reactivas de glucosa', TRUE, NOW(), NOW()),
     ('20000000-0000-4000-8000-000000000005', '22222222-2222-2222-2222-222222222222', 'PL-BAN-005', 'Venda elastica 10 cm', TRUE, NOW(), NOW());
 
-INSERT INTO lockers (id, clinic_id, name, location, device_id, is_active, created_at, updated_at)
+INSERT INTO ambientes (id, clinic_id, name, location, device_id, is_active, created_at, updated_at)
 VALUES
-    ('40000000-0000-4000-8000-000000000001', '11111111-1111-1111-1111-111111111111', 'Locker Urgencias A1', 'Planta 1 - Urgencias', 'SR-A1-LOCK', TRUE, NOW(), NOW()),
-    ('40000000-0000-4000-8000-000000000002', '22222222-2222-2222-2222-222222222222', 'Locker Consulta B1', 'Planta 2 - Consultas', 'PL-B1-LOCK', TRUE, NOW(), NOW());
+    ('40000000-0000-4000-8000-000000000001', '11111111-1111-1111-1111-111111111111', 'Ambiente Urgencias A1', 'Planta 1 - Urgencias', 'SR-A1-LOCK', TRUE, NOW(), NOW()),
+    ('40000000-0000-4000-8000-000000000002', '22222222-2222-2222-2222-222222222222', 'Ambiente Consulta B1', 'Planta 2 - Consultas', 'PL-B1-LOCK', TRUE, NOW(), NOW());
 
-INSERT INTO compartments (id, clinic_id, locker_id, code, is_active, created_at, updated_at)
+INSERT INTO compartments (id, clinic_id, ambiente_id, code, is_active, created_at, updated_at)
 VALUES
     ('50000000-0000-4000-8000-000000000001', '11111111-1111-1111-1111-111111111111', '40000000-0000-4000-8000-000000000001', 'A1-C1', TRUE, NOW(), NOW()),
     ('50000000-0000-4000-8000-000000000002', '11111111-1111-1111-1111-111111111111', '40000000-0000-4000-8000-000000000001', 'A1-C2', TRUE, NOW(), NOW()),

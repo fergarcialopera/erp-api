@@ -7,21 +7,21 @@ namespace App\Application\Stock;
 final class LocationPresenter
 {
     /**
-     * @param array<string, mixed> $row Keys: compartment_id, compartment_code, locker_id, locker_name, locker_device_id
-     * @return array{locker: ?array{id: string, name: string, device_id: ?string}, compartment: ?array{id: string, code: string}}
+     * @param array<string, mixed> $row Keys: compartment_id, compartment_code, ambiente_id, ambiente_name, ambiente_device_id
+     * @return array{ambiente: ?array{id: string, name: string, device_id: ?string}, compartment: ?array{id: string, code: string}}
      */
     public static function fromJoinRow(array $row): array
     {
         $compartmentId = $row['compartment_id'] ?? null;
-        $lockerId = $row['locker_id'] ?? null;
+        $ambienteId = $row['ambiente_id'] ?? null;
 
         return [
-            'locker' => $lockerId !== null && $lockerId !== ''
+            'ambiente' => $ambienteId !== null && $ambienteId !== ''
                 ? [
-                    'id' => (string) $lockerId,
-                    'name' => (string) ($row['locker_name'] ?? ''),
-                    'device_id' => isset($row['locker_device_id']) && $row['locker_device_id'] !== null
-                        ? (string) $row['locker_device_id']
+                    'id' => (string) $ambienteId,
+                    'name' => (string) ($row['ambiente_name'] ?? ''),
+                    'device_id' => isset($row['ambiente_device_id']) && $row['ambiente_device_id'] !== null
+                        ? (string) $row['ambiente_device_id']
                         : null,
                 ]
                 : null,
@@ -35,10 +35,10 @@ final class LocationPresenter
     }
 
     /**
-     * @return array{locker: ?array{id: string, name: string, device_id: ?string}, compartment: ?array{id: string, code: string}}
+     * @return array{ambiente: ?array{id: string, name: string, device_id: ?string}, compartment: ?array{id: string, code: string}}
      */
     public static function empty(): array
     {
-        return ['locker' => null, 'compartment' => null];
+        return ['ambiente' => null, 'compartment' => null];
     }
 }

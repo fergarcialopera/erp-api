@@ -13,12 +13,12 @@ Consulta solo la guía relevante al cambio. Índice:
 
 ## Contexto del proyecto
 
-Backend de un ERP orientado a lockers inteligentes en entornos clínicos.
+Backend de un ERP orientado a ambientes inteligentes en entornos clínicos.
 
 El sistema permite:
 
 - gestionar productos y stock
-- controlar compartimentos físicos (lockers)
+- controlar compartimentos físicos (ambientes)
 - registrar movimientos de stock
 - interactuar con dispositivos IoT (ESP32)
 - abrir cerraduras físicas mediante MQTT

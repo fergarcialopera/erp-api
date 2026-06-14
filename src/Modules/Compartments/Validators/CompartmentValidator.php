@@ -10,14 +10,14 @@ final class CompartmentValidator
 {
     public function validateCreate(array $payload): CreateCompartmentDTO
     {
-        $lockerId = trim((string) ($payload['locker_id'] ?? ''));
+        $ambienteId = trim((string) ($payload['ambiente_id'] ?? ''));
         $code = trim((string) ($payload['code'] ?? ''));
         $isActive = array_key_exists('is_active', $payload)
             ? (is_bool($payload['is_active']) ? $payload['is_active'] : filter_var($payload['is_active'], FILTER_VALIDATE_BOOL, FILTER_NULL_ON_FAILURE))
             : true;
 
-        if ($lockerId === '') {
-            throw new InvalidArgumentException('Invalid locker_id');
+        if ($ambienteId === '') {
+            throw new InvalidArgumentException('Invalid ambiente_id');
         }
         if ($code === '') {
             throw new InvalidArgumentException('Invalid code');
@@ -26,7 +26,7 @@ final class CompartmentValidator
             throw new InvalidArgumentException('Invalid is_active');
         }
 
-        return new CreateCompartmentDTO($lockerId, $code, (bool) $isActive);
+        return new CreateCompartmentDTO($ambienteId, $code, (bool) $isActive);
     }
 
     public function validatePatch(array $payload): PatchCompartmentDTO

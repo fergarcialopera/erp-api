@@ -7,7 +7,7 @@ namespace App\Application\ExitLogs\Ports;
 interface ExitLogLockPort
 {
     /**
-     * Load exit log with locker device context for the given clinic.
+     * Load exit log with ambiente device context for the given clinic.
      * Returns null only if no exit_logs row exists for this id and clinic.
      * Otherwise returns one joined row (LEFT JOINs) for domain policy checks.
      *

@@ -1,13 +1,13 @@
 <?php
 
-namespace App\Modules\Lockers\Services;
+namespace App\Modules\Ambientes\Services;
 
-use App\Modules\Lockers\DTOs\CreateLockerDTO;
-use App\Modules\Lockers\DTOs\PatchLockerDTO;
+use App\Modules\Ambientes\DTOs\CreateAmbienteDTO;
+use App\Modules\Ambientes\DTOs\PatchAmbienteDTO;
 use PDO;
 use Symfony\Component\Uid\Uuid;
 
-final class LockerService
+final class AmbienteService
 {
     public function __construct(private readonly PDO $pdo)
     {
@@ -16,7 +16,7 @@ final class LockerService
     public function list(string $clinicId, ?bool $active): array
     {
         $sql = 'SELECT id, clinic_id, name, location, device_id, is_active, created_at, updated_at
-                FROM lockers WHERE clinic_id = :clinic_id';
+                FROM ambientes WHERE clinic_id = :clinic_id';
         $params = ['clinic_id' => $clinicId];
         if ($active !== null) {
             $sql .= ' AND is_active = :is_active';
@@ -33,12 +33,12 @@ final class LockerService
      */
     public function listWithCompartments(string $clinicId, ?bool $active): array
     {
-        $lockers = $this->list($clinicId, $active);
-        if ($lockers === []) {
+        $ambientes = $this->list($clinicId, $active);
+        if ($ambientes === []) {
             return [];
         }
 
-        $sql = 'SELECT id, locker_id, code, is_active, created_at, updated_at
+        $sql = 'SELECT id, ambiente_id, code, is_active, created_at, updated_at
                 FROM compartments
                 WHERE clinic_id = :clinic_id';
         $params = ['clinic_id' => $clinicId];
@@ -51,60 +51,60 @@ final class LockerService
         $stmt->execute($params);
         $compartments = $stmt->fetchAll() ?: [];
 
-        $byLockerId = [];
+        $byAmbienteId = [];
         foreach ($compartments as $row) {
             if (!is_array($row)) {
                 continue;
             }
-            $lockerId = (string) ($row['locker_id'] ?? '');
-            if ($lockerId === '') {
+            $ambienteId = (string) ($row['ambiente_id'] ?? '');
+            if ($ambienteId === '') {
                 continue;
             }
-            $byLockerId[$lockerId][] = $row;
+            $byAmbienteId[$ambienteId][] = $row;
         }
 
         $result = [];
-        foreach ($lockers as $locker) {
-            if (!is_array($locker)) {
+        foreach ($ambientes as $ambiente) {
+            if (!is_array($ambiente)) {
                 continue;
             }
-            $lockerId = (string) ($locker['id'] ?? '');
-            $locker['compartments'] = $byLockerId[$lockerId] ?? [];
-            $result[] = $locker;
+            $ambienteId = (string) ($ambiente['id'] ?? '');
+            $ambiente['compartments'] = $byAmbienteId[$ambienteId] ?? [];
+            $result[] = $ambiente;
         }
 
         return $result;
     }
 
-    public function get(string $clinicId, string $lockerId): ?array
+    public function get(string $clinicId, string $ambienteId): ?array
     {
         $stmt = $this->pdo->prepare(
             'SELECT id, clinic_id, name, location, device_id, is_active, created_at, updated_at
-             FROM lockers WHERE clinic_id = :clinic_id AND id::text = :id LIMIT 1'
+             FROM ambientes WHERE clinic_id = :clinic_id AND id::text = :id LIMIT 1'
         );
-        $stmt->execute(['clinic_id' => $clinicId, 'id' => $lockerId]);
+        $stmt->execute(['clinic_id' => $clinicId, 'id' => $ambienteId]);
         $row = $stmt->fetch();
         if (!is_array($row)) {
             return null;
         }
 
         $comp = $this->pdo->prepare(
-            'SELECT id, locker_id, code, is_active, created_at, updated_at
+            'SELECT id, ambiente_id, code, is_active, created_at, updated_at
              FROM compartments
-             WHERE clinic_id = :clinic_id AND locker_id = :locker_id
+             WHERE clinic_id = :clinic_id AND ambiente_id = :ambiente_id
              ORDER BY created_at ASC'
         );
-        $comp->execute(['clinic_id' => $clinicId, 'locker_id' => $lockerId]);
+        $comp->execute(['clinic_id' => $clinicId, 'ambiente_id' => $ambienteId]);
         $row['compartments'] = $comp->fetchAll() ?: [];
 
         return $row;
     }
 
-    public function create(string $clinicId, CreateLockerDTO $dto): array
+    public function create(string $clinicId, CreateAmbienteDTO $dto): array
     {
         $id = Uuid::v4()->toRfc4122();
         $stmt = $this->pdo->prepare(
-            'INSERT INTO lockers (id, clinic_id, name, location, device_id, is_active, created_at, updated_at)
+            'INSERT INTO ambientes (id, clinic_id, name, location, device_id, is_active, created_at, updated_at)
              VALUES (:id, :clinic_id, :name, :location, :device_id, :is_active, NOW(), NOW())
              RETURNING id, clinic_id, name, location, device_id, is_active, created_at, updated_at'
         );
@@ -119,12 +119,12 @@ final class LockerService
         return (array) $stmt->fetch();
     }
 
-    public function patch(string $clinicId, string $lockerId, PatchLockerDTO $dto): ?array
+    public function patch(string $clinicId, string $ambienteId, PatchAmbienteDTO $dto): ?array
     {
         $currentStmt = $this->pdo->prepare(
-            'SELECT name, location, device_id, is_active FROM lockers WHERE clinic_id = :clinic_id AND id::text = :id LIMIT 1'
+            'SELECT name, location, device_id, is_active FROM ambientes WHERE clinic_id = :clinic_id AND id::text = :id LIMIT 1'
         );
-        $currentStmt->execute(['clinic_id' => $clinicId, 'id' => $lockerId]);
+        $currentStmt->execute(['clinic_id' => $clinicId, 'id' => $ambienteId]);
         $current = $currentStmt->fetch();
         if (!is_array($current)) {
             return null;
@@ -136,14 +136,14 @@ final class LockerService
         }
 
         $stmt = $this->pdo->prepare(
-            'UPDATE lockers
+            'UPDATE ambientes
              SET name = :name, location = :location, device_id = :device_id, is_active = :is_active, updated_at = NOW()
              WHERE clinic_id = :clinic_id AND id::text = :id
              RETURNING id, clinic_id, name, location, device_id, is_active, created_at, updated_at'
         );
         $stmt->execute([
             'clinic_id' => $clinicId,
-            'id' => $lockerId,
+            'id' => $ambienteId,
             'name' => $dto->name ?? $current['name'],
             'location' => $dto->location ?? $current['location'],
             'device_id' => $deviceId,
@@ -153,12 +153,12 @@ final class LockerService
         return is_array($row) ? $row : null;
     }
 
-    public function softDelete(string $clinicId, string $lockerId): bool
+    public function softDelete(string $clinicId, string $ambienteId): bool
     {
         $stmt = $this->pdo->prepare(
-            'UPDATE lockers SET is_active = FALSE, updated_at = NOW() WHERE clinic_id = :clinic_id AND id::text = :id'
+            'UPDATE ambientes SET is_active = FALSE, updated_at = NOW() WHERE clinic_id = :clinic_id AND id::text = :id'
         );
-        $stmt->execute(['clinic_id' => $clinicId, 'id' => $lockerId]);
+        $stmt->execute(['clinic_id' => $clinicId, 'id' => $ambienteId]);
         return $stmt->rowCount() > 0;
     }
 }

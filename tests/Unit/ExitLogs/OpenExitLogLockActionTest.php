@@ -26,8 +26,8 @@ final class OpenExitLogLockActionTest extends TestCase
             'compartment_id' => '00000000-0000-4000-8000-000000000001',
             'compartment_resolved' => true,
             'compartment_is_active' => true,
-            'locker_resolved' => true,
-            'locker_is_active' => true,
+            'ambiente_resolved' => true,
+            'ambiente_is_active' => true,
             'device_id' => 'DEVICE-UNIT-TEST',
         ];
     }
@@ -48,7 +48,7 @@ final class OpenExitLogLockActionTest extends TestCase
             '42',
             self::CLINIC,
             'DEVICE-UNIT-TEST',
-            'lockers/DEVICE-UNIT-TEST/cmd',
+            'ambientes/DEVICE-UNIT-TEST/cmd',
             'open',
             'user-1',
             true,
@@ -61,7 +61,7 @@ final class OpenExitLogLockActionTest extends TestCase
         $this->assertSame('Lock open command sent successfully.', $result->message);
         $this->assertSame('42', $result->exitLogId);
         $this->assertSame('DEVICE-UNIT-TEST', $result->deviceId);
-        $this->assertSame('lockers/DEVICE-UNIT-TEST/cmd', $result->topic);
+        $this->assertSame('ambientes/DEVICE-UNIT-TEST/cmd', $result->topic);
         $this->assertSame('open', $result->payload);
     }
 
@@ -99,8 +99,8 @@ final class OpenExitLogLockActionTest extends TestCase
             'compartment_id' => null,
             'compartment_resolved' => false,
             'compartment_is_active' => false,
-            'locker_resolved' => false,
-            'locker_is_active' => false,
+            'ambiente_resolved' => false,
+            'ambiente_is_active' => false,
             'device_id' => null,
         ]);
         $publisher = $this->createMock(LockCommandPublisher::class);
@@ -126,7 +126,7 @@ final class OpenExitLogLockActionTest extends TestCase
             '7',
             self::CLINIC,
             'DEVICE-UNIT-TEST',
-            'lockers/DEVICE-UNIT-TEST/cmd',
+            'ambientes/DEVICE-UNIT-TEST/cmd',
             'open',
             'user-1',
             false,

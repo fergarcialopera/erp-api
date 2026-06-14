@@ -1,14 +1,14 @@
 <?php
 
-namespace App\Modules\Lockers\Validators;
+namespace App\Modules\Ambientes\Validators;
 
-use App\Modules\Lockers\DTOs\CreateLockerDTO;
-use App\Modules\Lockers\DTOs\PatchLockerDTO;
+use App\Modules\Ambientes\DTOs\CreateAmbienteDTO;
+use App\Modules\Ambientes\DTOs\PatchAmbienteDTO;
 use InvalidArgumentException;
 
-final class LockerValidator
+final class AmbienteValidator
 {
-    public function validateCreate(array $payload): CreateLockerDTO
+    public function validateCreate(array $payload): CreateAmbienteDTO
     {
         $name = trim((string) ($payload['name'] ?? ''));
         $location = array_key_exists('location', $payload) ? trim((string) $payload['location']) : null;
@@ -34,10 +34,10 @@ final class LockerValidator
             }
         }
 
-        return new CreateLockerDTO($name, $location !== '' ? $location : null, (bool) $isActive, $deviceId);
+        return new CreateAmbienteDTO($name, $location !== '' ? $location : null, (bool) $isActive, $deviceId);
     }
 
-    public function validatePatch(array $payload): PatchLockerDTO
+    public function validatePatch(array $payload): PatchAmbienteDTO
     {
         $name = array_key_exists('name', $payload) ? trim((string) $payload['name']) : null;
         $location = array_key_exists('location', $payload) ? trim((string) $payload['location']) : null;
@@ -72,7 +72,7 @@ final class LockerValidator
             throw new InvalidArgumentException('No fields to update');
         }
 
-        return new PatchLockerDTO($name, $location !== '' ? $location : $location, $isActive, $deviceIdTouched, $deviceId);
+        return new PatchAmbienteDTO($name, $location !== '' ? $location : $location, $isActive, $deviceIdTouched, $deviceId);
     }
 }
 

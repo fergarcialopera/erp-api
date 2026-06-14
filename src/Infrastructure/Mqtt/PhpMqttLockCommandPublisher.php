@@ -46,7 +46,7 @@ final class PhpMqttLockCommandPublisher implements LockCommandPublisher
         $usernameStr = is_string($username) && $username !== '' ? $username : null;
         $passwordStr = is_string($password) && $password !== '' ? $password : null;
 
-        $topic = 'lockers/' . $deviceId . '/cmd';
+        $topic = 'ambientes/' . $deviceId . '/cmd';
         $payload = 'open';
 
         $settings = new ConnectionSettings();

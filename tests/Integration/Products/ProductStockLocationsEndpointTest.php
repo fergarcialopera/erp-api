@@ -60,29 +60,29 @@ final class ProductStockLocationsEndpointTest extends BaseApiTestCase
         $clinicId = '11111111-1111-1111-1111-111111111111';
 
         $pdo = self::testPdo();
-        $lockerStmt = $pdo->prepare(
-            'INSERT INTO lockers (clinic_id, name, location, device_id, is_active, created_at, updated_at)
+        $ambienteStmt = $pdo->prepare(
+            'INSERT INTO ambientes (clinic_id, name, location, device_id, is_active, created_at, updated_at)
              VALUES (:clinic_id, :name, :location, :device_id, TRUE, NOW(), NOW())
              RETURNING id::text AS id'
         );
-        $lockerStmt->execute([
+        $ambienteStmt->execute([
             'clinic_id' => $clinicId,
-            'name' => 'Locker Stock Loc',
+            'name' => 'Ambiente Stock Loc',
             'location' => 'Test',
             'device_id' => 'DEV-' . bin2hex(random_bytes(3)),
         ]);
-        $locker = $lockerStmt->fetch();
-        $this->assertIsArray($locker);
-        $lockerId = (string) ($locker['id'] ?? '');
+        $ambiente = $ambienteStmt->fetch();
+        $this->assertIsArray($ambiente);
+        $ambienteId = (string) ($ambiente['id'] ?? '');
 
         $compStmt = $pdo->prepare(
-            'INSERT INTO compartments (clinic_id, locker_id, code, is_active, created_at, updated_at)
-             VALUES (:clinic_id, :locker_id, :code, TRUE, NOW(), NOW())
+            'INSERT INTO compartments (clinic_id, ambiente_id, code, is_active, created_at, updated_at)
+             VALUES (:clinic_id, :ambiente_id, :code, TRUE, NOW(), NOW())
              RETURNING id::text AS id, code'
         );
         $compStmt->execute([
             'clinic_id' => $clinicId,
-            'locker_id' => $lockerId,
+            'ambiente_id' => $ambienteId,
             'code' => 'SL-C1',
         ]);
         $comp = $compStmt->fetch();
@@ -130,7 +130,7 @@ final class ProductStockLocationsEndpointTest extends BaseApiTestCase
             if (($loc['compartment'] ?? null) === null) {
                 $foundUnassigned = true;
                 $this->assertSame(3, (int) ($loc['quantity'] ?? 0));
-                $this->assertNull($loc['locker'] ?? null);
+                $this->assertNull($loc['ambiente'] ?? null);
                 continue;
             }
 
@@ -138,7 +138,7 @@ final class ProductStockLocationsEndpointTest extends BaseApiTestCase
                 $foundAssigned = true;
                 $this->assertSame(7, (int) ($loc['quantity'] ?? 0));
                 $this->assertSame('SL-C1', (string) ($loc['compartment']['code'] ?? ''));
-                $this->assertSame($lockerId, (string) ($loc['locker']['id'] ?? ''));
+                $this->assertSame($ambienteId, (string) ($loc['ambiente']['id'] ?? ''));
             }
         }
 

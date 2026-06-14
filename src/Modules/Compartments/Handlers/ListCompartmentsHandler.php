@@ -24,9 +24,9 @@ final class ListCompartmentsHandler
             }
 
             $qp = $request->getQueryParams();
-            $lockerId = array_key_exists('locker_id', $qp) ? trim((string) $qp['locker_id']) : null;
-            if ($lockerId === '') {
-                $lockerId = null;
+            $ambienteId = array_key_exists('ambiente_id', $qp) ? trim((string) $qp['ambiente_id']) : null;
+            if ($ambienteId === '') {
+                $ambienteId = null;
             }
 
             $active = null;
@@ -38,7 +38,7 @@ final class ListCompartmentsHandler
                 $active = (bool) $bool;
             }
 
-            return ApiResponse::success($request, $this->service->list($clinicId, $lockerId, $active));
+            return ApiResponse::success($request, $this->service->list($clinicId, $ambienteId, $active));
         } catch (Throwable $throwable) {
             return ApiResponse::error($request, 500, 'Internal Server Error', $throwable->getMessage());
         }

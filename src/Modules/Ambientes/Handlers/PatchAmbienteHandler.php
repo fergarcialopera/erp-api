@@ -1,19 +1,19 @@
 <?php
 
-namespace App\Modules\Lockers\Handlers;
+namespace App\Modules\Ambientes\Handlers;
 
 use App\Application\Http\ApiResponse;
 use App\Application\Http\Request;
 use App\Application\Http\Response;
-use App\Modules\Lockers\Services\LockerService;
-use App\Modules\Lockers\Validators\LockerValidator;
+use App\Modules\Ambientes\Services\AmbienteService;
+use App\Modules\Ambientes\Validators\AmbienteValidator;
 use Throwable;
 
-final class PatchLockerHandler
+final class PatchAmbienteHandler
 {
     public function __construct(
-        private readonly LockerValidator $validator,
-        private readonly LockerService $service
+        private readonly AmbienteValidator $validator,
+        private readonly AmbienteService $service
     ) {
     }
 
@@ -25,14 +25,14 @@ final class PatchLockerHandler
             if ($clinicId === '') {
                 return ApiResponse::error($request, 403, 'Forbidden', 'Missing clinic_id in user context');
             }
-            $id = (string) $request->getAttribute('locker_id', '');
+            $id = (string) $request->getAttribute('ambiente_id', '');
             if ($id === '') {
-                return ApiResponse::error($request, 404, 'Not Found', 'Locker not found');
+                return ApiResponse::error($request, 404, 'Not Found', 'Ambiente not found');
             }
             $dto = $this->validator->validatePatch($request->getParsedBody());
             $updated = $this->service->patch($clinicId, $id, $dto);
             if ($updated === null) {
-                return ApiResponse::error($request, 404, 'Not Found', 'Locker not found');
+                return ApiResponse::error($request, 404, 'Not Found', 'Ambiente not found');
             }
             return ApiResponse::success($request, $updated);
         } catch (Throwable $throwable) {

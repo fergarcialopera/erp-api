@@ -9,8 +9,8 @@ use Tests\Integration\Support\BaseApiTestCase;
 final class EntryLogsEndpointTest extends BaseApiTestCase
 {
     private const COMPARTMENT_A1 = '50000000-0000-4000-8000-000000000001';
-    private const LOCKER_A1 = '40000000-0000-4000-8000-000000000001';
-    private const LOCKER_A2 = '40000000-0000-4000-8000-000000000002';
+    private const AMBIENTE_A1 = '40000000-0000-4000-8000-000000000001';
+    private const AMBIENTE_A2 = '40000000-0000-4000-8000-000000000002';
 
     private function createProductSkuForClinicA(): string
     {
@@ -90,7 +90,7 @@ final class EntryLogsEndpointTest extends BaseApiTestCase
                 'sku' => $sku,
                 'quantity' => 2,
                 'compartment_id' => self::COMPARTMENT_A1,
-                'locker_id' => self::LOCKER_A1,
+                'ambiente_id' => self::AMBIENTE_A1,
             ],
             $this->authHeaderFor('tech@clinic.local')
         );
@@ -98,7 +98,7 @@ final class EntryLogsEndpointTest extends BaseApiTestCase
         $entry = $res['json']['data']['entry_log'] ?? null;
         $this->assertIsArray($entry);
         $this->assertSame(self::COMPARTMENT_A1, $entry['compartment']['id'] ?? null);
-        $this->assertSame(self::LOCKER_A1, $entry['locker']['id'] ?? null);
+        $this->assertSame(self::AMBIENTE_A1, $entry['ambiente']['id'] ?? null);
         $this->assertSame('A1-C1', $entry['compartment']['code'] ?? null);
 
         $list = $this->request('GET', '/api/v1/entry-logs', null, $this->authHeaderFor('staff@clinic.local'));
@@ -113,19 +113,19 @@ final class EntryLogsEndpointTest extends BaseApiTestCase
         $this->assertSame(self::COMPARTMENT_A1, $found['compartment']['id'] ?? null);
     }
 
-    public function testCreateEntryLogLockerWithoutCompartmentReturns422(): void
+    public function testCreateEntryLogAmbienteWithoutCompartmentReturns422(): void
     {
         $sku = $this->createProductSkuForClinicA();
         $res = $this->request(
             'POST',
             '/api/v1/entry-logs',
-            ['sku' => $sku, 'quantity' => 1, 'locker_id' => self::LOCKER_A1],
+            ['sku' => $sku, 'quantity' => 1, 'ambiente_id' => self::AMBIENTE_A1],
             $this->authHeaderFor('admin@clinic.local')
         );
         $this->assertSame(422, $res['status']);
     }
 
-    public function testCreateEntryLogLockerCompartmentMismatchReturns422(): void
+    public function testCreateEntryLogAmbienteCompartmentMismatchReturns422(): void
     {
         $sku = $this->createProductSkuForClinicA();
         $res = $this->request(
@@ -135,7 +135,7 @@ final class EntryLogsEndpointTest extends BaseApiTestCase
                 'sku' => $sku,
                 'quantity' => 1,
                 'compartment_id' => self::COMPARTMENT_A1,
-                'locker_id' => self::LOCKER_A2,
+                'ambiente_id' => self::AMBIENTE_A2,
             ],
             $this->authHeaderFor('admin@clinic.local')
         );

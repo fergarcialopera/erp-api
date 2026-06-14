@@ -33,17 +33,17 @@ final class ExitLogLockPolicy
             throw new ExitLogLockDeniedException('Compartment is inactive; lock cannot be opened.');
         }
 
-        if (!self::isPostgresTruthy($context['locker_resolved'] ?? false)) {
-            throw new ExitLogLockDeniedException('Locker for this compartment is missing; lock cannot be opened.');
+        if (!self::isPostgresTruthy($context['ambiente_resolved'] ?? false)) {
+            throw new ExitLogLockDeniedException('Ambiente for this compartment is missing; lock cannot be opened.');
         }
 
-        if (!self::isPostgresTruthy($context['locker_is_active'] ?? false)) {
-            throw new ExitLogLockDeniedException('Locker is inactive; lock cannot be opened.');
+        if (!self::isPostgresTruthy($context['ambiente_is_active'] ?? false)) {
+            throw new ExitLogLockDeniedException('Ambiente is inactive; lock cannot be opened.');
         }
 
         $deviceId = isset($context['device_id']) ? trim((string) $context['device_id']) : '';
         if ($deviceId === '') {
-            throw new ExitLogLockDeniedException('Locker has no device configured; lock cannot be opened.');
+            throw new ExitLogLockDeniedException('Ambiente has no device configured; lock cannot be opened.');
         }
     }
 

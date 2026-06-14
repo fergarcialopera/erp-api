@@ -36,7 +36,7 @@ final class OpenExitLogLockAction
         ExitLogLockPolicy::assertCanOpenLock($row);
 
         $deviceId = trim((string) $row['device_id']);
-        $topic = 'lockers/' . $deviceId . '/cmd';
+        $topic = 'ambientes/' . $deviceId . '/cmd';
 
         $this->logger->info('exit_log.lock_open.requested', [
             'exit_log_id' => $exitLogId,

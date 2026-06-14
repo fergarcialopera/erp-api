@@ -8,9 +8,9 @@ use Tests\Integration\Support\BaseApiTestCase;
 
 final class CompartmentsEndpointTest extends BaseApiTestCase
 {
-    private function createLockerId(): string
+    private function createAmbienteId(): string
     {
-        $created = $this->request('POST', '/api/v1/lockers', ['name' => 'Locker-' . bin2hex(random_bytes(2))], $this->authHeaderFor('admin@clinic.local'));
+        $created = $this->request('POST', '/api/v1/ambientes', ['name' => 'Ambiente-' . bin2hex(random_bytes(2))], $this->authHeaderFor('admin@clinic.local'));
         $this->assertSame(201, $created['status']);
         $id = (string) ($created['json']['data']['id'] ?? '');
         $this->assertNotSame('', $id);
@@ -25,22 +25,22 @@ final class CompartmentsEndpointTest extends BaseApiTestCase
 
     public function testCreateCompartmentValidationAndAuthorization(): void
     {
-        $lockerId = $this->createLockerId();
+        $ambienteId = $this->createAmbienteId();
 
-        $staff = $this->request('POST', '/api/v1/compartments', ['locker_id' => $lockerId, 'code' => 'C-01'], $this->authHeaderFor('staff@clinic.local'));
+        $staff = $this->request('POST', '/api/v1/compartments', ['ambiente_id' => $ambienteId, 'code' => 'C-01'], $this->authHeaderFor('staff@clinic.local'));
         $this->assertSame(403, $staff['status']);
 
-        $invalid = $this->request('POST', '/api/v1/compartments', ['locker_id' => '', 'code' => ''], $this->authHeaderFor('tech@clinic.local'));
+        $invalid = $this->request('POST', '/api/v1/compartments', ['ambiente_id' => '', 'code' => ''], $this->authHeaderFor('tech@clinic.local'));
         $this->assertSame(422, $invalid['status']);
 
-        $tech = $this->request('POST', '/api/v1/compartments', ['locker_id' => $lockerId, 'code' => 'C-01'], $this->authHeaderFor('tech@clinic.local'));
+        $tech = $this->request('POST', '/api/v1/compartments', ['ambiente_id' => $ambienteId, 'code' => 'C-01'], $this->authHeaderFor('tech@clinic.local'));
         $this->assertSame(201, $tech['status']);
     }
 
     public function testCompartmentGetPatchDeleteFlow(): void
     {
-        $lockerId = $this->createLockerId();
-        $created = $this->request('POST', '/api/v1/compartments', ['locker_id' => $lockerId, 'code' => 'C-' . bin2hex(random_bytes(2))], $this->authHeaderFor('admin@clinic.local'));
+        $ambienteId = $this->createAmbienteId();
+        $created = $this->request('POST', '/api/v1/compartments', ['ambiente_id' => $ambienteId, 'code' => 'C-' . bin2hex(random_bytes(2))], $this->authHeaderFor('admin@clinic.local'));
         $this->assertSame(201, $created['status']);
         $id = (string) ($created['json']['data']['id'] ?? '');
 
@@ -58,8 +58,8 @@ final class CompartmentsEndpointTest extends BaseApiTestCase
 
     public function testCompartmentIsolationByClinicReturns404(): void
     {
-        $lockerId = $this->createLockerId();
-        $created = $this->request('POST', '/api/v1/compartments', ['locker_id' => $lockerId, 'code' => 'C-tenant'], $this->authHeaderFor('admin@clinic.local'));
+        $ambienteId = $this->createAmbienteId();
+        $created = $this->request('POST', '/api/v1/compartments', ['ambiente_id' => $ambienteId, 'code' => 'C-tenant'], $this->authHeaderFor('admin@clinic.local'));
         $id = (string) ($created['json']['data']['id'] ?? '');
 
         $other = $this->request('GET', '/api/v1/compartments/' . $id, null, $this->authHeaderFor('admin2@clinic.local'));

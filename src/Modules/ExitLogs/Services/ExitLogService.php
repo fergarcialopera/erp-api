@@ -328,17 +328,17 @@ final class ExitLogService
                 p.name AS product_name,
                 p.sku AS product_sku,
                 c.code AS compartment_code,
-                l.id AS locker_id,
-                l.name AS locker_name,
-                l.device_id AS locker_device_id,
+                l.id AS ambiente_id,
+                l.name AS ambiente_name,
+                l.device_id AS ambiente_device_id,
                 ii.quantity AS stock_available
              FROM exit_log_items ei
              INNER JOIN products p
                 ON p.id = ei.product_id AND p.clinic_id = :clinic_id
              LEFT JOIN compartments c
                 ON c.id = ei.compartment_id AND c.clinic_id = :clinic_id
-             LEFT JOIN lockers l
-                ON l.id = c.locker_id AND l.clinic_id = :clinic_id
+             LEFT JOIN ambientes l
+                ON l.id = c.ambiente_id AND l.clinic_id = :clinic_id
              LEFT JOIN inventory_items ii
                 ON ii.clinic_id = :clinic_id
                AND ii.product_id = p.id
@@ -371,7 +371,7 @@ final class ExitLogService
                     'sku' => $it['product_sku'] !== null ? (string) $it['product_sku'] : null,
                     'barcode' => null,
                 ],
-                'locker' => $location['locker'],
+                'ambiente' => $location['ambiente'],
                 'compartment' => $location['compartment'],
                 'requested_quantity' => (int) $it['requested_quantity'],
                 'confirmed_quantity' => $it['confirmed_quantity'] !== null ? (int) $it['confirmed_quantity'] : null,

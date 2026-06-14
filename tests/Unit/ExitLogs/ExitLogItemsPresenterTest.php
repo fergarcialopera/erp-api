@@ -22,7 +22,7 @@ final class ExitLogItemsPresenterTest extends TestCase
             [
                 'item_id' => 'line-1',
                 'product' => $product,
-                'locker' => null,
+                'ambiente' => null,
                 'compartment' => ['id' => 'c1', 'code' => 'A1-C1'],
                 'requested_quantity' => 1,
                 'confirmed_quantity' => null,
@@ -31,7 +31,7 @@ final class ExitLogItemsPresenterTest extends TestCase
             [
                 'item_id' => 'line-2',
                 'product' => $product,
-                'locker' => null,
+                'ambiente' => null,
                 'compartment' => ['id' => 'c2', 'code' => 'A1-C2'],
                 'requested_quantity' => 2,
                 'confirmed_quantity' => null,
@@ -61,7 +61,7 @@ final class ExitLogItemsPresenterTest extends TestCase
             [
                 'item_id' => '1',
                 'product' => $product,
-                'locker' => null,
+                'ambiente' => null,
                 'compartment' => null,
                 'requested_quantity' => 2,
                 'confirmed_quantity' => 2,
@@ -70,7 +70,7 @@ final class ExitLogItemsPresenterTest extends TestCase
             [
                 'item_id' => '2',
                 'product' => $product,
-                'locker' => null,
+                'ambiente' => null,
                 'compartment' => null,
                 'requested_quantity' => 1,
                 'confirmed_quantity' => 1,

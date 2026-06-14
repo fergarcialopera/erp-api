@@ -15,7 +15,7 @@ final class LocationValidator
     }
 
     /**
-     * @throws InvalidArgumentException when locker_id is sent without compartment_id
+     * @throws InvalidArgumentException when ambiente_id is sent without compartment_id
      */
     public function parseOptionalLocation(array $payload, string $indexLabel = ''): ?string
     {
@@ -32,23 +32,23 @@ final class LocationValidator
             }
         }
 
-        $lockerId = null;
-        if (array_key_exists('locker_id', $payload)) {
-            $raw = $payload['locker_id'];
+        $ambienteId = null;
+        if (array_key_exists('ambiente_id', $payload)) {
+            $raw = $payload['ambiente_id'];
             if ($raw !== null && $raw !== '') {
-                $lockerId = trim((string) $raw);
-                if ($lockerId === '') {
-                    throw new InvalidArgumentException('Invalid locker_id' . $suffix);
+                $ambienteId = trim((string) $raw);
+                if ($ambienteId === '') {
+                    throw new InvalidArgumentException('Invalid ambiente_id' . $suffix);
                 }
             }
         }
 
-        if ($lockerId !== null && $compartmentId === null) {
-            throw new InvalidArgumentException('locker_id requires compartment_id' . $suffix);
+        if ($ambienteId !== null && $compartmentId === null) {
+            throw new InvalidArgumentException('ambiente_id requires compartment_id' . $suffix);
         }
 
-        if ($compartmentId !== null && $lockerId !== null) {
-            $this->assertCompartmentMatchesLocker($compartmentId, $lockerId);
+        if ($compartmentId !== null && $ambienteId !== null) {
+            $this->assertCompartmentMatchesAmbiente($compartmentId, $ambienteId);
         }
 
         return $compartmentId;
@@ -69,19 +69,19 @@ final class LocationValidator
         }
     }
 
-    public function assertCompartmentMatchesLocker(string $compartmentId, string $lockerId): void
+    public function assertCompartmentMatchesAmbiente(string $compartmentId, string $ambienteId): void
     {
         $stmt = $this->pdo->prepare(
-            'SELECT 1 FROM compartments WHERE id = :compartment_id AND locker_id = :locker_id LIMIT 1'
+            'SELECT 1 FROM compartments WHERE id = :compartment_id AND ambiente_id = :ambiente_id LIMIT 1'
         );
-        $stmt->execute(['compartment_id' => $compartmentId, 'locker_id' => $lockerId]);
+        $stmt->execute(['compartment_id' => $compartmentId, 'ambiente_id' => $ambienteId]);
         if (!$stmt->fetch()) {
-            throw new InvalidArgumentException('compartment_id does not belong to locker_id');
+            throw new InvalidArgumentException('compartment_id does not belong to ambiente_id');
         }
     }
 
     /**
-     * @return array{locker: ?array{id: string, name: string, device_id: ?string}, compartment: ?array{id: string, code: string}}|null
+     * @return array{ambiente: ?array{id: string, name: string, device_id: ?string}, compartment: ?array{id: string, code: string}}|null
      */
     public function fetchLocationForCompartment(string $clinicId, string $compartmentId): ?array
     {
@@ -89,11 +89,11 @@ final class LocationValidator
             'SELECT
                 c.id AS compartment_id,
                 c.code AS compartment_code,
-                l.id AS locker_id,
-                l.name AS locker_name,
-                l.device_id AS locker_device_id
+                a.id AS ambiente_id,
+                a.name AS ambiente_name,
+                a.device_id AS ambiente_device_id
              FROM compartments c
-             LEFT JOIN lockers l ON l.id = c.locker_id AND l.clinic_id = :clinic_id
+             LEFT JOIN ambientes a ON a.id = c.ambiente_id AND a.clinic_id = :clinic_id
              WHERE c.id = :compartment_id AND c.clinic_id = :clinic_id
              LIMIT 1'
         );

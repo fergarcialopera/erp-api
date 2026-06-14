@@ -1,8 +1,8 @@
 <?php
 
-namespace App\Modules\Lockers\DTOs;
+namespace App\Modules\Ambientes\DTOs;
 
-final class PatchLockerDTO
+final class PatchAmbienteDTO
 {
     public function __construct(
         public readonly ?string $name,

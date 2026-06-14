@@ -86,30 +86,30 @@ final class InventoryEndpointTest extends BaseApiTestCase
         $productId = $this->productIdForSku($clinicAId, $sku);
 
         $pdo = self::testPdo();
-        $lockerStmt = $pdo->prepare(
-            'INSERT INTO lockers (clinic_id, name, location, device_id, is_active, created_at, updated_at)
+        $ambienteStmt = $pdo->prepare(
+            'INSERT INTO ambientes (clinic_id, name, location, device_id, is_active, created_at, updated_at)
              VALUES (:clinic_id, :name, :location, :device_id, TRUE, NOW(), NOW())
              RETURNING id::text AS id, name'
         );
-        $lockerStmt->execute([
+        $ambienteStmt->execute([
             'clinic_id' => $clinicAId,
-            'name' => 'Locker Test',
+            'name' => 'Ambiente Test',
             'location' => 'Planta X',
             'device_id' => 'DEV-' . bin2hex(random_bytes(3)),
         ]);
-        $locker = $lockerStmt->fetch();
-        $this->assertIsArray($locker);
-        $lockerId = (string) ($locker['id'] ?? '');
-        $this->assertNotSame('', $lockerId);
+        $ambiente = $ambienteStmt->fetch();
+        $this->assertIsArray($ambiente);
+        $ambienteId = (string) ($ambiente['id'] ?? '');
+        $this->assertNotSame('', $ambienteId);
 
         $compStmt = $pdo->prepare(
-            'INSERT INTO compartments (clinic_id, locker_id, code, is_active, created_at, updated_at)
-             VALUES (:clinic_id, :locker_id, :code, TRUE, NOW(), NOW())
+            'INSERT INTO compartments (clinic_id, ambiente_id, code, is_active, created_at, updated_at)
+             VALUES (:clinic_id, :ambiente_id, :code, TRUE, NOW(), NOW())
              RETURNING id::text AS id, code'
         );
         $compStmt->execute([
             'clinic_id' => $clinicAId,
-            'locker_id' => $lockerId,
+            'ambiente_id' => $ambienteId,
             'code' => 'C-TEST',
         ]);
         $comp = $compStmt->fetch();
@@ -156,15 +156,15 @@ final class InventoryEndpointTest extends BaseApiTestCase
         foreach ($locations as $loc) {
             if (($loc['compartment'] ?? null) === null) {
                 $foundUnassigned = true;
-                $this->assertSame(null, $loc['locker'] ?? null);
+                $this->assertSame(null, $loc['ambiente'] ?? null);
                 continue;
             }
 
             if ((string) ($loc['compartment']['id'] ?? '') === $compartmentId) {
                 $foundAssigned = true;
                 $this->assertSame('C-TEST', (string) ($loc['compartment']['code'] ?? ''));
-                $this->assertSame($lockerId, (string) ($loc['locker']['id'] ?? ''));
-                $this->assertSame('Locker Test', (string) ($loc['locker']['name'] ?? ''));
+                $this->assertSame($ambienteId, (string) ($loc['ambiente']['id'] ?? ''));
+                $this->assertSame('Ambiente Test', (string) ($loc['ambiente']['name'] ?? ''));
             }
         }
 
@@ -210,29 +210,29 @@ final class InventoryEndpointTest extends BaseApiTestCase
         );
 
         $pdo = self::testPdo();
-        $lockerStmt = $pdo->prepare(
-            'INSERT INTO lockers (clinic_id, name, location, device_id, is_active, created_at, updated_at)
+        $ambienteStmt = $pdo->prepare(
+            'INSERT INTO ambientes (clinic_id, name, location, device_id, is_active, created_at, updated_at)
              VALUES (:clinic_id, :name, :location, :device_id, TRUE, NOW(), NOW())
              RETURNING id::text AS id'
         );
-        $lockerStmt->execute([
+        $ambienteStmt->execute([
             'clinic_id' => $clinicAId,
-            'name' => 'Locker Adj',
+            'name' => 'Ambiente Adj',
             'location' => 'Planta',
             'device_id' => 'DEV-ADJ-' . bin2hex(random_bytes(2)),
         ]);
-        $locker = $lockerStmt->fetch();
-        $this->assertIsArray($locker);
-        $lockerId = (string) ($locker['id'] ?? '');
+        $ambiente = $ambienteStmt->fetch();
+        $this->assertIsArray($ambiente);
+        $ambienteId = (string) ($ambiente['id'] ?? '');
 
         $compStmt = $pdo->prepare(
-            'INSERT INTO compartments (clinic_id, locker_id, code, is_active, created_at, updated_at)
-             VALUES (:clinic_id, :locker_id, :code, TRUE, NOW(), NOW())
+            'INSERT INTO compartments (clinic_id, ambiente_id, code, is_active, created_at, updated_at)
+             VALUES (:clinic_id, :ambiente_id, :code, TRUE, NOW(), NOW())
              RETURNING id::text AS id'
         );
         $compStmt->execute([
             'clinic_id' => $clinicAId,
-            'locker_id' => $lockerId,
+            'ambiente_id' => $ambienteId,
             'code' => 'ADJ-C1',
         ]);
         $comp = $compStmt->fetch();

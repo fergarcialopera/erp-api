@@ -10,7 +10,7 @@ final class ExitLogItemsPresenter
      * @param list<array{
      *     item_id: string,
      *     product: array{id: string, name: string, sku: ?string, barcode: null},
-     *     locker: ?array{id: string, name: string, device_id: ?string},
+     *     ambiente: ?array{id: string, name: string, device_id: ?string},
      *     compartment: ?array{id: string, code: string},
      *     requested_quantity: int,
      *     confirmed_quantity: ?int,
@@ -25,7 +25,7 @@ final class ExitLogItemsPresenter
      *         requested_quantity: int,
      *         confirmed_quantity: ?int,
      *         stock_available: ?int,
-     *         locker: ?array{id: string, name: string, device_id: ?string},
+     *         ambiente: ?array{id: string, name: string, device_id: ?string},
      *         compartment: ?array{id: string, code: string}
      *     }>
      * }>
@@ -63,7 +63,7 @@ final class ExitLogItemsPresenter
                 'requested_quantity' => $requested,
                 'confirmed_quantity' => $confirmed,
                 'stock_available' => $line['stock_available'],
-                'locker' => $line['locker'],
+                'ambiente' => $line['ambiente'],
                 'compartment' => $line['compartment'],
             ];
             unset($group);

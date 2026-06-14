@@ -25,8 +25,8 @@ tags:
     description: Productos por clinica.
   - name: Users
     description: Usuarios por clinica.
-  - name: Lockers
-    description: Lockers/armarios por clinica.
+  - name: Ambientes
+    description: Ambientes por clinica.
   - name: Compartments
     description: Compartimentos por clinica.
   - name: Docs
@@ -344,7 +344,7 @@ paths:
                                     properties:
                                       id: { type: string }
                                       code: { type: string }
-                              locker:
+                              ambiente:
                                 nullable: true
                                 oneOf:
                                   - type: 'null'
@@ -362,10 +362,10 @@ paths:
                     locations:
                       - quantity: 120
                         compartment: { id: "50000000-0000-4000-8000-000000000001", code: "A1-C1" }
-                        locker: { id: "40000000-0000-4000-8000-000000000001", name: "Locker Urgencias A1" }
+                        ambiente: { id: "40000000-0000-4000-8000-000000000001", name: "Ambiente Urgencias A1" }
                       - quantity: 45
                         compartment: null
-                        locker: null
+                        ambiente: null
                 meta: {}
         '401':
           description: Unauthorized
@@ -563,7 +563,7 @@ paths:
             description: Product public id (UUID)
       responses:
         '200':
-          description: Product stock broken down by locker/compartment (quantity > 0 only)
+          description: Product stock broken down by ambiente/compartment (quantity > 0 only)
           content:
             application/json:
               schema:
@@ -581,10 +581,10 @@ paths:
                   locations:
                     - quantity: 120
                       compartment: { id: "50000000-0000-4000-8000-000000000001", code: "A1-C1" }
-                      locker: { id: "40000000-0000-4000-8000-000000000001", name: "Locker Urgencias A1" }
+                      ambiente: { id: "40000000-0000-4000-8000-000000000001", name: "Ambiente Urgencias A1" }
                     - quantity: 45
                       compartment: null
-                      locker: null
+                      ambiente: null
         '401':
           description: Unauthorized
         '404':
@@ -715,10 +715,10 @@ paths:
           description: Forbidden
         '404':
           description: Not Found
-  /api/v1/lockers/tree:
+  /api/v1/ambientes/tree:
     get:
-      summary: List lockers with nested compartments (UI catalog)
-      tags: [Lockers]
+      summary: List ambientes with nested compartments (UI catalog)
+      tags: [Ambientes]
       security:
         - bearerAuth: []
       parameters:
@@ -727,10 +727,10 @@ paths:
           required: false
           schema:
             type: boolean
-          description: When set, filters both lockers and compartments by is_active
+          description: When set, filters both ambientes and compartments by is_active
       responses:
         '200':
-          description: Lockers each with a compartments array
+          description: Ambientes each with a compartments array
           content:
             application/json:
               schema:
@@ -760,7 +760,7 @@ paths:
                             properties:
                               id:
                                 type: string
-                              locker_id:
+                              ambiente_id:
                                 type: string
                               code:
                                 type: string
@@ -769,27 +769,27 @@ paths:
               example:
                 data:
                   - id: "40000000-0000-4000-8000-000000000001"
-                    name: "Locker Urgencias A1"
+                    name: "Ambiente Urgencias A1"
                     location: "Planta 1 - Urgencias"
                     device_id: "SR-A1-LOCK"
                     is_active: true
                     compartments:
                       - id: "50000000-0000-4000-8000-000000000001"
-                        locker_id: "40000000-0000-4000-8000-000000000001"
+                        ambiente_id: "40000000-0000-4000-8000-000000000001"
                         code: "A1-C1"
                         is_active: true
                       - id: "50000000-0000-4000-8000-000000000002"
-                        locker_id: "40000000-0000-4000-8000-000000000001"
+                        ambiente_id: "40000000-0000-4000-8000-000000000001"
                         code: "A1-C2"
                         is_active: true
         '401':
           description: Unauthorized
         '422':
           description: Invalid active filter
-  /api/v1/lockers:
+  /api/v1/ambientes:
     get:
-      summary: List lockers
-      tags: [Lockers]
+      summary: List ambientes
+      tags: [Ambientes]
       security:
         - bearerAuth: []
       parameters:
@@ -800,12 +800,12 @@ paths:
             type: boolean
       responses:
         '200':
-          description: Lockers list
+          description: Ambientes list
         '401':
           description: Unauthorized
     post:
-      summary: Create locker
-      tags: [Lockers]
+      summary: Create ambiente
+      tags: [Ambientes]
       security:
         - bearerAuth: []
       requestBody:
@@ -824,20 +824,20 @@ paths:
                   type: boolean
                 device_id:
                   type: string
-                  description: MQTT device id for lock commands (lockers/{deviceId}/cmd)
+                  description: MQTT device id for lock commands (ambientes/{deviceId}/cmd)
       responses:
         '201':
-          description: Locker created
+          description: Ambiente created
         '401':
           description: Unauthorized
         '403':
           description: Forbidden
         '422':
           description: Validation error
-  /api/v1/lockers/{id}:
+  /api/v1/ambientes/{id}:
     get:
-      summary: Get locker detail
-      tags: [Lockers]
+      summary: Get ambiente detail
+      tags: [Ambientes]
       security:
         - bearerAuth: []
       parameters:
@@ -848,14 +848,14 @@ paths:
             type: string
       responses:
         '200':
-          description: Locker detail
+          description: Ambiente detail
         '401':
           description: Unauthorized
         '404':
           description: Not Found
     patch:
-      summary: Patch locker
-      tags: [Lockers]
+      summary: Patch ambiente
+      tags: [Ambientes]
       security:
         - bearerAuth: []
       parameters:
@@ -883,7 +883,7 @@ paths:
                   description: Set MQTT device id; send null to clear
       responses:
         '200':
-          description: Locker updated
+          description: Ambiente updated
         '401':
           description: Unauthorized
         '403':
@@ -893,8 +893,8 @@ paths:
         '422':
           description: Validation error
     delete:
-      summary: Soft delete locker
-      tags: [Lockers]
+      summary: Soft delete ambiente
+      tags: [Ambientes]
       security:
         - bearerAuth: []
       parameters:
@@ -920,7 +920,7 @@ paths:
         - bearerAuth: []
       parameters:
         - in: query
-          name: locker_id
+          name: ambiente_id
           required: false
           schema:
             type: string
@@ -947,9 +947,9 @@ paths:
           application/json:
             schema:
               type: object
-              required: [locker_id, code]
+              required: [ambiente_id, code]
               properties:
-                locker_id:
+                ambiente_id:
                   type: string
                 code:
                   type: string
@@ -1044,7 +1044,7 @@ paths:
         - bearerAuth: []
       responses:
         '200':
-          description: Entry logs list with locker and compartment when set
+          description: Entry logs list with ambiente and compartment when set
           content:
             application/json:
               schema:
@@ -1081,9 +1081,9 @@ paths:
                 compartment_id:
                   type: string
                   description: Optional destination compartment UUID
-                locker_id:
+                ambiente_id:
                   type: string
-                  description: Optional; only with compartment_id, must match compartment locker
+                  description: Optional; only with compartment_id, must match compartment ambiente
       responses:
         '201':
           description: Entry log created with location enrichment
@@ -1103,8 +1103,8 @@ paths:
                           sku: { type: string }
                           quantity: { type: integer }
                           compartment_id: { type: string, nullable: true }
-                          locker:
-                            $ref: '#/components/schemas/LockerRef'
+                          ambiente:
+                            $ref: '#/components/schemas/AmbienteRef'
                           compartment:
                             $ref: '#/components/schemas/CompartmentRef'
         '401':
@@ -1256,7 +1256,7 @@ paths:
           description: State error
   /api/v1/exit-logs/{id}/open-lock:
     post:
-      summary: Open locker (only after exit log is CONFIRMED; uses first linked compartment; multi-compartment exits may need multiple calls or a future extension)
+      summary: Open lock (only after exit log is CONFIRMED; uses first linked compartment; multi-compartment exits may need multiple calls or a future extension)
       tags: [ExitLogs]
       security:
         - bearerAuth: []
@@ -1335,7 +1335,7 @@ paths:
                   enum: [LOW, MEDIUM, HIGH, CRITICAL]
                 source:
                   type: string
-                  enum: [ERP, LOCKER]
+                  enum: [ERP, AMBIENTE]
       responses:
         '201':
           description: Incident created
@@ -1396,7 +1396,7 @@ paths:
           description: OK
 components:
   schemas:
-    LockerRef:
+    AmbienteRef:
       nullable: true
       oneOf:
         - type: 'null'
@@ -1416,8 +1416,8 @@ components:
     StockLocation:
       type: object
       properties:
-        locker:
-          $ref: '#/components/schemas/LockerRef'
+        ambiente:
+          $ref: '#/components/schemas/AmbienteRef'
         compartment:
           $ref: '#/components/schemas/CompartmentRef'
     InventoryLocation:
@@ -1426,8 +1426,8 @@ components:
         quantity: { type: integer }
         compartment:
           $ref: '#/components/schemas/CompartmentRef'
-        locker:
-          $ref: '#/components/schemas/LockerRef'
+        ambiente:
+          $ref: '#/components/schemas/AmbienteRef'
     ProductStockLocations:
       type: object
       properties:
@@ -1452,8 +1452,8 @@ components:
         note: { type: string, nullable: true }
         created_by: { type: string }
         created_at: { type: string }
-        locker:
-          $ref: '#/components/schemas/LockerRef'
+        ambiente:
+          $ref: '#/components/schemas/AmbienteRef'
         compartment:
           $ref: '#/components/schemas/CompartmentRef'
     ExitLogCreateLocationAllocation:
@@ -1466,9 +1466,9 @@ components:
         quantity:
           type: integer
           minimum: 1
-        locker_id:
+        ambiente_id:
           type: string
-          description: Optional; only with compartment_id, must match compartment locker
+          description: Optional; only with compartment_id, must match compartment ambiente
     ExitLogCreateItemWithLocations:
       type: object
       required: [product_id, locations]
@@ -1494,9 +1494,9 @@ components:
         compartment_id:
           type: string
           description: Optional compartment public id (single allocation)
-        locker_id:
+        ambiente_id:
           type: string
-          description: Optional; only with compartment_id, must match compartment locker
+          description: Optional; only with compartment_id, must match compartment ambiente
     ExitLogLocationLine:
       type: object
       properties:
@@ -1506,8 +1506,8 @@ components:
         requested_quantity: { type: integer }
         confirmed_quantity: { type: integer, nullable: true }
         stock_available: { type: integer, nullable: true }
-        locker:
-          $ref: '#/components/schemas/LockerRef'
+        ambiente:
+          $ref: '#/components/schemas/AmbienteRef'
         compartment:
           $ref: '#/components/schemas/CompartmentRef'
     ExitLogProductItem:

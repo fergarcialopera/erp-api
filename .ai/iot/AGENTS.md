@@ -20,7 +20,7 @@ POST /exit-logs/{id}/open-lock
 
 ### MQTT
 
-- Topic: `lockers/{deviceId}/cmd`
+- Topic: `ambientes/{deviceId}/cmd`
 - Payload: `open`
 
 3. El ESP32:

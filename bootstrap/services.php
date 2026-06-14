@@ -72,14 +72,14 @@ use App\Modules\Inventory\Handlers\ListInventoryHandler;
 use App\Modules\Inventory\Handlers\PatchInventoryProductHandler;
 use App\Modules\Inventory\Services\InventoryService;
 use App\Modules\Inventory\Validators\InventoryValidator;
-use App\Modules\Lockers\Handlers\CreateLockerHandler;
-use App\Modules\Lockers\Handlers\DeleteLockerHandler;
-use App\Modules\Lockers\Handlers\GetLockerHandler;
-use App\Modules\Lockers\Handlers\ListLockersHandler;
-use App\Modules\Lockers\Handlers\ListLockersWithCompartmentsHandler;
-use App\Modules\Lockers\Handlers\PatchLockerHandler;
-use App\Modules\Lockers\Services\LockerService;
-use App\Modules\Lockers\Validators\LockerValidator;
+use App\Modules\Ambientes\Handlers\CreateAmbienteHandler;
+use App\Modules\Ambientes\Handlers\DeleteAmbienteHandler;
+use App\Modules\Ambientes\Handlers\GetAmbienteHandler;
+use App\Modules\Ambientes\Handlers\ListAmbientesHandler;
+use App\Modules\Ambientes\Handlers\ListAmbientesWithCompartmentsHandler;
+use App\Modules\Ambientes\Handlers\PatchAmbienteHandler;
+use App\Modules\Ambientes\Services\AmbienteService;
+use App\Modules\Ambientes\Validators\AmbienteValidator;
 use App\Modules\Products\Handlers\CreateProductHandler;
 use App\Modules\Products\Handlers\DeleteProductHandler;
 use App\Modules\Products\Handlers\GetProductHandler;
@@ -179,7 +179,7 @@ return static function (ApplicationConfig $appConfig): array {
     $clinicService = new ClinicService($pdo, $publicUrls);
     $productService = new ProductService($pdo);
     $userService = new UserService($pdo, $publicUrls, $loginAttempts);
-    $lockerService = new LockerService($pdo);
+    $ambienteService = new AmbienteService($pdo);
     $compartmentService = new CompartmentService($pdo);
 
     return [
@@ -232,12 +232,12 @@ return static function (ApplicationConfig $appConfig): array {
             'sendUserRecovery' => new SendUserRecoveryHandler(new UserValidator(), $recoveryService),
             'uploadUserImage' => new UploadUserImageHandler($userService, $imageStorage),
             'deleteUserImage' => new DeleteUserImageHandler($userService, $imageStorage),
-            'listLockers' => new ListLockersHandler($lockerService),
-            'listLockersWithCompartments' => new ListLockersWithCompartmentsHandler($lockerService),
-            'getLocker' => new GetLockerHandler($lockerService),
-            'createLocker' => new CreateLockerHandler(new LockerValidator(), $lockerService),
-            'patchLocker' => new PatchLockerHandler(new LockerValidator(), $lockerService),
-            'deleteLocker' => new DeleteLockerHandler($lockerService),
+            'listAmbientes' => new ListAmbientesHandler($ambienteService),
+            'listAmbientesWithCompartments' => new ListAmbientesWithCompartmentsHandler($ambienteService),
+            'getAmbiente' => new GetAmbienteHandler($ambienteService),
+            'createAmbiente' => new CreateAmbienteHandler(new AmbienteValidator(), $ambienteService),
+            'patchAmbiente' => new PatchAmbienteHandler(new AmbienteValidator(), $ambienteService),
+            'deleteAmbiente' => new DeleteAmbienteHandler($ambienteService),
             'listCompartments' => new ListCompartmentsHandler($compartmentService),
             'getCompartment' => new GetCompartmentHandler($compartmentService),
             'createCompartment' => new CreateCompartmentHandler(new CompartmentValidator(), $compartmentService),

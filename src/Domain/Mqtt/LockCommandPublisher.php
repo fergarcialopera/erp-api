@@ -7,7 +7,7 @@ namespace App\Domain\Mqtt;
 interface LockCommandPublisher
 {
     /**
-     * Publishes payload "open" to topic lockers/{deviceId}/cmd.
+     * Publishes payload "open" to topic ambientes/{deviceId}/cmd.
      *
      * @throws \App\Domain\Mqtt\Exception\MqttPublishFailedException
      */

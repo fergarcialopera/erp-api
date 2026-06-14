@@ -1,16 +1,16 @@
 <?php
 
-namespace App\Modules\Lockers\Handlers;
+namespace App\Modules\Ambientes\Handlers;
 
 use App\Application\Http\ApiResponse;
 use App\Application\Http\Request;
 use App\Application\Http\Response;
-use App\Modules\Lockers\Services\LockerService;
+use App\Modules\Ambientes\Services\AmbienteService;
 use Throwable;
 
-final class ListLockersWithCompartmentsHandler
+final class ListAmbientesWithCompartmentsHandler
 {
-    public function __construct(private readonly LockerService $service)
+    public function __construct(private readonly AmbienteService $service)
     {
     }
 

@@ -12,7 +12,7 @@ final class ExitLogsEndpointTest extends BaseApiTestCase
     private const PRODUCT_A1 = '10000000-0000-4000-8000-000000000001';
     private const COMPARTMENT_A1 = '50000000-0000-4000-8000-000000000001';
     private const COMPARTMENT_A2 = '50000000-0000-4000-8000-000000000002';
-    private const LOCKER_A1 = '40000000-0000-4000-8000-000000000001';
+    private const AMBIENTE_A1 = '40000000-0000-4000-8000-000000000001';
 
     public function testCreateExitLogWithoutTokenReturns401(): void
     {
@@ -182,7 +182,7 @@ final class ExitLogsEndpointTest extends BaseApiTestCase
                     'product_id' => self::PRODUCT_A1,
                     'quantity' => 1,
                     'compartment_id' => self::COMPARTMENT_A1,
-                    'locker_id' => self::LOCKER_A1,
+                    'ambiente_id' => self::AMBIENTE_A1,
                 ]],
             ],
             $this->authHeaderFor('admin@clinic.local')
@@ -194,7 +194,7 @@ final class ExitLogsEndpointTest extends BaseApiTestCase
         $location = $item['locations'][0] ?? null;
         $this->assertIsArray($location);
         $this->assertSame(self::COMPARTMENT_A1, $location['compartment']['id'] ?? null);
-        $this->assertSame(self::LOCKER_A1, $location['locker']['id'] ?? null);
+        $this->assertSame(self::AMBIENTE_A1, $location['ambiente']['id'] ?? null);
 
         $list = $this->request('GET', '/api/v1/exit-logs', null, $this->authHeaderFor('admin@clinic.local'));
         $row = null;
@@ -271,7 +271,7 @@ final class ExitLogsEndpointTest extends BaseApiTestCase
                         [
                             'compartment_id' => self::COMPARTMENT_A1,
                             'quantity' => 1,
-                            'locker_id' => self::LOCKER_A1,
+                            'ambiente_id' => self::AMBIENTE_A1,
                         ],
                         [
                             'compartment_id' => self::COMPARTMENT_A2,

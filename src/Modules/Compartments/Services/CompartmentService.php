@@ -14,15 +14,15 @@ final class CompartmentService
     {
     }
 
-    public function list(string $clinicId, ?string $lockerId, ?bool $active): array
+    public function list(string $clinicId, ?string $ambienteId, ?bool $active): array
     {
-        $sql = 'SELECT id, clinic_id, locker_id, code, is_active, created_at, updated_at
+        $sql = 'SELECT id, clinic_id, ambiente_id, code, is_active, created_at, updated_at
                 FROM compartments
                 WHERE clinic_id = :clinic_id';
         $params = ['clinic_id' => $clinicId];
-        if ($lockerId !== null) {
-            $sql .= ' AND locker_id = :locker_id';
-            $params['locker_id'] = $lockerId;
+        if ($ambienteId !== null) {
+            $sql .= ' AND ambiente_id = :ambiente_id';
+            $params['ambiente_id'] = $ambienteId;
         }
         if ($active !== null) {
             $sql .= ' AND is_active = :is_active';
@@ -37,7 +37,7 @@ final class CompartmentService
     public function get(string $clinicId, string $compartmentId): ?array
     {
         $stmt = $this->pdo->prepare(
-            'SELECT id, clinic_id, locker_id, code, is_active, created_at, updated_at
+            'SELECT id, clinic_id, ambiente_id, code, is_active, created_at, updated_at
              FROM compartments
              WHERE clinic_id = :clinic_id AND id::text = :id
              LIMIT 1'
@@ -49,24 +49,24 @@ final class CompartmentService
 
     public function create(string $clinicId, CreateCompartmentDTO $dto): array
     {
-        $locker = $this->pdo->prepare(
-            'SELECT id FROM lockers WHERE clinic_id = :clinic_id AND id::text = :id LIMIT 1'
+        $ambiente = $this->pdo->prepare(
+            'SELECT id FROM ambientes WHERE clinic_id = :clinic_id AND id::text = :id LIMIT 1'
         );
-        $locker->execute(['clinic_id' => $clinicId, 'id' => $dto->lockerId]);
-        if (!$locker->fetch()) {
-            throw new RuntimeException('Locker not found');
+        $ambiente->execute(['clinic_id' => $clinicId, 'id' => $dto->ambienteId]);
+        if (!$ambiente->fetch()) {
+            throw new RuntimeException('Ambiente not found');
         }
 
         $id = Uuid::v4()->toRfc4122();
         $stmt = $this->pdo->prepare(
-            'INSERT INTO compartments (id, clinic_id, locker_id, code, is_active, created_at, updated_at)
-             VALUES (:id, :clinic_id, :locker_id, :code, :is_active, NOW(), NOW())
-             RETURNING id, clinic_id, locker_id, code, is_active, created_at, updated_at'
+            'INSERT INTO compartments (id, clinic_id, ambiente_id, code, is_active, created_at, updated_at)
+             VALUES (:id, :clinic_id, :ambiente_id, :code, :is_active, NOW(), NOW())
+             RETURNING id, clinic_id, ambiente_id, code, is_active, created_at, updated_at'
         );
         $stmt->execute([
             'id' => $id,
             'clinic_id' => $clinicId,
-            'locker_id' => $dto->lockerId,
+            'ambiente_id' => $dto->ambienteId,
             'code' => $dto->code,
             'is_active' => $dto->isActive,
         ]);
@@ -84,7 +84,7 @@ final class CompartmentService
             'UPDATE compartments
              SET code = :code, is_active = :is_active, updated_at = NOW()
              WHERE clinic_id = :clinic_id AND id::text = :id
-             RETURNING id, clinic_id, locker_id, code, is_active, created_at, updated_at'
+             RETURNING id, clinic_id, ambiente_id, code, is_active, created_at, updated_at'
         );
         $stmt->execute([
             'clinic_id' => $clinicId,
@@ -106,4 +106,3 @@ final class CompartmentService
         return $stmt->rowCount() > 0;
     }
 }
-

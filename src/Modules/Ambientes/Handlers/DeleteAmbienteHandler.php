@@ -1,16 +1,16 @@
 <?php
 
-namespace App\Modules\Lockers\Handlers;
+namespace App\Modules\Ambientes\Handlers;
 
 use App\Application\Http\ApiResponse;
 use App\Application\Http\Request;
 use App\Application\Http\Response;
-use App\Modules\Lockers\Services\LockerService;
+use App\Modules\Ambientes\Services\AmbienteService;
 use Throwable;
 
-final class GetLockerHandler
+final class DeleteAmbienteHandler
 {
-    public function __construct(private readonly LockerService $service)
+    public function __construct(private readonly AmbienteService $service)
     {
     }
 
@@ -22,15 +22,15 @@ final class GetLockerHandler
             if ($clinicId === '') {
                 return ApiResponse::error($request, 403, 'Forbidden', 'Missing clinic_id in user context');
             }
-            $id = (string) $request->getAttribute('locker_id', '');
+            $id = (string) $request->getAttribute('ambiente_id', '');
             if ($id === '') {
-                return ApiResponse::error($request, 404, 'Not Found', 'Locker not found');
+                return ApiResponse::error($request, 404, 'Not Found', 'Ambiente not found');
             }
-            $locker = $this->service->get($clinicId, $id);
-            if ($locker === null) {
-                return ApiResponse::error($request, 404, 'Not Found', 'Locker not found');
+            $deleted = $this->service->softDelete($clinicId, $id);
+            if (!$deleted) {
+                return ApiResponse::error($request, 404, 'Not Found', 'Ambiente not found');
             }
-            return ApiResponse::success($request, $locker);
+            return ApiResponse::success($request, ['deleted' => true]);
         } catch (Throwable $throwable) {
             return ApiResponse::error($request, 500, 'Internal Server Error', $throwable->getMessage());
         }

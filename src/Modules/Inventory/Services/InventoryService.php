@@ -260,14 +260,14 @@ final class InventoryService
                 p.name,
                 ii.compartment_id::text AS compartment_id,
                 c.code AS compartment_code,
-                l.id::text AS locker_id,
-                l.name AS locker_name,
+                l.id::text AS ambiente_id,
+                l.name AS ambiente_name,
                 COALESCE(SUM(ii.quantity), 0)::int AS quantity,
                 MAX(ii.updated_at) AS updated_at
              FROM inventory_items ii
              INNER JOIN products p ON p.id = ii.product_id
              LEFT JOIN compartments c ON c.id = ii.compartment_id
-             LEFT JOIN lockers l ON l.id = c.locker_id
+             LEFT JOIN ambientes l ON l.id = c.ambiente_id
              WHERE ii.clinic_id = :clinic_id';
 
         $params = ['clinic_id' => $clinicId];
@@ -335,12 +335,12 @@ final class InventoryService
 
     /**
      * @param array<string, mixed> $row
-     * @return array{quantity: int, compartment: ?array{id: string, code: string}, locker: ?array{id: string, name: string}}
+     * @return array{quantity: int, compartment: ?array{id: string, code: string}, ambiente: ?array{id: string, name: string}}
      */
     private function mapLocationFromRow(array $row): array
     {
         $compartmentId = $row['compartment_id'] !== null ? (string) $row['compartment_id'] : null;
-        $lockerId = $row['locker_id'] !== null ? (string) $row['locker_id'] : null;
+        $ambienteId = $row['ambiente_id'] !== null ? (string) $row['ambiente_id'] : null;
 
         return [
             'quantity' => (int) ($row['quantity'] ?? 0),
@@ -348,9 +348,9 @@ final class InventoryService
                 'id' => $compartmentId,
                 'code' => $row['compartment_code'] !== null ? (string) $row['compartment_code'] : '',
             ] : null,
-            'locker' => $lockerId !== null ? [
-                'id' => $lockerId,
-                'name' => $row['locker_name'] !== null ? (string) $row['locker_name'] : '',
+            'ambiente' => $ambienteId !== null ? [
+                'id' => $ambienteId,
+                'name' => $row['ambiente_name'] !== null ? (string) $row['ambiente_name'] : '',
             ] : null,
         ];
     }

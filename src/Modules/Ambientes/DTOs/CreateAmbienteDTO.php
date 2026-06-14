@@ -1,8 +1,8 @@
 <?php
 
-namespace App\Modules\Lockers\DTOs;
+namespace App\Modules\Ambientes\DTOs;
 
-final class CreateLockerDTO
+final class CreateAmbienteDTO
 {
     public function __construct(
         public readonly string $name,

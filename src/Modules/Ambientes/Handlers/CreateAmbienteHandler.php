@@ -1,19 +1,19 @@
 <?php
 
-namespace App\Modules\Lockers\Handlers;
+namespace App\Modules\Ambientes\Handlers;
 
 use App\Application\Http\ApiResponse;
 use App\Application\Http\Request;
 use App\Application\Http\Response;
-use App\Modules\Lockers\Services\LockerService;
-use App\Modules\Lockers\Validators\LockerValidator;
+use App\Modules\Ambientes\Services\AmbienteService;
+use App\Modules\Ambientes\Validators\AmbienteValidator;
 use Throwable;
 
-final class CreateLockerHandler
+final class CreateAmbienteHandler
 {
     public function __construct(
-        private readonly LockerValidator $validator,
-        private readonly LockerService $service
+        private readonly AmbienteValidator $validator,
+        private readonly AmbienteService $service
     ) {
     }
 

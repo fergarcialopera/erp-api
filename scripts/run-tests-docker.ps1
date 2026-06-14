@@ -1,7 +1,7 @@
 # Ejecutar desde la raíz del repo en el host (no dentro del contenedor php).
 # Flujo: infra → API en erp_test → migrar/seed → PHPUnit → restaurar erp.
 # Uso: .\scripts\run-tests-docker.ps1
-#      .\scripts\run-tests-docker.ps1 --filter LockersTreeEndpointTest
+#      .\scripts\run-tests-docker.ps1 --filter AmbientesTreeEndpointTest
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 

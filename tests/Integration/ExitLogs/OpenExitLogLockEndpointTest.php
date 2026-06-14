@@ -59,16 +59,16 @@ final class OpenExitLogLockEndpointTest extends BaseApiTestCase
 
     public function testOpenLockSuccessWithCompartmentAndDevice(): void
     {
-        $locker = $this->request('POST', '/api/v1/lockers', ['name' => 'L-' . bin2hex(random_bytes(2))], $this->authHeaderFor('tech@clinic.local'));
-        $this->assertSame(201, $locker['status']);
-        $lockerId = (string) ($locker['json']['data']['id'] ?? '');
-        $this->assertNotSame('', $lockerId);
+        $ambiente = $this->request('POST', '/api/v1/ambientes', ['name' => 'L-' . bin2hex(random_bytes(2))], $this->authHeaderFor('tech@clinic.local'));
+        $this->assertSame(201, $ambiente['status']);
+        $ambienteId = (string) ($ambiente['json']['data']['id'] ?? '');
+        $this->assertNotSame('', $ambienteId);
 
         $deviceId = 'dev-' . bin2hex(random_bytes(4));
-        $patch = $this->request('PATCH', '/api/v1/lockers/' . $lockerId, ['device_id' => $deviceId], $this->authHeaderFor('tech@clinic.local'));
+        $patch = $this->request('PATCH', '/api/v1/ambientes/' . $ambienteId, ['device_id' => $deviceId], $this->authHeaderFor('tech@clinic.local'));
         $this->assertSame(200, $patch['status']);
 
-        $comp = $this->request('POST', '/api/v1/compartments', ['locker_id' => $lockerId, 'code' => 'C-' . bin2hex(random_bytes(2))], $this->authHeaderFor('tech@clinic.local'));
+        $comp = $this->request('POST', '/api/v1/compartments', ['ambiente_id' => $ambienteId, 'code' => 'C-' . bin2hex(random_bytes(2))], $this->authHeaderFor('tech@clinic.local'));
         $this->assertSame(201, $comp['status']);
         $compartmentId = (string) ($comp['json']['data']['id'] ?? '');
         $this->assertNotSame('', $compartmentId);
@@ -80,7 +80,7 @@ final class OpenExitLogLockEndpointTest extends BaseApiTestCase
                 'sku' => 'SR-GLV-001',
                 'quantity' => 2,
                 'compartment_id' => $compartmentId,
-                'locker_id' => $lockerId,
+                'ambiente_id' => $ambienteId,
             ],
             $this->authHeaderFor('tech@clinic.local')
         );
@@ -114,6 +114,6 @@ final class OpenExitLogLockEndpointTest extends BaseApiTestCase
         $this->assertSame($exitId, $data['exit_log_id'] ?? null);
         $this->assertSame($deviceId, $data['device_id'] ?? null);
         $this->assertSame('open', $data['payload'] ?? null);
-        $this->assertSame('lockers/' . $deviceId . '/cmd', $data['topic'] ?? null);
+        $this->assertSame('ambientes/' . $deviceId . '/cmd', $data['topic'] ?? null);
     }
 }

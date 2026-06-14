@@ -47,14 +47,14 @@ SELECT
     r.compartment_id,
     (c.id IS NOT NULL) AS compartment_resolved,
     COALESCE(c.is_active, FALSE) AS compartment_is_active,
-    (l.id IS NOT NULL) AS locker_resolved,
-    COALESCE(l.is_active, FALSE) AS locker_is_active,
-    l.device_id
+    (a.id IS NOT NULL) AS ambiente_resolved,
+    COALESCE(a.is_active, FALSE) AS ambiente_is_active,
+    a.device_id
 FROM resolved r
 LEFT JOIN compartments c
     ON c.id = r.compartment_id AND c.clinic_id = :clinic_id
-LEFT JOIN lockers l
-    ON l.id = c.locker_id AND l.clinic_id = :clinic_id
+LEFT JOIN ambientes a
+    ON a.id = c.ambiente_id AND a.clinic_id = :clinic_id
 SQL;
 
         $stmt = $this->pdo->prepare($sql);

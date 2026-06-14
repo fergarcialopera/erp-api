@@ -2,69 +2,69 @@
 
 declare(strict_types=1);
 
-namespace Tests\Integration\Lockers;
+namespace Tests\Integration\Ambientes;
 
 use Tests\Integration\Support\BaseApiTestCase;
 
-final class LockersTreeEndpointTest extends BaseApiTestCase
+final class AmbientesTreeEndpointTest extends BaseApiTestCase
 {
-    private const LOCKER_A1 = '40000000-0000-4000-8000-000000000001';
-    private const LOCKER_B1 = '40000000-0000-4000-8000-000000000002';
+    private const AMBIENTE_A1 = '40000000-0000-4000-8000-000000000001';
+    private const AMBIENTE_B1 = '40000000-0000-4000-8000-000000000002';
 
-    public function testListLockersTreeRequiresAuth(): void
+    public function testListAmbientesTreeRequiresAuth(): void
     {
-        $res = $this->request('GET', '/api/v1/lockers/tree');
+        $res = $this->request('GET', '/api/v1/ambientes/tree');
         $this->assertSame(401, $res['status']);
     }
 
-    public function testListLockersTreeReturnsNestedCompartmentsForClinic(): void
+    public function testListAmbientesTreeReturnsNestedCompartmentsForClinic(): void
     {
-        $res = $this->request('GET', '/api/v1/lockers/tree', null, $this->authHeaderFor('staff@clinic.local'));
+        $res = $this->request('GET', '/api/v1/ambientes/tree', null, $this->authHeaderFor('staff@clinic.local'));
         $this->assertSame(200, $res['status']);
 
         $data = $res['json']['data'] ?? null;
         $this->assertIsArray($data);
 
-        $lockerIds = array_map(static fn (array $row): string => (string) ($row['id'] ?? ''), $data);
-        $this->assertContains(self::LOCKER_A1, $lockerIds);
-        $this->assertNotContains(self::LOCKER_B1, $lockerIds);
+        $ambienteIds = array_map(static fn (array $row): string => (string) ($row['id'] ?? ''), $data);
+        $this->assertContains(self::AMBIENTE_A1, $ambienteIds);
+        $this->assertNotContains(self::AMBIENTE_B1, $ambienteIds);
 
-        $locker = null;
+        $ambiente = null;
         foreach ($data as $row) {
             if (!is_array($row)) {
                 continue;
             }
-            if (($row['id'] ?? '') === self::LOCKER_A1) {
-                $locker = $row;
+            if (($row['id'] ?? '') === self::AMBIENTE_A1) {
+                $ambiente = $row;
                 break;
             }
         }
-        $this->assertIsArray($locker);
-        $compartments = $locker['compartments'] ?? null;
+        $this->assertIsArray($ambiente);
+        $compartments = $ambiente['compartments'] ?? null;
         $this->assertIsArray($compartments);
         $this->assertCount(3, $compartments);
 
         foreach ($compartments as $compartment) {
             $this->assertIsArray($compartment);
-            $this->assertSame(self::LOCKER_A1, (string) ($compartment['locker_id'] ?? ''));
+            $this->assertSame(self::AMBIENTE_A1, (string) ($compartment['ambiente_id'] ?? ''));
             $this->assertNotSame('', (string) ($compartment['code'] ?? ''));
         }
     }
 
-    public function testListLockersTreeActiveFilter(): void
+    public function testListAmbientesTreeActiveFilter(): void
     {
-        $locker = $this->request(
+        $ambiente = $this->request(
             'POST',
-            '/api/v1/lockers',
+            '/api/v1/ambientes',
             ['name' => 'Inactive-' . bin2hex(random_bytes(2))],
             $this->authHeaderFor('tech@clinic.local')
         );
-        $this->assertSame(201, $locker['status']);
-        $lockerId = (string) ($locker['json']['data']['id'] ?? '');
+        $this->assertSame(201, $ambiente['status']);
+        $ambienteId = (string) ($ambiente['json']['data']['id'] ?? '');
 
         $deactivate = $this->request(
             'DELETE',
-            '/api/v1/lockers/' . $lockerId,
+            '/api/v1/ambientes/' . $ambienteId,
             null,
             $this->authHeaderFor('admin@clinic.local')
         );
@@ -73,22 +73,22 @@ final class LockersTreeEndpointTest extends BaseApiTestCase
         $comp = $this->request(
             'POST',
             '/api/v1/compartments',
-            ['locker_id' => $lockerId, 'code' => 'X-' . bin2hex(random_bytes(2))],
+            ['ambiente_id' => $ambienteId, 'code' => 'X-' . bin2hex(random_bytes(2))],
             $this->authHeaderFor('tech@clinic.local')
         );
         $this->assertSame(201, $comp['status']);
 
-        $all = $this->request('GET', '/api/v1/lockers/tree', null, $this->authHeaderFor('staff@clinic.local'));
+        $all = $this->request('GET', '/api/v1/ambientes/tree', null, $this->authHeaderFor('staff@clinic.local'));
         $this->assertSame(200, $all['status']);
         $allIds = array_map(
             static fn (array $row): string => (string) ($row['id'] ?? ''),
             (array) ($all['json']['data'] ?? [])
         );
-        $this->assertContains($lockerId, $allIds);
+        $this->assertContains($ambienteId, $allIds);
 
         $activeOnly = $this->request(
             'GET',
-            '/api/v1/lockers/tree?active=true',
+            '/api/v1/ambientes/tree?active=true',
             null,
             $this->authHeaderFor('staff@clinic.local')
         );
@@ -97,26 +97,26 @@ final class LockersTreeEndpointTest extends BaseApiTestCase
             static fn (array $row): string => (string) ($row['id'] ?? ''),
             (array) ($activeOnly['json']['data'] ?? [])
         );
-        $this->assertNotContains($lockerId, $activeIds);
+        $this->assertNotContains($ambienteId, $activeIds);
 
         $invalid = $this->request(
             'GET',
-            '/api/v1/lockers/tree?active=maybe',
+            '/api/v1/ambientes/tree?active=maybe',
             null,
             $this->authHeaderFor('staff@clinic.local')
         );
         $this->assertSame(422, $invalid['status']);
     }
 
-    public function testListLockersTreeIsolationByClinic(): void
+    public function testListAmbientesTreeIsolationByClinic(): void
     {
-        $res = $this->request('GET', '/api/v1/lockers/tree', null, $this->authHeaderFor('admin2@clinic.local'));
+        $res = $this->request('GET', '/api/v1/ambientes/tree', null, $this->authHeaderFor('admin2@clinic.local'));
         $this->assertSame(200, $res['status']);
 
         $ids = array_map(
             static fn (array $row): string => (string) ($row['id'] ?? ''),
             (array) ($res['json']['data'] ?? [])
         );
-        $this->assertNotContains(self::LOCKER_A1, $ids);
+        $this->assertNotContains(self::AMBIENTE_A1, $ids);
     }
 }

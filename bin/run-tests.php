@@ -8,7 +8,7 @@ declare(strict_types=1);
  *
  * Uso (desde la raíz del repo):
  *   php bin/run-tests.php
- *   php bin/run-tests.php --filter LockersTreeEndpointTest
+ *   php bin/run-tests.php --filter AmbientesTreeEndpointTest
  *   composer test:docker
  *   composer test:docker -- --filter Auth
  */

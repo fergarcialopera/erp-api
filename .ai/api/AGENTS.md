@@ -29,7 +29,7 @@ Para autenticación, roles y aislamiento por clínica, ver [auth/AGENTS.md](../a
 
 ## Diseño de endpoints
 
-- Usar nombres de dominio claros: `/inventory`, `/entry-logs`, `/exit-logs`, `/lockers`, etc.
+- Usar nombres de dominio claros: `/inventory`, `/entry-logs`, `/exit-logs`, `/ambientes`, etc.
 - Evitar sufijos artificiales: `/table`, `/list`, `/detail`.
 - Permitir subrutas de acción cuando representen una acción real de negocio (ej.: `/exit-logs/{id}/open-lock`).
 - Mantener consistencia de nombres entre rutas, OpenAPI y tests.

@@ -85,7 +85,7 @@ final class EntryLogService
                     'sku' => (string) $product['sku'],
                     'quantity' => $newQuantity,
                     'compartment_id' => $dto->compartmentId,
-                    'locker' => $location['locker'],
+                    'ambiente' => $location['ambiente'],
                     'compartment' => $location['compartment'],
                 ],
             ];
@@ -111,13 +111,13 @@ final class EntryLogService
                 el.created_at,
                 el.compartment_id,
                 c.code AS compartment_code,
-                l.id AS locker_id,
-                l.name AS locker_name,
-                l.device_id AS locker_device_id
+                l.id AS ambiente_id,
+                l.name AS ambiente_name,
+                l.device_id AS ambiente_device_id
              FROM entry_logs el
              INNER JOIN products p ON p.id = el.product_id
              LEFT JOIN compartments c ON c.id = el.compartment_id AND c.clinic_id = :clinic_id
-             LEFT JOIN lockers l ON l.id = c.locker_id AND l.clinic_id = :clinic_id
+             LEFT JOIN ambientes l ON l.id = c.ambiente_id AND l.clinic_id = :clinic_id
              WHERE el.clinic_id = :clinic_id
              ORDER BY el.id DESC'
         );
@@ -139,7 +139,7 @@ final class EntryLogService
                 'note' => $row['note'],
                 'created_by' => $row['created_by'],
                 'created_at' => $row['created_at'],
-                'locker' => $location['locker'],
+                'ambiente' => $location['ambiente'],
                 'compartment' => $location['compartment'],
             ];
         }
@@ -224,7 +224,7 @@ final class EntryLogService
 
     /**
      * @param array<string, mixed> $row
-     * @param array{locker: ?array, compartment: ?array} $location
+     * @param array{ambiente: ?array, compartment: ?array} $location
      * @return array<string, mixed>
      */
     private function mapEntryLogRow(array $row, string $sku, string $name, array $location): array
@@ -238,7 +238,7 @@ final class EntryLogService
             'note' => $row['note'] ?? null,
             'created_by' => $row['created_by_user_id'] ?? null,
             'created_at' => $row['created_at'] ?? null,
-            'locker' => $location['locker'],
+            'ambiente' => $location['ambiente'],
             'compartment' => $location['compartment'],
         ];
     }

@@ -21,7 +21,7 @@ final class IncidentsEndpointTest extends BaseApiTestCase
 
     public function testCreateIncidentRequiresTechnicianOrAdmin(): void
     {
-        $payload = ['title' => 'Inc', 'description' => 'Desc', 'severity' => 'HIGH', 'source' => 'LOCKER'];
+        $payload = ['title' => 'Inc', 'description' => 'Desc', 'severity' => 'HIGH', 'source' => 'ambiente'];
 
         $staff = $this->request('POST', '/api/v1/incidents', $payload, $this->authHeaderFor('staff@clinic.local'));
         $this->assertSame(403, $staff['status']);

@@ -47,7 +47,7 @@ CREATE TABLE products (
     UNIQUE (clinic_id, sku)
 );
 
-CREATE TABLE lockers (
+CREATE TABLE ambientes (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     clinic_id UUID NOT NULL REFERENCES clinics(id) ON DELETE CASCADE,
     name VARCHAR(255) NOT NULL,
@@ -58,19 +58,19 @@ CREATE TABLE lockers (
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
 );
 
-CREATE UNIQUE INDEX lockers_device_id_unique
-    ON lockers (device_id)
+CREATE UNIQUE INDEX ambientes_device_id_unique
+    ON ambientes (device_id)
     WHERE device_id IS NOT NULL;
 
 CREATE TABLE compartments (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     clinic_id UUID NOT NULL REFERENCES clinics(id) ON DELETE CASCADE,
-    locker_id UUID NOT NULL REFERENCES lockers(id) ON DELETE CASCADE,
+    ambiente_id UUID NOT NULL REFERENCES ambientes(id) ON DELETE CASCADE,
     code VARCHAR(128) NOT NULL,
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-    UNIQUE (locker_id, code)
+    UNIQUE (ambiente_id, code)
 );
 
 CREATE TABLE inventory_items (
@@ -167,7 +167,7 @@ CREATE INDEX exit_logs_clinic_status_created_at_idx ON exit_logs (clinic_id, sta
 CREATE INDEX exit_logs_compartment_idx ON exit_logs (compartment_id);
 CREATE INDEX exit_log_items_exit_log_idx ON exit_log_items (exit_log_id);
 CREATE INDEX exit_log_items_product_idx ON exit_log_items (product_id);
-CREATE INDEX compartments_clinic_locker_idx ON compartments (clinic_id, locker_id);
+CREATE INDEX compartments_clinic_ambiente_idx ON compartments (clinic_id, ambiente_id);
 CREATE INDEX settings_clinic_idx ON settings (clinic_id);
 CREATE INDEX incidents_clinic_created_at_idx ON incidents (clinic_id, created_at DESC);
 CREATE INDEX exit_log_lock_commands_exit_log_idx ON exit_log_lock_commands (exit_log_id);

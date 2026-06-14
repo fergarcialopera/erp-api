@@ -8,7 +8,7 @@ use InvalidArgumentException;
 final class IncidentValidator
 {
     private const ALLOWED_SEVERITIES = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'];
-    private const ALLOWED_SOURCES = ['ERP', 'LOCKER'];
+    private const ALLOWED_SOURCES = ['ERP', 'AMBIENTE'];
 
     public function validateCreate(array $payload): CreateIncidentDTO
     {

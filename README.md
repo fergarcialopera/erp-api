@@ -142,7 +142,7 @@ Debe responder `200` con un JSON similar a:
 composer test:docker
 # equivalente:
 php bin/run-tests.php
-php bin/run-tests.php -- --filter LockersTreeEndpointTest
+php bin/run-tests.php -- --filter AmbientesTreeEndpointTest
 
 # Si la API quedó en modo test por error
 composer test:docker:restore
@@ -245,7 +245,7 @@ Primero confirma que estas usando el puerto correcto del backend:
 
 ## 13) MQTT (Mosquitto) — desarrollo local con autenticacion
 
-**Eclipse Mosquitto** esta integrado como servicio Docker. El backend publica comandos de apertura de cerradura en el topic `lockers/{deviceId}/cmd` (payload `open`) cuando se invoca `POST /api/v1/exit-logs/{id}/open-lock`. Si `MQTT_HOST` esta vacio o `MQTT_DISABLED=true`, el API usa un publicador no-op (util en tests o sin broker).
+**Eclipse Mosquitto** esta integrado como servicio Docker. El backend publica comandos de apertura de cerradura en el topic `ambientes/{deviceId}/cmd` (payload `open`) cuando se invoca `POST /api/v1/exit-logs/{id}/open-lock`. Si `MQTT_HOST` esta vacio o `MQTT_DISABLED=true`, el API usa un publicador no-op (util en tests o sin broker).
 
 ### Que hace la infraestructura
 
