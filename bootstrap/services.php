@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Application\Audit\AuditActivitySanitizer;
 use App\Application\Auth\ClinicAccessService;
 use App\Application\Auth\RequestClinicResolver;
 use App\Application\ExitLogs\OpenExitLogLockAction;
@@ -20,6 +21,12 @@ use App\Infrastructure\OpenAPI\OpenApiController;
 use App\Infrastructure\Persistence\PdoExitLogLockPort;
 use App\Infrastructure\Redis\RedisClient;
 use App\Infrastructure\Storage\LocalImageStorage;
+use App\Modules\Audit\Handlers\GetAuditActivityHandler;
+use App\Modules\Audit\Handlers\GetAuditLogHandler;
+use App\Modules\Audit\Handlers\ListAuditActivityHandler;
+use App\Modules\Audit\Handlers\ListAuditLogsHandler;
+use App\Modules\Audit\Services\AuditActivityService;
+use App\Modules\Audit\Services\AuditLogService;
 use App\Modules\Auth\Handlers\ClinicLoginHandler;
 use App\Modules\Auth\Handlers\ClinicLogoutHandler;
 use App\Modules\Auth\Handlers\ConfirmRecoveryHandler;
@@ -146,7 +153,11 @@ return static function (ApplicationConfig $appConfig): array {
     $tokenService = new TokenService($redis, $userTtl, $clinicTtl);
     $loginAttempts = new LoginAttemptService($redis);
     $authMapper = new AuthMapper($publicUrls);
-    $authService = new AuthService($pdo, $tokenService, $loginAttempts, $authMapper);
+    $auditLogService = new AuditLogService($pdo);
+    $auditActivitySanitizer = new AuditActivitySanitizer();
+    $auditActivityService = new AuditActivityService($pdo, $auditActivitySanitizer);
+
+    $authService = new AuthService($pdo, $tokenService, $loginAttempts, $authMapper, $auditLogService);
 
     $mailer = null;
     $mailHost = $appConfig->mailHost();
@@ -168,28 +179,34 @@ return static function (ApplicationConfig $appConfig): array {
     $imageStorage = new LocalImageStorage($projectRoot);
     $locationValidator = new LocationValidator($pdo);
 
-    $inventoryService = new InventoryService($pdo);
+    $inventoryService = new InventoryService($pdo, $auditActivityService);
     $inventoryValidator = new InventoryValidator($locationValidator);
 
-    $entryLogService = new EntryLogService($pdo, $locationValidator);
+    $entryLogService = new EntryLogService($pdo, $locationValidator, $auditActivityService);
     $entryLogValidator = new EntryLogValidator($locationValidator);
 
-    $exitLogService = new ExitLogService($pdo, $locationValidator);
+    $exitLogService = new ExitLogService($pdo, $locationValidator, $auditActivityService);
     $exitLogValidator = new ExitLogValidator($locationValidator);
     $exitLogLockPort = new PdoExitLogLockPort($pdo);
     $mqttHost = $appConfig->mqttHost();
     $lockCommandPublisher = ($mqttHost !== '' && !$appConfig->mqttDisabled())
         ? new PhpMqttLockCommandPublisher($config, $logger)
         : new NoOpLockCommandPublisher();
-    $openExitLogLockAction = new OpenExitLogLockAction($exitLogLockPort, $lockCommandPublisher, $logger);
+    $openExitLogLockAction = new OpenExitLogLockAction(
+        $exitLogLockPort,
+        $lockCommandPublisher,
+        $logger,
+        $exitLogService,
+        $auditActivityService,
+    );
 
-    $incidentService = new IncidentService($pdo);
-    $settingService = new SettingService($pdo);
-    $clinicService = new ClinicService($pdo, $publicUrls);
-    $productService = new ProductService($pdo);
-    $userService = new UserService($pdo, $publicUrls, $loginAttempts);
-    $ambienteService = new AmbienteService($pdo);
-    $zoneService = new ZoneService($pdo);
+    $incidentService = new IncidentService($pdo, $auditActivityService);
+    $settingService = new SettingService($pdo, $auditActivityService);
+    $clinicService = new ClinicService($pdo, $publicUrls, $auditActivityService);
+    $productService = new ProductService($pdo, $auditActivityService);
+    $userService = new UserService($pdo, $publicUrls, $loginAttempts, $auditActivityService);
+    $ambienteService = new AmbienteService($pdo, $auditActivityService);
+    $zoneService = new ZoneService($pdo, $auditActivityService);
     $clinicAccess = new ClinicAccessService($pdo);
     $clinicResolver = new RequestClinicResolver($clinicAccess);
 
@@ -261,6 +278,10 @@ return static function (ApplicationConfig $appConfig): array {
             'createZone' => new CreateZoneHandler($clinicAccess, new ZoneValidator(), $zoneService),
             'patchZone' => new PatchZoneHandler($clinicAccess, new ZoneValidator(), $zoneService),
             'deleteZone' => new DeleteZoneHandler($clinicAccess, $zoneService),
+            'listAuditLogs' => new ListAuditLogsHandler($clinicAccess, $auditLogService),
+            'getAuditLog' => new GetAuditLogHandler($clinicAccess, $auditLogService),
+            'listAuditActivity' => new ListAuditActivityHandler($clinicAccess, $auditActivityService),
+            'getAuditActivity' => new GetAuditActivityHandler($clinicAccess, $auditActivityService),
             'openApi' => new OpenApiController(),
         ],
     ];

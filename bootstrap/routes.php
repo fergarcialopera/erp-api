@@ -91,6 +91,10 @@ return static function (Router $router, array $handlers): array {
     $router->addRoute('PATCH', '/api/v1/incidents/{incident_id}', fn ($request) => $handlers['patchIncident']($request));
     $router->addRoute('GET', '/api/v1/settings', fn ($request) => $handlers['listSettings']($request));
     $router->addRoute('POST', '/api/v1/settings', fn ($request) => $handlers['upsertSetting']($request));
+    $router->addRoute('GET', '/api/v1/audit/logs', fn ($request) => $handlers['listAuditLogs']($request));
+    $router->addRoute('GET', '/api/v1/audit/logs/{id}', fn ($request) => $handlers['getAuditLog']($request));
+    $router->addRoute('GET', '/api/v1/audit/activity', fn ($request) => $handlers['listAuditActivity']($request));
+    $router->addRoute('GET', '/api/v1/audit/activity/{id}', fn ($request) => $handlers['getAuditActivity']($request));
     $router->addRoute('GET', '/docs', fn () => $openApi->docsYaml());
     $router->addRoute('GET', '/docs/ui', fn () => $openApi->docsUi());
 
@@ -152,5 +156,9 @@ return static function (Router $router, array $handlers): array {
         're:/^PATCH \\/api\\/v1\\/incidents\\/[^\\/]+$/' => ['SUPER_ADMIN'],
         'GET /api/v1/settings' => ['ADMIN'],
         'POST /api/v1/settings' => ['ADMIN'],
+        'GET /api/v1/audit/logs' => ['ADMIN'],
+        're:/^GET \\/api\\/v1\\/audit\\/logs\\/[^\\/]+$/' => ['ADMIN'],
+        'GET /api/v1/audit/activity' => ['ADMIN'],
+        're:/^GET \\/api\\/v1\\/audit\\/activity\\/[^\\/]+$/' => ['ADMIN'],
     ];
 };

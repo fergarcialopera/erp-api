@@ -2,6 +2,7 @@
 
 namespace App\Modules\Auth\Handlers;
 
+use App\Application\Audit\AuditRequestContext;
 use App\Application\Http\ApiResponse;
 use App\Application\Http\Request;
 use App\Application\Http\Response;
@@ -17,7 +18,7 @@ final class LogoutHandler
     {
         $token = (string) $request->getAttribute('access_token', '');
         if ($token !== '') {
-            $this->service->logoutUser($token);
+            $this->service->logoutUser($token, AuditRequestContext::fromRequest($request));
         }
 
         return ApiResponse::success($request, ['logged_out' => true]);

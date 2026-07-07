@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace App\Modules\Users\Services;
 
+use App\Application\Audit\AuditActor;
 use App\Application\Support\DisplayName;
 use App\Application\Support\PublicUrlBuilder;
 use App\Domain\Auth\Role;
 use App\Infrastructure\Auth\LoginAttemptService;
+use App\Modules\Audit\Services\AuditActivityService;
 use App\Modules\Users\DTOs\CreateUserDTO;
 use App\Modules\Users\DTOs\PatchUserDTO;
 use PDO;
@@ -19,7 +21,8 @@ final class UserService
     public function __construct(
         private readonly PDO $pdo,
         private readonly PublicUrlBuilder $urls,
-        private readonly LoginAttemptService $loginAttempts
+        private readonly LoginAttemptService $loginAttempts,
+        private readonly AuditActivityService $audit,
     ) {
     }
 
@@ -63,7 +66,7 @@ final class UserService
         return is_array($row) ? $this->presentUser($row) : null;
     }
 
-    public function create(CreateUserDTO $dto): array
+    public function create(CreateUserDTO $dto, AuditActor $actor): array
     {
         $existing = $this->pdo->prepare('SELECT id FROM users WHERE email = :email LIMIT 1');
         $existing->execute(['email' => $dto->email]);
@@ -97,9 +100,13 @@ final class UserService
                 $this->syncClinicLinks($id, $dto->clinicIds !== [] ? $dto->clinicIds : array_filter([$dto->clinicId]));
             }
 
+            $row = (array) $stmt->fetch();
             $this->pdo->commit();
 
-            return $this->presentUser((array) $stmt->fetch());
+            $presented = $this->presentUser($row);
+            $this->audit->recordAdd('user', $presented['id'], $actor->userId, $actor->clinicId, $presented);
+
+            return $presented;
         } catch (\Throwable $e) {
             if ($this->pdo->inTransaction()) {
                 $this->pdo->rollBack();
@@ -108,10 +115,15 @@ final class UserService
         }
     }
 
-    public function patch(string $userId, PatchUserDTO $dto): ?array
+    public function patch(string $userId, PatchUserDTO $dto, AuditActor $actor): ?array
     {
         $current = $this->getRaw($userId);
         if ($current === null) {
+            return null;
+        }
+
+        $before = $this->get($userId);
+        if ($before === null) {
             return null;
         }
 
@@ -183,7 +195,14 @@ final class UserService
 
             $this->pdo->commit();
 
-            return is_array($row) ? $this->presentUser($row) : null;
+            if (!is_array($row)) {
+                return null;
+            }
+
+            $after = $this->presentUser($row);
+            $this->audit->recordEdit('user', $userId, $actor->userId, $actor->clinicId, $before, $after);
+
+            return $after;
         } catch (\Throwable $e) {
             if ($this->pdo->inTransaction()) {
                 $this->pdo->rollBack();
@@ -192,7 +211,7 @@ final class UserService
         }
     }
 
-    public function updateImagePath(string $clinicId, string $userId, ?string $imagePath): ?array
+    public function updateImagePath(string $clinicId, string $userId, ?string $imagePath, AuditActor $actor): ?array
     {
         $user = $this->getRaw($userId);
         if ($user === null) {
@@ -202,6 +221,8 @@ final class UserService
         if ((string) ($user['clinic_id'] ?? '') !== $clinicId && !$this->isLinkedToClinic($userId, $clinicId)) {
             return null;
         }
+
+        $before = $this->get($userId);
 
         $stmt = $this->pdo->prepare(
             'UPDATE users SET image_path = :image_path, updated_at = NOW()
@@ -214,15 +235,28 @@ final class UserService
         ]);
         $row = $stmt->fetch();
 
-        return is_array($row) ? $this->presentUser($row) : null;
+        if (!is_array($row)) {
+            return null;
+        }
+
+        $after = $this->presentUser($row);
+        if ($before !== null) {
+            $this->audit->recordEdit('user', $userId, $actor->userId, $clinicId, $before, $after);
+        }
+
+        return $after;
     }
 
-    public function softDelete(string $userId): bool
+    public function softDelete(string $userId, AuditActor $actor): bool
     {
         $stmt = $this->pdo->prepare(
             'UPDATE users SET is_active = FALSE, updated_at = NOW() WHERE id::text = :id AND role <> \'SUPER_ADMIN\''
         );
         $stmt->execute(['id' => $userId]);
+
+        if ($stmt->rowCount() > 0) {
+            $this->audit->recordDelete('user', $userId, $actor->userId, $actor->clinicId);
+        }
 
         return $stmt->rowCount() > 0;
     }

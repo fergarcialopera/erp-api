@@ -2,6 +2,8 @@
 
 namespace App\Modules\Inventory\Services;
 
+use App\Application\Audit\AuditActor;
+use App\Modules\Audit\Services\AuditActivityService;
 use App\Modules\Inventory\DTOs\AdjustInventoryLocationDTO;
 use App\Modules\Inventory\DTOs\UpsertInventoryItemDTO;
 use PDO;
@@ -9,8 +11,10 @@ use RuntimeException;
 
 final class InventoryService
 {
-    public function __construct(private readonly PDO $pdo)
-    {
+    public function __construct(
+        private readonly PDO $pdo,
+        private readonly AuditActivityService $audit,
+    ) {
     }
 
     public function listByClinic(string $clinicId): array
@@ -77,8 +81,9 @@ final class InventoryService
      * @param list<AdjustInventoryLocationDTO> $locations
      * @return array{product: array{id: string, sku: string, name: string}, quantity_total: int, locations: list<array<string, mixed>>}|null
      */
-    public function adjustProductQuantities(string $clinicId, string $productId, array $locations): ?array
+    public function adjustProductQuantities(string $clinicId, string $productId, array $locations, AuditActor $actor): ?array
     {
+        $before = $this->stockLocationsForProduct($clinicId, $productId);
         $productStmt = $this->pdo->prepare(
             'SELECT p.id
              FROM products p
@@ -111,7 +116,12 @@ final class InventoryService
             throw $throwable;
         }
 
-        return $this->stockLocationsForProduct($clinicId, $productId);
+        $after = $this->stockLocationsForProduct($clinicId, $productId);
+        if ($before !== null && $after !== null) {
+            $this->audit->recordEdit('inventory-item', $productId, $actor->userId, $clinicId, $before, $after);
+        }
+
+        return $after;
     }
 
     public function upsertByClinic(string $clinicId, UpsertInventoryItemDTO $dto): array

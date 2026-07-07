@@ -4,6 +4,7 @@ namespace App\Modules\EntryLogs\Services;
 
 use App\Application\Stock\LocationPresenter;
 use App\Application\Stock\LocationValidator;
+use App\Modules\Audit\Services\AuditActivityService;
 use App\Modules\EntryLogs\DTOs\CreateEntryLogDTO;
 use PDO;
 use RuntimeException;
@@ -12,7 +13,8 @@ final class EntryLogService
 {
     public function __construct(
         private readonly PDO $pdo,
-        private readonly LocationValidator $locationValidator
+        private readonly LocationValidator $locationValidator,
+        private readonly AuditActivityService $audit,
     ) {
     }
 
@@ -78,7 +80,7 @@ final class EntryLogService
                     ?? LocationPresenter::empty())
                 : LocationPresenter::empty();
 
-            return [
+            $result = [
                 'entry_log' => $this->mapEntryLogRow(
                     is_array($entryLog) ? $entryLog : [],
                     (string) $product['sku'],
@@ -93,6 +95,13 @@ final class EntryLogService
                     'zone' => $location['zone'],
                 ],
             ];
+
+            $entryLogId = (string) ($result['entry_log']['id'] ?? '');
+            if ($entryLogId !== '') {
+                $this->audit->recordAdd('entry-log', $entryLogId, $userId, $clinicId, $result);
+            }
+
+            return $result;
         } catch (\Throwable $throwable) {
             if ($this->pdo->inTransaction()) {
                 $this->pdo->rollBack();

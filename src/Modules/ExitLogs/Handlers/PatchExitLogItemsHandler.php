@@ -41,9 +41,10 @@ final class PatchExitLogItemsHandler
 
             $updates = $this->validator->validatePatchItems($request->getParsedBody());
 
+            $actorUserId = (string) ($user['user_id'] ?? '');
             $scope = ExitLogUserScope::restrictToCreatorForStaff($user);
 
-            return ApiResponse::success($request, $this->service->patchItems($clinicId, $exitLogId, $updates, $scope));
+            return ApiResponse::success($request, $this->service->patchItems($clinicId, $exitLogId, $updates, $scope, $actorUserId));
         } catch (InvalidArgumentException $e) {
             return ApiResponse::error($request, 422, 'Unprocessable Entity', $e->getMessage());
         } catch (ExitLogNotFoundException $e) {

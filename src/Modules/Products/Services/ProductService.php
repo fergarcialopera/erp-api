@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Modules\Products\Services;
 
+use App\Application\Audit\AuditActor;
+use App\Modules\Audit\Services\AuditActivityService;
 use App\Modules\Products\DTOs\CreateProductDTO;
 use App\Modules\Products\DTOs\PatchProductDTO;
 use PDO;
@@ -11,8 +13,10 @@ use Symfony\Component\Uid\Uuid;
 
 final class ProductService
 {
-    public function __construct(private readonly PDO $pdo)
-    {
+    public function __construct(
+        private readonly PDO $pdo,
+        private readonly AuditActivityService $audit,
+    ) {
     }
 
     /**
@@ -90,7 +94,7 @@ final class ProductService
         return is_array($row) ? $row : null;
     }
 
-    public function create(CreateProductDTO $dto): array
+    public function create(CreateProductDTO $dto, AuditActor $actor): array
     {
         $id = Uuid::v4()->toRfc4122();
         $sku = strtoupper(substr(bin2hex(random_bytes(4)), 0, 8));
@@ -128,6 +132,9 @@ final class ProductService
 
             $this->pdo->commit();
 
+            $presented = $this->presentGlobalProduct($product);
+            $this->audit->recordAdd('product', (string) $product['id'], $actor->userId, $actor->clinicId, $presented);
+
             return $product;
         } catch (\Throwable $e) {
             if ($this->pdo->inTransaction()) {
@@ -137,12 +144,14 @@ final class ProductService
         }
     }
 
-    public function patch(string $productId, PatchProductDTO $dto): ?array
+    public function patch(string $productId, PatchProductDTO $dto, AuditActor $actor): ?array
     {
         $current = $this->getGlobal($productId);
         if ($current === null) {
             return null;
         }
+
+        $before = $this->presentGlobalProduct($current);
 
         $name = $dto->name ?? (string) $current['name'];
         $isActive = $dto->isActive ?? (bool) $current['is_active'];
@@ -159,25 +168,38 @@ final class ProductService
         $stmt->execute();
         $row = $stmt->fetch();
 
-        return is_array($row) ? $row : null;
+        if (!is_array($row)) {
+            return null;
+        }
+
+        $after = $this->presentGlobalProduct($row);
+        $this->audit->recordEdit('product', $productId, $actor->userId, $actor->clinicId, $before, $after);
+
+        return $row;
     }
 
-    public function softDelete(string $productId): bool
+    public function softDelete(string $productId, AuditActor $actor): bool
     {
         $stmt = $this->pdo->prepare(
             'UPDATE products SET is_active = FALSE, updated_at = NOW() WHERE id::text = :id'
         );
         $stmt->execute(['id' => $productId]);
 
+        if ($stmt->rowCount() > 0) {
+            $this->audit->recordDelete('product', $productId, $actor->userId, $actor->clinicId);
+        }
+
         return $stmt->rowCount() > 0;
     }
 
-    public function setClinicVisibility(string $clinicId, string $productId, bool $visible): ?array
+    public function setClinicVisibility(string $clinicId, string $productId, bool $visible, AuditActor $actor): ?array
     {
         $product = $this->getGlobal($productId);
         if ($product === null || !(bool) $product['is_active']) {
             return null;
         }
+
+        $before = $this->getForClinic($clinicId, $productId, true);
 
         $stmt = $this->pdo->prepare(
             'INSERT INTO clinic_products (clinic_id, product_id, visible)
@@ -194,7 +216,39 @@ final class ProductService
             return null;
         }
 
-        return $this->getForClinic($clinicId, $productId, true);
+        if (!$stmt->fetch()) {
+            return null;
+        }
+
+        $after = $this->getForClinic($clinicId, $productId, true);
+        if ($after !== null) {
+            $this->audit->recordEdit(
+                'clinic-product',
+                $productId,
+                $actor->userId,
+                $clinicId,
+                $before ?? ['product_id' => $productId, 'clinic_id' => $clinicId, 'visible' => !$visible],
+                $after,
+            );
+        }
+
+        return $after;
+    }
+
+    /**
+     * @param array<string, mixed> $row
+     * @return array<string, mixed>
+     */
+    private function presentGlobalProduct(array $row): array
+    {
+        return [
+            'id' => (string) $row['id'],
+            'sku' => (string) $row['sku'],
+            'name' => (string) $row['name'],
+            'is_active' => (bool) $row['is_active'],
+            'created_at' => (string) ($row['created_at'] ?? ''),
+            'updated_at' => (string) ($row['updated_at'] ?? ''),
+        ];
     }
 
     /**

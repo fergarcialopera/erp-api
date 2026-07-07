@@ -2,6 +2,7 @@
 
 namespace App\Modules\Inventory\Handlers;
 
+use App\Application\Audit\AuditActor;
 use App\Application\Http\ApiResponse;
 use App\Application\Http\Request;
 use App\Application\Http\Response;
@@ -32,7 +33,7 @@ final class PatchInventoryProductHandler
             }
 
             $locations = $this->validator->validateAdjustQuantities($request->getParsedBody());
-            $data = $this->service->adjustProductQuantities($clinicId, $productId, $locations);
+            $data = $this->service->adjustProductQuantities($clinicId, $productId, $locations, AuditActor::fromUser($user));
             if ($data === null) {
                 return ApiResponse::error($request, 404, 'Not Found', 'Product not found');
             }

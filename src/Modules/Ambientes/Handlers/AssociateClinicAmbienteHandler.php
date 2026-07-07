@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Ambientes\Handlers;
 
+use App\Application\Audit\AuditActor;
 use App\Application\Auth\AccessDeniedException;
 use App\Application\Auth\ClinicAccessService;
 use App\Application\Http\ApiResponse;
@@ -34,7 +35,7 @@ final class AssociateClinicAmbienteHandler
                 throw new InvalidArgumentException('ambiente_id is required');
             }
 
-            $ambiente = $this->service->associateToClinic($clinicId, $ambienteId);
+            $ambiente = $this->service->associateToClinic($clinicId, $ambienteId, AuditActor::fromUser($user));
             if ($ambiente === null) {
                 return ApiResponse::error($request, 404, 'Not Found', 'Ambiente not found');
             }

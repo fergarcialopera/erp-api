@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Ambientes\Handlers;
 
+use App\Application\Audit\AuditActor;
 use App\Application\Auth\AccessDeniedException;
 use App\Application\Auth\ClinicAccessService;
 use App\Application\Http\ApiResponse;
@@ -32,7 +33,7 @@ final class DisassociateClinicAmbienteHandler
                 return ApiResponse::error($request, 404, 'Not Found', 'Ambiente association not found');
             }
 
-            if (!$this->service->disassociateFromClinic($clinicId, $ambienteId)) {
+            if (!$this->service->disassociateFromClinic($clinicId, $ambienteId, AuditActor::fromUser($user))) {
                 return ApiResponse::error($request, 404, 'Not Found', 'Ambiente association not found');
             }
 

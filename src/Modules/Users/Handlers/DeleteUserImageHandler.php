@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Users\Handlers;
 
+use App\Application\Audit\AuditActor;
 use App\Application\Http\ApiResponse;
 use App\Application\Http\Request;
 use App\Application\Http\Response;
@@ -36,13 +37,13 @@ final class DeleteUserImageHandler
                 return ApiResponse::error($request, 403, 'Forbidden', 'Insufficient role');
             }
 
-            $target = $this->service->get($clinicId, $targetUserId);
+            $target = $this->service->get($targetUserId);
             if ($target === null) {
                 return ApiResponse::error($request, 404, 'Not Found', 'User not found');
             }
 
             $this->storage->deleteByPublicPath(isset($target['image_path']) ? (string) $target['image_path'] : null);
-            $updated = $this->service->updateImagePath($clinicId, $targetUserId, null);
+            $updated = $this->service->updateImagePath($clinicId, $targetUserId, null, AuditActor::fromUser($user));
 
             return ApiResponse::success($request, $updated ?? []);
         } catch (Throwable $throwable) {
