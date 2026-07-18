@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Users\Handlers;
 
+use App\Application\Audit\AuditActor;
 use App\Application\Http\ApiResponse;
 use App\Application\Http\Request;
 use App\Application\Http\Response;
@@ -43,7 +44,7 @@ final class UploadUserImageHandler
             }
 
             $path = $this->storage->storeUserImage($targetUserId, $file);
-            $updated = $this->service->updateImagePath($clinicId, $targetUserId, $path);
+            $updated = $this->service->updateImagePath($clinicId, $targetUserId, $path, AuditActor::fromUser($user));
             if ($updated === null) {
                 return ApiResponse::error($request, 404, 'Not Found', 'User not found');
             }

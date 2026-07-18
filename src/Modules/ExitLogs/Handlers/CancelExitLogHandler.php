@@ -35,9 +35,10 @@ final class CancelExitLogHandler
                 return ApiResponse::error($request, 400, 'Bad Request', 'Invalid exit log id');
             }
 
+            $actorUserId = (string) ($user['user_id'] ?? '');
             $scope = ExitLogUserScope::restrictToCreatorForStaff($user);
 
-            return ApiResponse::success($request, $this->service->cancel($clinicId, $exitLogId, $scope));
+            return ApiResponse::success($request, $this->service->cancel($clinicId, $exitLogId, $scope, $actorUserId));
         } catch (ExitLogNotFoundException $e) {
             return ApiResponse::error($request, 404, 'Not Found', $e->getMessage());
         } catch (ExitLogBusinessRuleException $e) {

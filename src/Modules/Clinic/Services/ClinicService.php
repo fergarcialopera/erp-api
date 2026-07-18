@@ -4,15 +4,18 @@ declare(strict_types=1);
 
 namespace App\Modules\Clinic\Services;
 
+use App\Application\Audit\AuditActor;
 use App\Application\Support\DisplayName;
 use App\Application\Support\PublicUrlBuilder;
+use App\Modules\Audit\Services\AuditActivityService;
 use PDO;
 
 final class ClinicService
 {
     public function __construct(
         private readonly PDO $pdo,
-        private readonly PublicUrlBuilder $urls
+        private readonly PublicUrlBuilder $urls,
+        private readonly AuditActivityService $audit,
     ) {
     }
 
@@ -42,7 +45,7 @@ final class ClinicService
         return array_map(fn (array $row): array => $this->presentClinic($row), $rows);
     }
 
-    public function create(string $name, string $password): array
+    public function create(string $name, string $password, AuditActor $actor): array
     {
         $id = \Symfony\Component\Uid\Uuid::v4()->toRfc4122();
         $hash = password_hash($password, PASSWORD_BCRYPT);
@@ -57,15 +60,23 @@ final class ClinicService
             'password_hash' => $hash,
         ]);
 
-        return $this->presentClinic((array) $stmt->fetch());
+        $presented = $this->presentClinic((array) $stmt->fetch());
+        $this->audit->recordAdd('clinic', $presented['id'], $actor->userId, $presented['id'], $presented);
+
+        return $presented;
     }
 
-    public function patch(string $clinicId, ?bool $visible, ?string $password, ?string $name): ?array
+    public function patch(string $clinicId, ?bool $visible, ?string $password, ?string $name, AuditActor $actor): ?array
     {
         $current = $this->pdo->prepare('SELECT id, name, visible, image_path FROM clinics WHERE id::text = :id LIMIT 1');
         $current->execute(['id' => $clinicId]);
         $row = $current->fetch();
         if (!is_array($row)) {
+            return null;
+        }
+
+        $before = $this->getById($clinicId);
+        if ($before === null) {
             return null;
         }
 
@@ -98,11 +109,20 @@ final class ClinicService
 
         $updated = $stmt->fetch();
 
-        return is_array($updated) ? $this->presentClinic($updated) : null;
+        if (!is_array($updated)) {
+            return null;
+        }
+
+        $after = $this->presentClinic($updated);
+        $this->audit->recordEdit('clinic', $clinicId, $actor->userId, $clinicId, $before, $after);
+
+        return $after;
     }
 
-    public function updateImagePath(string $clinicId, ?string $imagePath): ?array
+    public function updateImagePath(string $clinicId, ?string $imagePath, AuditActor $actor): ?array
     {
+        $before = $this->getById($clinicId);
+
         $stmt = $this->pdo->prepare(
             'UPDATE clinics SET image_path = :image_path WHERE id::text = :id
              RETURNING id, name, visible, image_path, password_hash IS NOT NULL AS has_password, created_at'
@@ -110,7 +130,16 @@ final class ClinicService
         $stmt->execute(['id' => $clinicId, 'image_path' => $imagePath]);
         $row = $stmt->fetch();
 
-        return is_array($row) ? $this->presentClinic($row) : null;
+        if (!is_array($row)) {
+            return null;
+        }
+
+        $after = $this->presentClinic($row);
+        if ($before !== null) {
+            $this->audit->recordEdit('clinic', $clinicId, $actor->userId, $clinicId, $before, $after);
+        }
+
+        return $after;
     }
 
     /**

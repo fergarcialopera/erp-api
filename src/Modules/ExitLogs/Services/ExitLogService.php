@@ -10,6 +10,7 @@ use App\Application\Stock\LocationValidator;
 use App\Domain\ExitLogs\Exception\ExitLogBusinessRuleException;
 use App\Domain\ExitLogs\Exception\ExitLogNotFoundException;
 use App\Domain\ExitLogs\ExitLogStatus;
+use App\Modules\Audit\Services\AuditActivityService;
 use App\Modules\ExitLogs\DTOs\CreateExitLogDTO;
 use PDO;
 use PDOException;
@@ -20,7 +21,8 @@ final class ExitLogService
 {
     public function __construct(
         private readonly PDO $pdo,
-        private readonly LocationValidator $locationValidator
+        private readonly LocationValidator $locationValidator,
+        private readonly AuditActivityService $audit,
     ) {
     }
 
@@ -75,15 +77,25 @@ final class ExitLogService
             throw $e;
         }
 
-        return $this->getDetail($clinicId, $exitLogId)
+        $detail = $this->getDetail($clinicId, $exitLogId)
             ?? throw new RuntimeException('Exit log not found after create');
+
+        $this->audit->recordAdd('exit-log', $exitLogId, $userId, $clinicId, $detail);
+
+        return $detail;
     }
 
     /**
      * @param list<array{item_id:string, quantity:int}> $updates
      */
-    public function patchItems(string $clinicId, string $exitLogId, array $updates, ?string $createdByUserId = null): array
-    {
+    public function patchItems(
+        string $clinicId,
+        string $exitLogId,
+        array $updates,
+        ?string $createdByUserId,
+        string $actorUserId,
+    ): array {
+        $before = $this->getDetail($clinicId, $exitLogId, $createdByUserId);
         $this->pdo->beginTransaction();
         try {
             $row = $this->lockExitLogHeader($clinicId, $exitLogId, $createdByUserId);
@@ -122,12 +134,23 @@ final class ExitLogService
             throw $e;
         }
 
-        return $this->getDetail($clinicId, $exitLogId, $createdByUserId)
+        $after = $this->getDetail($clinicId, $exitLogId, $createdByUserId)
             ?? throw new RuntimeException('Exit log not found after update');
+
+        if ($before !== null) {
+            $this->audit->recordEdit('exit-log', $exitLogId, $actorUserId, $clinicId, $before, $after);
+        }
+
+        return $after;
     }
 
-    public function confirm(string $clinicId, string $exitLogId, ?string $createdByUserId = null): array
-    {
+    public function confirm(
+        string $clinicId,
+        string $exitLogId,
+        ?string $createdByUserId,
+        string $actorUserId,
+    ): array {
+        $before = $this->getDetail($clinicId, $exitLogId, $createdByUserId);
         $this->pdo->beginTransaction();
         try {
             $row = $this->lockExitLogHeader($clinicId, $exitLogId, $createdByUserId);
@@ -164,8 +187,13 @@ final class ExitLogService
                 $this->markCancelled($exitLogId);
                 $this->pdo->commit();
 
-                return $this->getDetail($clinicId, $exitLogId, $createdByUserId)
+                $after = $this->getDetail($clinicId, $exitLogId, $createdByUserId)
                     ?? throw new RuntimeException('Exit log not found');
+                if ($before !== null) {
+                    $this->audit->recordEdit('exit-log', $exitLogId, $actorUserId, $clinicId, $before, $after);
+                }
+
+                return $after;
             }
 
             foreach ($items as $it) {
@@ -215,12 +243,23 @@ final class ExitLogService
             throw $e;
         }
 
-        return $this->getDetail($clinicId, $exitLogId, $createdByUserId)
+        $after = $this->getDetail($clinicId, $exitLogId, $createdByUserId)
             ?? throw new RuntimeException('Exit log not found after confirm');
+
+        if ($before !== null) {
+            $this->audit->recordEdit('exit-log', $exitLogId, $actorUserId, $clinicId, $before, $after);
+        }
+
+        return $after;
     }
 
-    public function cancel(string $clinicId, string $exitLogId, ?string $createdByUserId = null): array
-    {
+    public function cancel(
+        string $clinicId,
+        string $exitLogId,
+        ?string $createdByUserId,
+        string $actorUserId,
+    ): array {
+        $before = $this->getDetail($clinicId, $exitLogId, $createdByUserId);
         $this->pdo->beginTransaction();
         try {
             $row = $this->lockExitLogHeader($clinicId, $exitLogId, $createdByUserId);
@@ -239,8 +278,14 @@ final class ExitLogService
             throw $e;
         }
 
-        return $this->getDetail($clinicId, $exitLogId, $createdByUserId)
+        $after = $this->getDetail($clinicId, $exitLogId, $createdByUserId)
             ?? throw new RuntimeException('Exit log not found after cancel');
+
+        if ($before !== null) {
+            $this->audit->recordEdit('exit-log', $exitLogId, $actorUserId, $clinicId, $before, $after);
+        }
+
+        return $after;
     }
 
     public function list(string $clinicId, ?string $createdByUserId = null): array

@@ -2,6 +2,7 @@
 
 namespace App\Modules\Products\Handlers;
 
+use App\Application\Audit\AuditActor;
 use App\Application\Auth\AccessDeniedException;
 use App\Application\Auth\ClinicAccessService;
 use App\Application\Http\ApiResponse;
@@ -32,7 +33,7 @@ final class PatchProductHandler
             }
 
             $dto = $this->validator->validatePatch($request->getParsedBody());
-            $product = $this->service->patch($id, $dto);
+            $product = $this->service->patch($id, $dto, AuditActor::fromUser($user));
             if ($product === null) {
                 return ApiResponse::error($request, 404, 'Not Found', 'Product not found');
             }

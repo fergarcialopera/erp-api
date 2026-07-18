@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Incidents\Handlers;
 
+use App\Application\Audit\AuditActor;
 use App\Application\Auth\AccessDeniedException;
 use App\Application\Auth\ClinicAccessService;
 use App\Application\Auth\RequestClinicResolver;
@@ -35,7 +36,7 @@ final class PatchIncidentHandler
             }
 
             $dto = $this->validator->validatePatch($request->getParsedBody());
-            $incident = $this->service->patch($incidentId, $dto);
+            $incident = $this->service->patch($incidentId, $dto, AuditActor::fromUser($user));
             if ($incident === null) {
                 return ApiResponse::error($request, 404, 'Not Found', 'Incident not found');
             }

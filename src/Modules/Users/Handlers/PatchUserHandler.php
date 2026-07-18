@@ -2,6 +2,7 @@
 
 namespace App\Modules\Users\Handlers;
 
+use App\Application\Audit\AuditActor;
 use App\Application\Auth\AccessDeniedException;
 use App\Application\Auth\ClinicAccessService;
 use App\Application\Http\ApiResponse;
@@ -32,7 +33,7 @@ final class PatchUserHandler
             }
 
             $dto = $this->validator->validatePatch($request->getParsedBody());
-            $updated = $this->service->patch($userId, $dto);
+            $updated = $this->service->patch($userId, $dto, AuditActor::fromUser($user));
             if ($updated === null) {
                 return ApiResponse::error($request, 404, 'Not Found', 'User not found');
             }

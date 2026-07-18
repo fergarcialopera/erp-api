@@ -2,6 +2,7 @@
 
 namespace App\Modules\Users\Handlers;
 
+use App\Application\Audit\AuditActor;
 use App\Application\Auth\AccessDeniedException;
 use App\Application\Auth\ClinicAccessService;
 use App\Application\Http\ApiResponse;
@@ -27,7 +28,7 @@ final class CreateUserHandler
             $this->access->assertSuperAdmin($user);
 
             $dto = $this->validator->validateCreate($request->getParsedBody());
-            $created = $this->service->create($dto);
+            $created = $this->service->create($dto, AuditActor::fromUser($user));
 
             return ApiResponse::success($request, $created, status: 201);
         } catch (AccessDeniedException $e) {

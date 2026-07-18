@@ -29,6 +29,8 @@ tags:
     description: Ambientes por clinica.
   - name: Zones
     description: Compartimentos por clinica.
+  - name: Audit
+    description: Auditoria de accesos y actividad del sistema.
   - name: Docs
     description: Documentacion OpenAPI y UI.
 paths:
@@ -1507,6 +1509,107 @@ paths:
           description: Unauthorized
         '422':
           description: Validation error
+  /api/v1/audit/logs:
+    get:
+      summary: List access audit logs
+      tags: [Audit]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: page
+          schema: { type: integer, minimum: 1, default: 1 }
+        - in: query
+          name: per_page
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+        - in: query
+          name: event
+          schema: { type: string }
+        - in: query
+          name: success
+          schema: { type: boolean }
+        - in: query
+          name: user_id
+          schema: { type: string }
+        - in: query
+          name: clinic_id
+          schema: { type: string }
+          description: Solo SUPER_ADMIN
+      responses:
+        '200':
+          description: Paginated access logs
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /api/v1/audit/logs/{id}:
+    get:
+      summary: Get access audit log by id
+      tags: [Audit]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Access log detail
+        '404':
+          description: Not Found
+  /api/v1/audit/activity:
+    get:
+      summary: List activity audit logs
+      tags: [Audit]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: page
+          schema: { type: integer, minimum: 1, default: 1 }
+        - in: query
+          name: per_page
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+        - in: query
+          name: type
+          schema: { type: string, enum: [add, edit, delete] }
+        - in: query
+          name: entity
+          schema: { type: string }
+        - in: query
+          name: entity_id
+          schema: { type: string }
+        - in: query
+          name: user_id
+          schema: { type: string }
+        - in: query
+          name: clinic_id
+          schema: { type: string }
+          description: Solo SUPER_ADMIN
+      responses:
+        '200':
+          description: Paginated activity logs
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /api/v1/audit/activity/{id}:
+    get:
+      summary: Get activity audit log by id
+      tags: [Audit]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Activity log detail with data payload
+        '404':
+          description: Not Found
   /docs:
     get:
       summary: OpenAPI YAML

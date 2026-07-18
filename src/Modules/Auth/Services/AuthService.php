@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace App\Modules\Auth\Services;
 
+use App\Application\Audit\AuditRequestContext;
 use App\Application\Support\PinValidator;
 use App\Domain\Auth\PinLockedException;
 use App\Domain\Auth\UserLockedException;
 use App\Infrastructure\Auth\LoginAttemptService;
 use App\Infrastructure\Auth\TokenService;
+use App\Modules\Audit\Services\AuditLogService;
 use App\Modules\Auth\DTOs\LoginDTO;
 use App\Modules\Auth\Mappers\AuthMapper;
 use PDO;
@@ -20,7 +22,8 @@ final class AuthService
         private readonly PDO $pdo,
         private readonly TokenService $tokenService,
         private readonly LoginAttemptService $loginAttempts,
-        private readonly AuthMapper $mapper
+        private readonly AuthMapper $mapper,
+        private readonly AuditLogService $auditLogs,
     ) {
     }
 
@@ -35,7 +38,7 @@ final class AuthService
         return array_map(fn (array $row): array => $this->mapper->toClinicCard($row), $rows);
     }
 
-    public function loginClinic(string $clinicId, string $password): array
+    public function loginClinic(string $clinicId, string $password, AuditRequestContext $context): array
     {
         $stmt = $this->pdo->prepare(
             'SELECT id, name, image_path, password_hash, visible FROM clinics WHERE id::text = :id LIMIT 1'
@@ -44,14 +47,17 @@ final class AuthService
         $clinic = $stmt->fetch();
 
         if (!$clinic || !(bool) $clinic['visible']) {
+            $this->auditLogs->recordFailure('clinic_login', 'clinic_not_found', $context, $clinicId);
             throw new RuntimeException('Invalid credentials');
         }
 
         $hash = (string) ($clinic['password_hash'] ?? '');
         if ($hash === '' || !password_verify($password, $hash)) {
+            $this->auditLogs->recordFailure('clinic_login', 'invalid_credentials', $context, (string) $clinic['id']);
             throw new RuntimeException('Invalid credentials');
         }
 
+        $this->auditLogs->recordSuccess('clinic_login', $context, (string) $clinic['id']);
         $token = $this->tokenService->issueClinicToken((string) $clinic['id']);
 
         return $this->mapper->toClinicLoginResponse(
@@ -79,39 +85,47 @@ final class AuthService
         return array_map(fn (array $row): array => $this->mapper->toStaffCard($row), $rows);
     }
 
-    public function loginPin(string $clinicId, string $userId, string $pin): array
+    public function loginPin(string $clinicId, string $userId, string $pin, AuditRequestContext $context): array
     {
         PinValidator::assertValid($pin);
 
         $user = $this->findActiveUserInClinic($clinicId, $userId);
         if ($user === null) {
+            $this->auditLogs->recordFailure('pin_login', 'invalid_credentials', $context, $clinicId);
             throw new RuntimeException('Invalid credentials');
         }
 
+        $resolvedUserId = (string) $user['id'];
+
         if ((bool) $user['is_locked']) {
+            $this->auditLogs->recordFailure('pin_login', 'user_locked', $context, $clinicId, $resolvedUserId);
             throw new UserLockedException();
         }
 
-        if ($this->loginAttempts->isPinLocked((string) $user['id'])) {
-            throw new PinLockedException($this->loginAttempts->getPinFailures((string) $user['id']));
+        if ($this->loginAttempts->isPinLocked($resolvedUserId)) {
+            $this->auditLogs->recordFailure('pin_login', 'pin_locked', $context, $clinicId, $resolvedUserId);
+            throw new PinLockedException($this->loginAttempts->getPinFailures($resolvedUserId));
         }
 
         $pinHash = (string) ($user['pin_hash'] ?? '');
         if ($pinHash === '' || !password_verify($pin, $pinHash)) {
-            $failures = $this->loginAttempts->recordPinFailure((string) $user['id']);
+            $failures = $this->loginAttempts->recordPinFailure($resolvedUserId);
             if ($failures >= $this->loginAttempts->maxAttempts()) {
+                $this->auditLogs->recordFailure('pin_login', 'pin_locked', $context, $clinicId, $resolvedUserId);
                 throw new PinLockedException($failures);
             }
 
+            $this->auditLogs->recordFailure('pin_login', 'invalid_credentials', $context, $clinicId, $resolvedUserId);
             throw new RuntimeException('Invalid credentials');
         }
 
-        $this->loginAttempts->clearAllFailures((string) $user['id']);
+        $this->loginAttempts->clearAllFailures($resolvedUserId);
+        $this->auditLogs->recordSuccess('pin_login', $context, $clinicId, $resolvedUserId);
 
         return $this->issueUserSession($user, $clinicId);
     }
 
-    public function login(LoginDTO $dto, ?string $clinicIdFromSession = null): array
+    public function login(LoginDTO $dto, ?string $clinicIdFromSession, AuditRequestContext $context): array
     {
         $stmt = $this->pdo->prepare(
             'SELECT id, clinic_id, name, email, password_hash, role, is_active, is_locked, pin_hash
@@ -120,29 +134,43 @@ final class AuthService
         $stmt->execute(['email' => $dto->email]);
         $user = $stmt->fetch();
 
-        if (!$user || !(bool) $user['is_active']) {
+        if (!$user) {
+            $this->auditLogs->recordFailure('email_login', 'invalid_credentials', $context, $clinicIdFromSession);
+            throw new RuntimeException('Invalid credentials');
+        }
+
+        $resolvedUserId = (string) $user['id'];
+        $resolvedClinicId = $user['clinic_id'] !== null ? (string) $user['clinic_id'] : $clinicIdFromSession;
+
+        if (!(bool) $user['is_active']) {
+            $this->auditLogs->recordFailure('email_login', 'user_inactive', $context, $resolvedClinicId, $resolvedUserId);
             throw new RuntimeException('Invalid credentials');
         }
 
         if ((bool) $user['is_locked']) {
+            $this->auditLogs->recordFailure('email_login', 'user_locked', $context, $resolvedClinicId, $resolvedUserId);
             throw new UserLockedException();
         }
 
         if ($clinicIdFromSession !== null && !$this->userHasClinicAccess($user, $clinicIdFromSession)) {
+            $this->auditLogs->recordFailure('email_login', 'invalid_credentials', $context, $clinicIdFromSession, $resolvedUserId);
             throw new RuntimeException('Invalid credentials');
         }
 
         if (!password_verify($dto->password, (string) $user['password_hash'])) {
-            $failures = $this->loginAttempts->recordLoginFailure((string) $user['id']);
+            $failures = $this->loginAttempts->recordLoginFailure($resolvedUserId);
             if ($failures >= $this->loginAttempts->maxAttempts()) {
-                $this->lockUser((string) $user['id']);
+                $this->lockUser($resolvedUserId);
+                $this->auditLogs->recordFailure('email_login', 'user_locked', $context, $resolvedClinicId, $resolvedUserId);
                 throw new UserLockedException();
             }
 
+            $this->auditLogs->recordFailure('email_login', 'invalid_credentials', $context, $resolvedClinicId, $resolvedUserId);
             throw new RuntimeException('Invalid credentials');
         }
 
-        $this->loginAttempts->clearAllFailures((string) $user['id']);
+        $this->loginAttempts->clearAllFailures($resolvedUserId);
+        $this->auditLogs->recordSuccess('email_login', $context, $resolvedClinicId, $resolvedUserId);
 
         return $this->issueUserSession($user, $clinicIdFromSession);
     }
@@ -157,14 +185,41 @@ final class AuthService
         return $this->tokenService->validateClinicToken($token);
     }
 
-    public function logoutUser(string $token): void
+    public function logoutUser(string $token, AuditRequestContext $context): void
     {
+        $payload = $this->tokenService->validateUserToken($token);
         $this->tokenService->invalidateUserToken($token);
+
+        if (!is_array($payload)) {
+            return;
+        }
+
+        $clinicId = trim((string) ($payload['clinic_id'] ?? ''));
+        $userId = trim((string) ($payload['user_id'] ?? ''));
+
+        $this->auditLogs->recordSuccess(
+            'user_logout',
+            $context,
+            $clinicId !== '' ? $clinicId : null,
+            $userId !== '' ? $userId : null,
+        );
     }
 
-    public function logoutClinic(string $token): void
+    public function logoutClinic(string $token, AuditRequestContext $context): void
     {
+        $payload = $this->tokenService->validateClinicToken($token);
         $this->tokenService->invalidateClinicToken($token);
+
+        if (!is_array($payload)) {
+            return;
+        }
+
+        $clinicId = trim((string) ($payload['clinic_id'] ?? ''));
+        $this->auditLogs->recordSuccess(
+            'clinic_logout',
+            $context,
+            $clinicId !== '' ? $clinicId : null,
+        );
     }
 
     private function issueUserSession(array $user, ?string $activeClinicId = null): array

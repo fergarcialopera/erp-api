@@ -2,6 +2,7 @@
 
 namespace App\Modules\Settings\Handlers;
 
+use App\Application\Audit\AuditActor;
 use App\Application\Http\ApiResponse;
 use App\Application\Http\Request;
 use App\Application\Http\Response;
@@ -27,7 +28,7 @@ final class UpsertSettingHandler
             }
 
             $dto = $this->validator->validateUpsert($request->getParsedBody());
-            return ApiResponse::success($request, $this->service->upsert($clinicId, $dto), status: 201);
+            return ApiResponse::success($request, $this->service->upsert($clinicId, $dto, AuditActor::fromUser($user)), status: 201);
         } catch (Throwable $throwable) {
             return ApiResponse::error($request, 422, 'Unprocessable Entity', $throwable->getMessage());
         }

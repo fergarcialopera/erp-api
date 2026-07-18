@@ -2,6 +2,8 @@
 
 namespace App\Modules\Zones\Services;
 
+use App\Application\Audit\AuditActor;
+use App\Modules\Audit\Services\AuditActivityService;
 use App\Modules\Zones\DTOs\CreateZoneDTO;
 use App\Modules\Zones\DTOs\PatchZoneDTO;
 use PDO;
@@ -10,8 +12,10 @@ use Symfony\Component\Uid\Uuid;
 
 final class ZoneService
 {
-    public function __construct(private readonly PDO $pdo)
-    {
+    public function __construct(
+        private readonly PDO $pdo,
+        private readonly AuditActivityService $audit,
+    ) {
     }
 
     /**
@@ -89,7 +93,7 @@ final class ZoneService
         return is_array($row) ? $row : null;
     }
 
-    public function create(CreateZoneDTO $dto): array
+    public function create(CreateZoneDTO $dto, AuditActor $actor): array
     {
         $ambiente = $this->pdo->prepare('SELECT id FROM ambientes WHERE id::text = :id LIMIT 1');
         $ambiente->execute(['id' => $dto->ambienteId]);
@@ -110,15 +114,20 @@ final class ZoneService
             'is_active' => $dto->isActive,
         ]);
 
-        return (array) $stmt->fetch();
+        $row = (array) $stmt->fetch();
+        $this->audit->recordAdd('zone', (string) $row['id'], $actor->userId, $actor->clinicId, $this->presentZone($row));
+
+        return $row;
     }
 
-    public function patch(string $zoneId, PatchZoneDTO $dto): ?array
+    public function patch(string $zoneId, PatchZoneDTO $dto, AuditActor $actor): ?array
     {
         $current = $this->getGlobal($zoneId);
         if ($current === null) {
             return null;
         }
+
+        $before = $this->presentZone($current);
 
         $stmt = $this->pdo->prepare(
             'UPDATE zones
@@ -133,16 +142,43 @@ final class ZoneService
         ]);
         $row = $stmt->fetch();
 
-        return is_array($row) ? $row : null;
+        if (!is_array($row)) {
+            return null;
+        }
+
+        $after = $this->presentZone($row);
+        $this->audit->recordEdit('zone', $zoneId, $actor->userId, $actor->clinicId, $before, $after);
+
+        return $row;
     }
 
-    public function softDelete(string $zoneId): bool
+    public function softDelete(string $zoneId, AuditActor $actor): bool
     {
         $stmt = $this->pdo->prepare(
             'UPDATE zones SET is_active = FALSE, updated_at = NOW() WHERE id::text = :id'
         );
         $stmt->execute(['id' => $zoneId]);
 
+        if ($stmt->rowCount() > 0) {
+            $this->audit->recordDelete('zone', $zoneId, $actor->userId, $actor->clinicId);
+        }
+
         return $stmt->rowCount() > 0;
+    }
+
+    /**
+     * @param array<string, mixed> $row
+     * @return array<string, mixed>
+     */
+    private function presentZone(array $row): array
+    {
+        return [
+            'id' => (string) $row['id'],
+            'ambiente_id' => (string) $row['ambiente_id'],
+            'code' => (string) $row['code'],
+            'is_active' => (bool) $row['is_active'],
+            'created_at' => (string) ($row['created_at'] ?? ''),
+            'updated_at' => (string) ($row['updated_at'] ?? ''),
+        ];
     }
 }
