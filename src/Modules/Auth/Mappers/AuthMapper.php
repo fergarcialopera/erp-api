@@ -19,6 +19,9 @@ final class AuthMapper
             'user_id' => $userRow['id'],
             'clinic_id' => $userRow['clinic_id'] ?? null,
             'role' => (string) $userRow['role'],
+            'operational_role_id' => isset($userRow['operational_role_id']) && $userRow['operational_role_id'] !== null
+                ? (string) $userRow['operational_role_id']
+                : null,
             'email' => (string) $userRow['email'],
             'name' => (string) ($userRow['name'] ?? ''),
         ];
@@ -37,6 +40,9 @@ final class AuthMapper
                     : null,
                 'name' => (string) ($userRow['name'] ?? ''),
                 'role' => (string) $userRow['role'],
+                'operational_role_id' => isset($userRow['operational_role_id']) && $userRow['operational_role_id'] !== null
+                    ? (string) $userRow['operational_role_id']
+                    : null,
                 'email' => (string) $userRow['email'],
                 'is_active' => (bool) ($userRow['is_active'] ?? true),
             ],

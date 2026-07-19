@@ -16,7 +16,9 @@ final class PatchUserDTO
         public readonly ?string $password,
         public readonly ?string $pin,
         public readonly ?bool $unlock,
-        public readonly ?array $clinicIds = null
+        public readonly ?array $clinicIds = null,
+        public readonly bool $operationalRoleIdTouched = false,
+        public readonly ?string $operationalRoleId = null,
     ) {
     }
 }

@@ -114,7 +114,7 @@ final class AuthService
     public function login(LoginDTO $dto, ?string $clinicIdFromSession = null): array
     {
         $stmt = $this->pdo->prepare(
-            'SELECT id, clinic_id, name, email, password_hash, role, is_active, is_locked, pin_hash
+            'SELECT id, clinic_id, name, email, password_hash, role, operational_role_id, is_active, is_locked, pin_hash
              FROM users WHERE email = :email LIMIT 1'
         );
         $stmt->execute(['email' => $dto->email]);
@@ -185,7 +185,7 @@ final class AuthService
     private function findActiveUserInClinic(string $clinicId, string $userId): ?array
     {
         $stmt = $this->pdo->prepare(
-            'SELECT u.id, u.clinic_id, u.name, u.email, u.password_hash, u.role, u.is_active, u.is_locked, u.pin_hash
+            'SELECT u.id, u.clinic_id, u.name, u.email, u.password_hash, u.role, u.operational_role_id, u.is_active, u.is_locked, u.pin_hash
              FROM users u
              LEFT JOIN user_clinics uc ON uc.user_id = u.id
              WHERE u.id::text = :id
