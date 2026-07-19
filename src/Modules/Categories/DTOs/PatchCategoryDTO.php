@@ -8,8 +8,6 @@ final class PatchCategoryDTO
 {
     public function __construct(
         public readonly ?string $name,
-        public readonly ?string $slug,
-        public readonly bool $slugTouched,
         public readonly ?string $description,
         public readonly bool $descriptionTouched,
         public readonly ?bool $isActive

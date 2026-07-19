@@ -12,13 +12,12 @@ final class SubcategoryValidator
 {
     public function validateCreate(array $payload): CreateSubcategoryDTO
     {
+        if (array_key_exists('slug', $payload)) {
+            throw new InvalidArgumentException('slug is not allowed');
+        }
+
         $categoryId = trim((string) ($payload['category_id'] ?? ''));
         $name = trim((string) ($payload['name'] ?? ''));
-        $slug = null;
-        if (array_key_exists('slug', $payload)) {
-            $rawSlug = trim((string) $payload['slug']);
-            $slug = $rawSlug !== '' ? $rawSlug : null;
-        }
         $description = null;
         if (array_key_exists('description', $payload)) {
             $rawDescription = trim((string) $payload['description']);
@@ -38,16 +37,18 @@ final class SubcategoryValidator
             throw new InvalidArgumentException('Invalid is_active');
         }
 
-        return new CreateSubcategoryDTO($categoryId, $name, $slug, $description, (bool) $isActive);
+        return new CreateSubcategoryDTO($categoryId, $name, $description, (bool) $isActive);
     }
 
     public function validatePatch(array $payload): PatchSubcategoryDTO
     {
+        if (array_key_exists('slug', $payload)) {
+            throw new InvalidArgumentException('slug is not allowed');
+        }
+
         $categoryIdTouched = array_key_exists('category_id', $payload);
         $categoryId = $categoryIdTouched ? trim((string) $payload['category_id']) : null;
         $name = array_key_exists('name', $payload) ? trim((string) $payload['name']) : null;
-        $slugTouched = array_key_exists('slug', $payload);
-        $slug = $slugTouched ? trim((string) $payload['slug']) : null;
         $descriptionTouched = array_key_exists('description', $payload);
         $description = $descriptionTouched ? trim((string) $payload['description']) : null;
         if (array_key_exists('is_active', $payload)) {
@@ -63,13 +64,10 @@ final class SubcategoryValidator
         if ($name !== null && $name === '') {
             throw new InvalidArgumentException('Invalid name');
         }
-        if ($slugTouched && $slug === '') {
-            throw new InvalidArgumentException('Invalid slug');
-        }
         if (array_key_exists('is_active', $payload) && $isActive === null) {
             throw new InvalidArgumentException('Invalid is_active');
         }
-        if (!$categoryIdTouched && $name === null && !$slugTouched && !$descriptionTouched && $isActive === null) {
+        if (!$categoryIdTouched && $name === null && !$descriptionTouched && $isActive === null) {
             throw new InvalidArgumentException('No fields to update');
         }
 
@@ -77,8 +75,6 @@ final class SubcategoryValidator
             $categoryId,
             $categoryIdTouched,
             $name,
-            $slugTouched ? $slug : null,
-            $slugTouched,
             $descriptionTouched ? ($description !== '' ? $description : null) : null,
             $descriptionTouched,
             $isActive

@@ -12,12 +12,11 @@ final class RoleValidator
 {
     public function validateCreate(array $payload): CreateRoleDTO
     {
-        $name = trim((string) ($payload['name'] ?? ''));
-        $slug = null;
         if (array_key_exists('slug', $payload)) {
-            $rawSlug = trim((string) $payload['slug']);
-            $slug = $rawSlug !== '' ? $rawSlug : null;
+            throw new InvalidArgumentException('slug is not allowed');
         }
+
+        $name = trim((string) ($payload['name'] ?? ''));
         $description = null;
         if (array_key_exists('description', $payload)) {
             $rawDescription = trim((string) $payload['description']);
@@ -34,14 +33,16 @@ final class RoleValidator
             throw new InvalidArgumentException('Invalid is_active');
         }
 
-        return new CreateRoleDTO($name, $slug, $description, (bool) $isActive);
+        return new CreateRoleDTO($name, $description, (bool) $isActive);
     }
 
     public function validatePatch(array $payload): PatchRoleDTO
     {
+        if (array_key_exists('slug', $payload)) {
+            throw new InvalidArgumentException('slug is not allowed');
+        }
+
         $name = array_key_exists('name', $payload) ? trim((string) $payload['name']) : null;
-        $slugTouched = array_key_exists('slug', $payload);
-        $slug = $slugTouched ? trim((string) $payload['slug']) : null;
         $descriptionTouched = array_key_exists('description', $payload);
         $description = $descriptionTouched ? trim((string) $payload['description']) : null;
         if (array_key_exists('is_active', $payload)) {
@@ -54,20 +55,15 @@ final class RoleValidator
         if ($name !== null && $name === '') {
             throw new InvalidArgumentException('Invalid name');
         }
-        if ($slugTouched && $slug === '') {
-            throw new InvalidArgumentException('Invalid slug');
-        }
         if (array_key_exists('is_active', $payload) && $isActive === null) {
             throw new InvalidArgumentException('Invalid is_active');
         }
-        if ($name === null && !$slugTouched && !$descriptionTouched && $isActive === null) {
+        if ($name === null && !$descriptionTouched && $isActive === null) {
             throw new InvalidArgumentException('No fields to update');
         }
 
         return new PatchRoleDTO(
             $name,
-            $slugTouched ? $slug : null,
-            $slugTouched,
             $descriptionTouched ? ($description !== '' ? $description : null) : null,
             $descriptionTouched,
             $isActive

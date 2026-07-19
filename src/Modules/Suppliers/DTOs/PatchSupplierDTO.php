@@ -8,8 +8,6 @@ final class PatchSupplierDTO
 {
     public function __construct(
         public readonly ?string $name,
-        public readonly ?string $slug,
-        public readonly bool $slugTouched,
         public readonly ?string $legalName,
         public readonly bool $legalNameTouched,
         public readonly ?string $taxId,

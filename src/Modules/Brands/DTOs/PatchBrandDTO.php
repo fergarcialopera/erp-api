@@ -8,8 +8,6 @@ final class PatchBrandDTO
 {
     public function __construct(
         public readonly ?string $name,
-        public readonly ?string $slug,
-        public readonly bool $slugTouched,
         public readonly ?bool $isActive
     ) {
     }

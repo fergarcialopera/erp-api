@@ -12,12 +12,11 @@ final class SupplierValidator
 {
     public function validateCreate(array $payload): CreateSupplierDTO
     {
-        $name = trim((string) ($payload['name'] ?? ''));
-        $slug = null;
         if (array_key_exists('slug', $payload)) {
-            $rawSlug = trim((string) $payload['slug']);
-            $slug = $rawSlug !== '' ? $rawSlug : null;
+            throw new InvalidArgumentException('slug is not allowed');
         }
+
+        $name = trim((string) ($payload['name'] ?? ''));
         $legalName = $this->optionalString($payload, 'legal_name');
         $taxId = $this->optionalString($payload, 'tax_id');
         $email = $this->optionalString($payload, 'email');
@@ -36,14 +35,16 @@ final class SupplierValidator
             throw new InvalidArgumentException('Invalid is_active');
         }
 
-        return new CreateSupplierDTO($name, $slug, $legalName, $taxId, $email, $phone, (bool) $isActive);
+        return new CreateSupplierDTO($name, $legalName, $taxId, $email, $phone, (bool) $isActive);
     }
 
     public function validatePatch(array $payload): PatchSupplierDTO
     {
+        if (array_key_exists('slug', $payload)) {
+            throw new InvalidArgumentException('slug is not allowed');
+        }
+
         $name = array_key_exists('name', $payload) ? trim((string) $payload['name']) : null;
-        $slugTouched = array_key_exists('slug', $payload);
-        $slug = $slugTouched ? trim((string) $payload['slug']) : null;
         $legalNameTouched = array_key_exists('legal_name', $payload);
         $legalName = $legalNameTouched ? $this->optionalString($payload, 'legal_name') : null;
         $taxIdTouched = array_key_exists('tax_id', $payload);
@@ -62,9 +63,6 @@ final class SupplierValidator
         if ($name !== null && $name === '') {
             throw new InvalidArgumentException('Invalid name');
         }
-        if ($slugTouched && $slug === '') {
-            throw new InvalidArgumentException('Invalid slug');
-        }
         if ($emailTouched && $email !== null && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
             throw new InvalidArgumentException('Invalid email');
         }
@@ -72,7 +70,7 @@ final class SupplierValidator
             throw new InvalidArgumentException('Invalid is_active');
         }
         if (
-            $name === null && !$slugTouched && !$legalNameTouched && !$taxIdTouched
+            $name === null && !$legalNameTouched && !$taxIdTouched
             && !$emailTouched && !$phoneTouched && $isActive === null
         ) {
             throw new InvalidArgumentException('No fields to update');
@@ -80,8 +78,6 @@ final class SupplierValidator
 
         return new PatchSupplierDTO(
             $name,
-            $slugTouched ? $slug : null,
-            $slugTouched,
             $legalName,
             $legalNameTouched,
             $taxId,

@@ -1063,7 +1063,6 @@ paths:
               required: [name]
               properties:
                 name: { type: string }
-                slug: { type: string, nullable: true }
                 description: { type: string, nullable: true }
                 is_active: { type: boolean, default: true }
       responses:
@@ -1133,7 +1132,6 @@ paths:
               type: object
               properties:
                 name: { type: string }
-                slug: { type: string, nullable: true }
                 description: { type: string, nullable: true }
                 is_active: { type: boolean }
       responses:
@@ -1226,7 +1224,6 @@ paths:
               properties:
                 category_id: { type: string, format: uuid }
                 name: { type: string }
-                slug: { type: string, nullable: true }
                 description: { type: string, nullable: true }
                 is_active: { type: boolean, default: true }
       responses:
@@ -1297,7 +1294,6 @@ paths:
               properties:
                 category_id: { type: string, format: uuid }
                 name: { type: string }
-                slug: { type: string, nullable: true }
                 description: { type: string, nullable: true }
                 is_active: { type: boolean }
       responses:
@@ -1383,7 +1379,6 @@ paths:
               required: [name]
               properties:
                 name: { type: string }
-                slug: { type: string, nullable: true }
                 is_active: { type: boolean, default: true }
       responses:
         '201':
@@ -1452,7 +1447,6 @@ paths:
               type: object
               properties:
                 name: { type: string }
-                slug: { type: string, nullable: true }
                 is_active: { type: boolean }
       responses:
         '200':
@@ -1642,7 +1636,6 @@ paths:
               required: [name]
               properties:
                 name: { type: string }
-                slug: { type: string, nullable: true }
                 legal_name: { type: string, nullable: true }
                 tax_id: { type: string, nullable: true }
                 email: { type: string, format: email, nullable: true }
@@ -1715,7 +1708,6 @@ paths:
               type: object
               properties:
                 name: { type: string }
-                slug: { type: string, nullable: true }
                 legal_name: { type: string, nullable: true }
                 tax_id: { type: string, nullable: true }
                 email: { type: string, format: email, nullable: true }
@@ -1804,7 +1796,6 @@ paths:
               required: [name]
               properties:
                 name: { type: string }
-                slug: { type: string, nullable: true }
                 description: { type: string, nullable: true }
                 is_active: { type: boolean, default: true }
       responses:
@@ -1874,7 +1865,6 @@ paths:
               type: object
               properties:
                 name: { type: string }
-                slug: { type: string, nullable: true }
                 description: { type: string, nullable: true }
                 is_active: { type: boolean }
       responses:
@@ -2062,7 +2052,6 @@ paths:
               required: [name]
               properties:
                 name: { type: string }
-                slug: { type: string, nullable: true }
                 description: { type: string, nullable: true }
                 is_active: { type: boolean, default: true }
       responses:
@@ -2132,7 +2121,6 @@ paths:
               type: object
               properties:
                 name: { type: string }
-                slug: { type: string, nullable: true }
                 description: { type: string, nullable: true }
                 is_active: { type: boolean }
       responses:
@@ -3065,7 +3053,9 @@ components:
       properties:
         id: { type: string, format: uuid }
         name: { type: string }
-        slug: { type: string }
+        slug:
+          type: string
+          description: Server-generated; read-only. Not accepted on create/patch.
         description: { type: string, nullable: true }
         is_active: { type: boolean }
         created_at: { type: string }
@@ -3076,7 +3066,9 @@ components:
         id: { type: string, format: uuid }
         category_id: { type: string, format: uuid }
         name: { type: string }
-        slug: { type: string }
+        slug:
+          type: string
+          description: Server-generated; read-only. Not accepted on create/patch.
         description: { type: string, nullable: true }
         is_active: { type: boolean }
         created_at: { type: string }
@@ -3086,7 +3078,9 @@ components:
       properties:
         id: { type: string, format: uuid }
         name: { type: string }
-        slug: { type: string }
+        slug:
+          type: string
+          description: Server-generated; read-only. Not accepted on create/patch.
         is_active: { type: boolean }
         created_at: { type: string }
         updated_at: { type: string }
@@ -3095,7 +3089,9 @@ components:
       properties:
         id: { type: string, format: uuid }
         name: { type: string }
-        slug: { type: string }
+        slug:
+          type: string
+          description: Server-generated; read-only. Not accepted on create/patch.
         legal_name: { type: string, nullable: true }
         tax_id: { type: string, nullable: true }
         email: { type: string, format: email, nullable: true }
@@ -3108,7 +3104,9 @@ components:
       properties:
         id: { type: string, format: uuid }
         name: { type: string }
-        slug: { type: string }
+        slug:
+          type: string
+          description: Server-generated; read-only. Not accepted on create/patch.
         description: { type: string, nullable: true }
         is_active: { type: boolean }
         created_at: { type: string }
@@ -3118,7 +3116,9 @@ components:
       properties:
         id: { type: string, format: uuid }
         name: { type: string }
-        slug: { type: string }
+        slug:
+          type: string
+          description: Server-generated; read-only. Not accepted on create/patch.
         description: { type: string, nullable: true }
         is_active: { type: boolean }
         created_at: { type: string }

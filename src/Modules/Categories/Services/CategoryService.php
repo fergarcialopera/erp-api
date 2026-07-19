@@ -50,7 +50,7 @@ final class CategoryService
     public function create(CreateCategoryDTO $dto): array
     {
         $id = Uuid::v4()->toRfc4122();
-        $slug = $dto->slug ?? Slug::from($dto->name);
+        $slug = Slug::from($dto->name);
         $stmt = $this->pdo->prepare(
             'INSERT INTO categories (id, name, slug, description, is_active, created_at, updated_at)
              VALUES (:id, :name, :slug, :description, :is_active, NOW(), NOW())
@@ -78,12 +78,7 @@ final class CategoryService
         }
 
         $name = $dto->name ?? (string) $current['name'];
-        $slug = (string) $current['slug'];
-        if ($dto->slugTouched) {
-            $slug = (string) $dto->slug;
-        } elseif ($dto->name !== null) {
-            $slug = Slug::from($name);
-        }
+        $slug = $dto->name !== null ? Slug::from($name) : (string) $current['slug'];
 
         $description = $current['description'];
         if ($dto->descriptionTouched) {
