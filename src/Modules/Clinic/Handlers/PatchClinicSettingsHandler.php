@@ -2,6 +2,7 @@
 
 namespace App\Modules\Clinic\Handlers;
 
+use App\Application\Audit\AuditActor;
 use App\Application\Http\ApiResponse;
 use App\Application\Http\Request;
 use App\Application\Http\Response;
@@ -29,9 +30,10 @@ final class PatchClinicSettingsHandler
 
             $dto = $this->validator->validatePatch($request->getParsedBody());
 
+            $actor = AuditActor::fromUser($user);
             $result = [];
             if ($dto->openLatencyMs !== null) {
-                $result[] = $this->settings->upsert($clinicId, new UpsertSettingDTO('clinic.open_latency_ms', (string) $dto->openLatencyMs));
+                $result[] = $this->settings->upsert($clinicId, new UpsertSettingDTO('clinic.open_latency_ms', (string) $dto->openLatencyMs), $actor);
             }
 
             return ApiResponse::success($request, $result, status: 200);

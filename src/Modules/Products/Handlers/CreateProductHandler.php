@@ -2,6 +2,7 @@
 
 namespace App\Modules\Products\Handlers;
 
+use App\Application\Audit\AuditActor;
 use App\Application\Auth\AccessDeniedException;
 use App\Application\Auth\ClinicAccessService;
 use App\Application\Http\ApiResponse;
@@ -27,7 +28,7 @@ final class CreateProductHandler
             $this->access->assertSuperAdmin($user);
 
             $dto = $this->validator->validateCreate($request->getParsedBody());
-            $product = $this->service->create($dto);
+            $product = $this->service->create($dto, AuditActor::fromUser($user));
 
             return ApiResponse::success($request, $product, status: 201);
         } catch (AccessDeniedException $e) {

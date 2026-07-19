@@ -2,16 +2,20 @@
 
 namespace App\Modules\Ambientes\Services;
 
+use App\Application\Audit\AuditActor;
 use App\Modules\Ambientes\DTOs\CreateAmbienteDTO;
 use App\Modules\Ambientes\DTOs\PatchAmbienteDTO;
+use App\Modules\Audit\Services\AuditActivityService;
 use PDO;
 use RuntimeException;
 use Symfony\Component\Uid\Uuid;
 
 final class AmbienteService
 {
-    public function __construct(private readonly PDO $pdo)
-    {
+    public function __construct(
+        private readonly PDO $pdo,
+        private readonly AuditActivityService $audit,
+    ) {
     }
 
     /**
@@ -155,7 +159,7 @@ final class AmbienteService
         return $row;
     }
 
-    public function create(CreateAmbienteDTO $dto): array
+    public function create(CreateAmbienteDTO $dto, AuditActor $actor): array
     {
         $id = Uuid::v4()->toRfc4122();
         $stmt = $this->pdo->prepare(
@@ -171,19 +175,21 @@ final class AmbienteService
             'is_active' => $dto->isActive,
         ]);
 
-        return (array) $stmt->fetch();
+        $row = (array) $stmt->fetch();
+        $presented = $this->presentGlobalAmbiente($row);
+        $this->audit->recordAdd('ambiente', $presented['id'], $actor->userId, $actor->clinicId, $presented);
+
+        return $row;
     }
 
-    public function patch(string $ambienteId, PatchAmbienteDTO $dto): ?array
+    public function patch(string $ambienteId, PatchAmbienteDTO $dto, AuditActor $actor): ?array
     {
-        $currentStmt = $this->pdo->prepare(
-            'SELECT name, location, device_id, is_active FROM ambientes WHERE id::text = :id LIMIT 1'
-        );
-        $currentStmt->execute(['id' => $ambienteId]);
-        $current = $currentStmt->fetch();
-        if (!is_array($current)) {
+        $current = $this->getGlobal($ambienteId);
+        if ($current === null) {
             return null;
         }
+
+        $before = $this->presentGlobalAmbiente($current);
 
         $deviceId = $current['device_id'];
         if ($dto->deviceIdTouched) {
@@ -205,20 +211,31 @@ final class AmbienteService
         ]);
         $row = $stmt->fetch();
 
-        return is_array($row) ? $row : null;
+        if (!is_array($row)) {
+            return null;
+        }
+
+        $after = $this->presentGlobalAmbiente($row);
+        $this->audit->recordEdit('ambiente', $ambienteId, $actor->userId, $actor->clinicId, $before, $after);
+
+        return $row;
     }
 
-    public function softDelete(string $ambienteId): bool
+    public function softDelete(string $ambienteId, AuditActor $actor): bool
     {
         $stmt = $this->pdo->prepare(
             'UPDATE ambientes SET is_active = FALSE, updated_at = NOW() WHERE id::text = :id'
         );
         $stmt->execute(['id' => $ambienteId]);
 
+        if ($stmt->rowCount() > 0) {
+            $this->audit->recordDelete('ambiente', $ambienteId, $actor->userId, $actor->clinicId);
+        }
+
         return $stmt->rowCount() > 0;
     }
 
-    public function associateToClinic(string $clinicId, string $ambienteId): ?array
+    public function associateToClinic(string $clinicId, string $ambienteId, AuditActor $actor): ?array
     {
         $ambiente = $this->getGlobal($ambienteId);
         if ($ambiente === null) {
@@ -232,20 +249,29 @@ final class AmbienteService
         );
         $stmt->execute(['clinic_id' => $clinicId, 'ambiente_id' => $ambienteId]);
 
-        return $this->getForClinic($clinicId, $ambienteId, true);
+        $result = $this->getForClinic($clinicId, $ambienteId, true);
+        if ($result !== null) {
+            $this->audit->recordAdd('clinic-ambiente', $ambienteId, $actor->userId, $clinicId, $result);
+        }
+
+        return $result;
     }
 
-    public function disassociateFromClinic(string $clinicId, string $ambienteId): bool
+    public function disassociateFromClinic(string $clinicId, string $ambienteId, AuditActor $actor): bool
     {
         $stmt = $this->pdo->prepare(
             'DELETE FROM clinic_ambientes WHERE clinic_id::text = :clinic_id AND ambiente_id::text = :ambiente_id'
         );
         $stmt->execute(['clinic_id' => $clinicId, 'ambiente_id' => $ambienteId]);
 
+        if ($stmt->rowCount() > 0) {
+            $this->audit->recordDelete('clinic-ambiente', $ambienteId, $actor->userId, $clinicId);
+        }
+
         return $stmt->rowCount() > 0;
     }
 
-    public function setClinicVisibility(string $clinicId, string $ambienteId, bool $visible): ?array
+    public function setClinicVisibility(string $clinicId, string $ambienteId, bool $visible, AuditActor $actor): ?array
     {
         $link = $this->pdo->prepare(
             'SELECT 1 FROM clinic_ambientes WHERE clinic_id::text = :clinic_id AND ambiente_id::text = :ambiente_id LIMIT 1'
@@ -254,6 +280,8 @@ final class AmbienteService
         if (!$link->fetch()) {
             return null;
         }
+
+        $before = $this->getForClinic($clinicId, $ambienteId, true);
 
         $ambiente = $this->getGlobal($ambienteId);
         if ($ambiente === null || !(bool) $ambiente['is_active']) {
@@ -269,7 +297,38 @@ final class AmbienteService
         $stmt->bindValue(':visible', $visible, PDO::PARAM_BOOL);
         $stmt->execute();
 
-        return $this->getForClinic($clinicId, $ambienteId, true);
+        $stmt->execute();
+
+        $after = $this->getForClinic($clinicId, $ambienteId, true);
+        if ($after !== null) {
+            $this->audit->recordEdit(
+                'clinic-ambiente',
+                $ambienteId,
+                $actor->userId,
+                $clinicId,
+                $before ?? ['ambiente_id' => $ambienteId, 'clinic_id' => $clinicId, 'visible' => !$visible],
+                $after,
+            );
+        }
+
+        return $after;
+    }
+
+    /**
+     * @param array<string, mixed> $row
+     * @return array<string, mixed>
+     */
+    private function presentGlobalAmbiente(array $row): array
+    {
+        return [
+            'id' => (string) $row['id'],
+            'name' => (string) $row['name'],
+            'location' => $row['location'] !== null ? (string) $row['location'] : null,
+            'device_id' => $row['device_id'] !== null ? (string) $row['device_id'] : null,
+            'is_active' => (bool) ($row['is_active'] ?? true),
+            'created_at' => (string) ($row['created_at'] ?? ''),
+            'updated_at' => (string) ($row['updated_at'] ?? ''),
+        ];
     }
 
     /**

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Auth\Handlers;
 
+use App\Application\Audit\AuditRequestContext;
 use App\Application\Http\ApiResponse;
 use App\Application\Http\Request;
 use App\Application\Http\Response;
@@ -25,7 +26,11 @@ final class ClinicLoginHandler
     {
         try {
             $dto = $this->validator->validate($request->getParsedBody());
-            $result = $this->service->loginClinic($dto['clinic_id'], $dto['password']);
+            $result = $this->service->loginClinic(
+                $dto['clinic_id'],
+                $dto['password'],
+                AuditRequestContext::fromRequest($request),
+            );
 
             return ApiResponse::success($request, $result);
         } catch (InvalidArgumentException $throwable) {

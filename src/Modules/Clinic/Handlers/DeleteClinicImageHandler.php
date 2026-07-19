@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Clinic\Handlers;
 
+use App\Application\Audit\AuditActor;
 use App\Application\Http\ApiResponse;
 use App\Application\Http\Request;
 use App\Application\Http\Response;
@@ -34,7 +35,7 @@ final class DeleteClinicImageHandler
             }
 
             $this->storage->deleteByPublicPath(isset($clinic['image_path']) ? (string) $clinic['image_path'] : null);
-            $updated = $this->service->updateImagePath($clinicId, null);
+            $updated = $this->service->updateImagePath($clinicId, null, AuditActor::fromUser($user));
 
             return ApiResponse::success($request, $updated ?? []);
         } catch (Throwable $throwable) {

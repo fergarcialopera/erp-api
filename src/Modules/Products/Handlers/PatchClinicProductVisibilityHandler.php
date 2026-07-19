@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Products\Handlers;
 
+use App\Application\Audit\AuditActor;
 use App\Application\Auth\AccessDeniedException;
 use App\Application\Auth\RequestClinicResolver;
 use App\Application\Http\ApiResponse;
@@ -43,7 +44,7 @@ final class PatchClinicProductVisibilityHandler
                 throw new InvalidArgumentException('Invalid visible');
             }
 
-            $product = $this->service->setClinicVisibility($clinicId, $productId, (bool) $visible);
+            $product = $this->service->setClinicVisibility($clinicId, $productId, (bool) $visible, AuditActor::fromUser($user));
             if ($product === null) {
                 return ApiResponse::error($request, 404, 'Not Found', 'Product not found');
             }

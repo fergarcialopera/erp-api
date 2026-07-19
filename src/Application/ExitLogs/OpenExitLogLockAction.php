@@ -9,6 +9,8 @@ use App\Domain\ExitLogs\ExitLogLockPolicy;
 use App\Domain\ExitLogs\Exception\ExitLogNotFoundException;
 use App\Domain\Mqtt\Exception\MqttPublishFailedException;
 use App\Domain\Mqtt\LockCommandPublisher;
+use App\Modules\Audit\Services\AuditActivityService;
+use App\Modules\ExitLogs\Services\ExitLogService;
 use Psr\Log\LoggerInterface;
 
 final class OpenExitLogLockAction
@@ -18,7 +20,9 @@ final class OpenExitLogLockAction
     public function __construct(
         private readonly ExitLogLockPort $exitLogLockPort,
         private readonly LockCommandPublisher $lockCommandPublisher,
-        private readonly LoggerInterface $logger
+        private readonly LoggerInterface $logger,
+        private readonly ExitLogService $exitLogService,
+        private readonly AuditActivityService $audit,
     ) {
     }
 
@@ -28,6 +32,7 @@ final class OpenExitLogLockAction
         string $requestedBy,
         ?string $createdByUserId = null
     ): OpenExitLogLockResult {
+        $before = $this->exitLogService->getDetail($clinicId, $exitLogId, $createdByUserId);
         $row = $this->exitLogLockPort->findContextForOpenLock($clinicId, $exitLogId, $createdByUserId);
         if ($row === null) {
             throw new ExitLogNotFoundException('Exit log not found.');
@@ -84,12 +89,19 @@ final class OpenExitLogLockAction
             'topic' => $topic,
         ]);
 
-        return new OpenExitLogLockResult(
+        $result = new OpenExitLogLockResult(
             'Lock open command sent successfully.',
             $exitLogId,
             $deviceId,
             $topic,
             self::PAYLOAD
         );
+
+        if ($before !== null) {
+            $after = array_merge($before, ['lock_open' => $result->toApiData()]);
+            $this->audit->recordEdit('exit-log', $exitLogId, $requestedBy, $clinicId, $before, $after);
+        }
+
+        return $result;
     }
 }

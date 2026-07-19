@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Clinic\Handlers;
 
+use App\Application\Audit\AuditActor;
 use App\Application\Http\ApiResponse;
 use App\Application\Http\Request;
 use App\Application\Http\Response;
@@ -40,7 +41,7 @@ final class UploadClinicImageHandler
             }
 
             $path = $this->storage->storeClinicImage($clinicId, $file);
-            $updated = $this->service->updateImagePath($clinicId, $path);
+            $updated = $this->service->updateImagePath($clinicId, $path, AuditActor::fromUser($user));
 
             return ApiResponse::success($request, $updated ?? []);
         } catch (Throwable $throwable) {

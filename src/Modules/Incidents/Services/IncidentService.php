@@ -2,14 +2,18 @@
 
 namespace App\Modules\Incidents\Services;
 
+use App\Application\Audit\AuditActor;
+use App\Modules\Audit\Services\AuditActivityService;
 use App\Modules\Incidents\DTOs\CreateIncidentDTO;
 use App\Modules\Incidents\DTOs\PatchIncidentDTO;
 use PDO;
 
 final class IncidentService
 {
-    public function __construct(private readonly PDO $pdo)
-    {
+    public function __construct(
+        private readonly PDO $pdo,
+        private readonly AuditActivityService $audit,
+    ) {
     }
 
     public function create(string $clinicId, string $createdBy, CreateIncidentDTO $dto): array
@@ -30,7 +34,19 @@ final class IncidentService
         ]);
 
         $incident = $stmt->fetch();
-        return is_array($incident) ? $incident : [];
+        if (!is_array($incident)) {
+            return [];
+        }
+
+        $this->audit->recordAdd(
+            'incident',
+            (string) $incident['id'],
+            $createdBy,
+            $clinicId,
+            $this->presentIncident($incident),
+        );
+
+        return $incident;
     }
 
     public function list(string $clinicId): array
@@ -56,16 +72,20 @@ final class IncidentService
         return $stmt->fetchAll() ?: [];
     }
 
-    public function patch(string $incidentId, PatchIncidentDTO $dto): ?array
+    public function patch(string $incidentId, PatchIncidentDTO $dto, AuditActor $actor): ?array
     {
         $currentStmt = $this->pdo->prepare(
-            'SELECT title, description, severity, status FROM incidents WHERE id::text = :id LIMIT 1'
+            'SELECT id, clinic_id, title, description, severity, source, status, created_by_user_id AS created_by, created_at
+             FROM incidents WHERE id::text = :id LIMIT 1'
         );
         $currentStmt->execute(['id' => $incidentId]);
         $current = $currentStmt->fetch();
         if (!is_array($current)) {
             return null;
         }
+
+        $before = $this->presentIncident($current);
+        $clinicId = (string) $before['clinic_id'];
 
         $stmt = $this->pdo->prepare(
             'UPDATE incidents
@@ -82,6 +102,32 @@ final class IncidentService
         ]);
         $row = $stmt->fetch();
 
-        return is_array($row) ? $row : null;
+        if (!is_array($row)) {
+            return null;
+        }
+
+        $after = $this->presentIncident($row);
+        $this->audit->recordEdit('incident', $incidentId, $actor->userId, $clinicId, $before, $after);
+
+        return $row;
+    }
+
+    /**
+     * @param array<string, mixed> $row
+     * @return array<string, mixed>
+     */
+    private function presentIncident(array $row): array
+    {
+        return [
+            'id' => (string) $row['id'],
+            'clinic_id' => (string) $row['clinic_id'],
+            'title' => (string) $row['title'],
+            'description' => $row['description'],
+            'severity' => (string) $row['severity'],
+            'source' => (string) $row['source'],
+            'status' => (string) $row['status'],
+            'created_by' => $row['created_by'],
+            'created_at' => (string) ($row['created_at'] ?? ''),
+        ];
     }
 }

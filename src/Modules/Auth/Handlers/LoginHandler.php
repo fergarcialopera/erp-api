@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Auth\Handlers;
 
+use App\Application\Audit\AuditRequestContext;
 use App\Application\Http\ApiResponse;
 use App\Application\Http\JsonResponse;
 use App\Application\Http\Request;
@@ -29,7 +30,11 @@ final class LoginHandler
             $dto = $this->validator->validate($request->getParsedBody());
             $clinic = (array) $request->getAttribute('clinic', []);
             $clinicId = isset($clinic['clinic_id']) ? (string) $clinic['clinic_id'] : null;
-            $result = $this->service->login($dto, $clinicId !== '' ? $clinicId : null);
+            $result = $this->service->login(
+                $dto,
+                $clinicId !== '' ? $clinicId : null,
+                AuditRequestContext::fromRequest($request),
+            );
 
             return ApiResponse::success($request, $result);
         } catch (UserLockedException $throwable) {

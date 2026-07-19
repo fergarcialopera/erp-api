@@ -2,13 +2,17 @@
 
 namespace App\Modules\Settings\Services;
 
+use App\Application\Audit\AuditActor;
+use App\Modules\Audit\Services\AuditActivityService;
 use App\Modules\Settings\DTOs\UpsertSettingDTO;
 use PDO;
 
 final class SettingService
 {
-    public function __construct(private readonly PDO $pdo)
-    {
+    public function __construct(
+        private readonly PDO $pdo,
+        private readonly AuditActivityService $audit,
+    ) {
     }
 
     public function list(string $clinicId): array
@@ -24,8 +28,16 @@ final class SettingService
         return array_map(fn (array $row): array => $this->normalizeValue($row), $rows);
     }
 
-    public function upsert(string $clinicId, UpsertSettingDTO $dto): array
+    public function upsert(string $clinicId, UpsertSettingDTO $dto, AuditActor $actor): array
     {
+        $existingStmt = $this->pdo->prepare(
+            'SELECT id, clinic_id, key, value::text AS value, updated_at
+             FROM settings WHERE clinic_id = :clinic_id AND key = :key LIMIT 1'
+        );
+        $existingStmt->execute(['clinic_id' => $clinicId, 'key' => $dto->key]);
+        $existing = $existingStmt->fetch();
+        $before = is_array($existing) ? $this->normalizeValue($existing) : null;
+
         $valueJson = json_encode($dto->value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         $stmt = $this->pdo->prepare(
             'INSERT INTO settings (clinic_id, key, value)
@@ -43,7 +55,20 @@ final class SettingService
         ]);
 
         $setting = $stmt->fetch();
-        return is_array($setting) ? $this->normalizeValue($setting) : [];
+        if (!is_array($setting)) {
+            return [];
+        }
+
+        $after = $this->normalizeValue($setting);
+        $entityId = (string) $after['id'];
+
+        if ($before === null) {
+            $this->audit->recordAdd('setting', $entityId, $actor->userId, $clinicId, $after);
+        } else {
+            $this->audit->recordEdit('setting', $entityId, $actor->userId, $clinicId, $before, $after);
+        }
+
+        return $after;
     }
 
     private function normalizeValue(array $row): array

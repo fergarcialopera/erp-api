@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Auth\Handlers;
 
+use App\Application\Audit\AuditRequestContext;
 use App\Application\Http\ApiResponse;
 use App\Application\Http\JsonResponse;
 use App\Application\Http\Request;
@@ -34,7 +35,12 @@ final class PinLoginHandler
             }
 
             $dto = $this->validator->validate($request->getParsedBody());
-            $result = $this->service->loginPin($clinicId, $dto['user_id'], $dto['pin']);
+            $result = $this->service->loginPin(
+                $clinicId,
+                $dto['user_id'],
+                $dto['pin'],
+                AuditRequestContext::fromRequest($request),
+            );
 
             return ApiResponse::success($request, $result);
         } catch (PinLockedException $throwable) {

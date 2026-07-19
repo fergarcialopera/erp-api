@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Auth\Handlers;
 
+use App\Application\Audit\AuditRequestContext;
 use App\Application\Http\ApiResponse;
 use App\Application\Http\Request;
 use App\Application\Http\Response;
@@ -19,7 +20,7 @@ final class ClinicLogoutHandler
     {
         $token = (string) $request->getAttribute('clinic_access_token', '');
         if ($token !== '') {
-            $this->service->logoutClinic($token);
+            $this->service->logoutClinic($token, AuditRequestContext::fromRequest($request));
         }
 
         return ApiResponse::success($request, ['logged_out' => true]);
