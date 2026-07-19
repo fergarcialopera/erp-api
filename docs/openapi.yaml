@@ -22,7 +22,19 @@ tags:
   - name: Clinic
     description: Datos y configuracion de clinica.
   - name: Products
-    description: Productos por clinica.
+    description: Catalogo global de productos, relaciones (categoria, proveedores) y visibilidad por clinica.
+  - name: Categories
+    description: Categorias del catalogo de productos.
+  - name: Subcategories
+    description: Subcategorias del catalogo de productos.
+  - name: Brands
+    description: Marcas del catalogo de productos.
+  - name: Suppliers
+    description: Proveedores del catalogo de productos.
+  - name: DispensingTypes
+    description: Tipos de dispensacion y roles operativos autorizados.
+  - name: Roles
+    description: Roles operativos de locker; independientes de users.role de autenticacion API.
   - name: Users
     description: Usuarios por clinica.
   - name: Ambientes
@@ -227,6 +239,15 @@ paths:
       responses:
         '200':
           description: Authenticated user context
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/MeUser'
+                  meta:
+                    type: object
         '401':
           description: Unauthorized
   /api/v1/clinic:
@@ -549,7 +570,7 @@ paths:
           description: Validation error
   /api/v1/products:
     get:
-      summary: List products
+      summary: List products (STAFF+)
       tags: [Products]
       security:
         - bearerAuth: []
@@ -559,15 +580,72 @@ paths:
           required: false
           schema:
             type: boolean
+          description: |
+            Filter by products.is_active. Omit to include both (except clinic staff view,
+            which always forces active+visible). Do not confuse omitted with active=false.
+        - in: query
+          name: category_id
+          required: false
+          schema:
+            type: string
+            format: uuid
+          description: Exact match on products.category_id
+        - in: query
+          name: subcategory_id
+          required: false
+          schema:
+            type: string
+            format: uuid
+          description: Exact match on products.subcategory_id
+        - in: query
+          name: brand_id
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - in: query
+          name: dispensing_type_id
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - in: query
+          name: supplier_id
+          required: false
+          schema:
+            type: string
+            format: uuid
+          description: Products with at least one row in product_suppliers for this supplier
+        - in: query
+          name: search
+          required: false
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 100
+          description: |
+            Case-insensitive substring match on name, barcode, internal_reference, sku.
+            Empty/whitespace ignored. Combined with other filters using AND.
       responses:
         '200':
           description: Products list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Product'
+                  meta:
+                    type: object
         '401':
           description: Unauthorized
         '422':
           description: Validation error
     post:
-      summary: Create product
+      summary: Create product (SUPER_ADMIN)
       tags: [Products]
       security:
         - bearerAuth: []
@@ -576,16 +654,19 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              required: [name]
-              properties:
-                name:
-                  type: string
-                is_active:
-                  type: boolean
+              $ref: '#/components/schemas/ProductCreateBody'
       responses:
         '201':
           description: Product created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Product'
+                  meta:
+                    type: object
         '401':
           description: Unauthorized
         '403':
@@ -594,7 +675,7 @@ paths:
           description: Validation error
   /api/v1/products/{id}:
     get:
-      summary: Get product
+      summary: Get product (STAFF+)
       tags: [Products]
       security:
         - bearerAuth: []
@@ -604,15 +685,25 @@ paths:
           required: true
           schema:
             type: string
+            format: uuid
       responses:
         '200':
-          description: Product
+          description: Product detail with suppliers
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Product'
+                  meta:
+                    type: object
         '401':
           description: Unauthorized
         '404':
           description: Not Found
     patch:
-      summary: Patch product
+      summary: Patch product (SUPER_ADMIN)
       tags: [Products]
       security:
         - bearerAuth: []
@@ -622,20 +713,25 @@ paths:
           required: true
           schema:
             type: string
+            format: uuid
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                name:
-                  type: string
-                is_active:
-                  type: boolean
+              $ref: '#/components/schemas/ProductPatchBody'
       responses:
         '200':
           description: Product updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Product'
+                  meta:
+                    type: object
         '401':
           description: Unauthorized
         '403':
@@ -705,6 +801,1371 @@ paths:
           description: Unauthorized
         '404':
           description: Product not found in clinic
+  /api/v1/products/{id}/suppliers:
+    get:
+      summary: List product suppliers (STAFF+)
+      tags: [Products]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Product supplier links
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ProductSupplierLink'
+                  meta:
+                    type: object
+        '401':
+          description: Unauthorized
+        '404':
+          description: Product not found
+    post:
+      summary: Add product supplier (SUPER_ADMIN)
+      tags: [Products]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [supplier_id]
+              properties:
+                supplier_id:
+                  type: string
+                  format: uuid
+                supplier_reference:
+                  type: string
+                  nullable: true
+                purchase_price:
+                  type: number
+                  format: float
+                  nullable: true
+                pvp:
+                  type: number
+                  format: float
+                  nullable: true
+                net_cost:
+                  type: number
+                  format: float
+                  nullable: true
+                is_preferred:
+                  type: boolean
+                  default: false
+      responses:
+        '201':
+          description: Supplier link created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ProductSupplierLink'
+                  meta:
+                    type: object
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Product or supplier not found
+        '422':
+          description: Validation error
+  /api/v1/products/{id}/suppliers/{product_supplier_id}:
+    patch:
+      summary: Patch product supplier (SUPER_ADMIN)
+      tags: [Products]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - in: path
+          name: product_supplier_id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                supplier_id:
+                  type: string
+                  format: uuid
+                supplier_reference:
+                  type: string
+                  nullable: true
+                purchase_price:
+                  type: number
+                  format: float
+                  nullable: true
+                pvp:
+                  type: number
+                  format: float
+                  nullable: true
+                net_cost:
+                  type: number
+                  format: float
+                  nullable: true
+                is_preferred:
+                  type: boolean
+      responses:
+        '200':
+          description: Supplier link updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ProductSupplierLink'
+                  meta:
+                    type: object
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not found
+        '422':
+          description: Validation error
+    delete:
+      summary: Remove product supplier (SUPER_ADMIN)
+      tags: [Products]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - in: path
+          name: product_supplier_id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Deleted
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not found
+  /api/v1/products/{id}/suppliers/{product_supplier_id}/preferred:
+    patch:
+      summary: Set preferred product supplier (SUPER_ADMIN)
+      tags: [Products]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - in: path
+          name: product_supplier_id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Preferred supplier updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ProductSupplierLink'
+                  meta:
+                    type: object
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not found
+  /api/v1/categories:
+    get:
+      summary: List categories (STAFF+)
+      tags: [Categories]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: active
+          required: false
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Categories list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Category'
+                  meta:
+                    type: object
+        '401':
+          description: Unauthorized
+    post:
+      summary: Create category (SUPER_ADMIN)
+      tags: [Categories]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+                description: { type: string, nullable: true }
+                is_active: { type: boolean, default: true }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Category'
+                  meta:
+                    type: object
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '422':
+          description: Validation error
+  /api/v1/categories/{id}:
+    get:
+      summary: Get category (STAFF+)
+      tags: [Categories]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Category
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Category'
+                  meta:
+                    type: object
+        '401':
+          description: Unauthorized
+        '404':
+          description: Not Found
+    patch:
+      summary: Patch category (SUPER_ADMIN)
+      tags: [Categories]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                description: { type: string, nullable: true }
+                is_active: { type: boolean }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Category'
+                  meta:
+                    type: object
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not Found
+        '422':
+          description: Validation error
+    delete:
+      summary: Soft delete category (SUPER_ADMIN)
+      tags: [Categories]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Deleted
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not Found
+  /api/v1/subcategories:
+    get:
+      summary: List subcategories (STAFF+)
+      tags: [Subcategories]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: active
+          required: false
+          schema:
+            type: boolean
+        - in: query
+          name: category_id
+          required: false
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Subcategories list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Subcategory'
+                  meta:
+                    type: object
+        '401':
+          description: Unauthorized
+    post:
+      summary: Create subcategory (SUPER_ADMIN)
+      tags: [Subcategories]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [category_id, name]
+              properties:
+                category_id: { type: string, format: uuid }
+                name: { type: string }
+                description: { type: string, nullable: true }
+                is_active: { type: boolean, default: true }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Subcategory'
+                  meta:
+                    type: object
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '422':
+          description: Validation error
+  /api/v1/subcategories/{id}:
+    get:
+      summary: Get subcategory (STAFF+)
+      tags: [Subcategories]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Subcategory
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Subcategory'
+                  meta:
+                    type: object
+        '401':
+          description: Unauthorized
+        '404':
+          description: Not Found
+    patch:
+      summary: Patch subcategory (SUPER_ADMIN)
+      tags: [Subcategories]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                category_id: { type: string, format: uuid }
+                name: { type: string }
+                description: { type: string, nullable: true }
+                is_active: { type: boolean }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Subcategory'
+                  meta:
+                    type: object
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not Found
+        '422':
+          description: Validation error
+    delete:
+      summary: Soft delete subcategory (SUPER_ADMIN)
+      tags: [Subcategories]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Deleted
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not Found
+  /api/v1/brands:
+    get:
+      summary: List brands (STAFF+)
+      tags: [Brands]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: active
+          required: false
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Brands list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Brand'
+                  meta:
+                    type: object
+        '401':
+          description: Unauthorized
+    post:
+      summary: Create brand (SUPER_ADMIN)
+      tags: [Brands]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+                is_active: { type: boolean, default: true }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Brand'
+                  meta:
+                    type: object
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '422':
+          description: Validation error
+  /api/v1/brands/{id}:
+    get:
+      summary: Get brand (STAFF+)
+      tags: [Brands]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Brand
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Brand'
+                  meta:
+                    type: object
+        '401':
+          description: Unauthorized
+        '404':
+          description: Not Found
+    patch:
+      summary: Patch brand (SUPER_ADMIN)
+      tags: [Brands]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                is_active: { type: boolean }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Brand'
+                  meta:
+                    type: object
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not Found
+        '422':
+          description: Validation error
+    delete:
+      summary: Soft delete brand (SUPER_ADMIN)
+      tags: [Brands]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Deleted
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not Found
+  /api/v1/brands/{id}/suppliers:
+    get:
+      summary: List brand suppliers (STAFF+)
+      tags: [Brands]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Brand supplier links
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/BrandSupplierLink'
+                  meta:
+                    type: object
+        '401':
+          description: Unauthorized
+        '404':
+          description: Brand not found
+    post:
+      summary: Attach supplier to brand (SUPER_ADMIN)
+      tags: [Brands]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [supplier_id]
+              properties:
+                supplier_id:
+                  type: string
+                  format: uuid
+                is_active:
+                  type: boolean
+                  default: true
+      responses:
+        '201':
+          description: Link created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/BrandSupplierLink'
+                  meta:
+                    type: object
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Brand or supplier not found
+        '422':
+          description: Validation error
+  /api/v1/brands/{id}/suppliers/{supplier_id}:
+    delete:
+      summary: Detach supplier from brand (SUPER_ADMIN)
+      tags: [Brands]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - in: path
+          name: supplier_id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Detached
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not found
+  /api/v1/suppliers:
+    get:
+      summary: List suppliers (STAFF+)
+      tags: [Suppliers]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: active
+          required: false
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Suppliers list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Supplier'
+                  meta:
+                    type: object
+        '401':
+          description: Unauthorized
+    post:
+      summary: Create supplier (SUPER_ADMIN)
+      tags: [Suppliers]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+                legal_name: { type: string, nullable: true }
+                tax_id: { type: string, nullable: true }
+                email: { type: string, format: email, nullable: true }
+                phone: { type: string, nullable: true }
+                is_active: { type: boolean, default: true }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Supplier'
+                  meta:
+                    type: object
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '422':
+          description: Validation error
+  /api/v1/suppliers/{id}:
+    get:
+      summary: Get supplier (STAFF+)
+      tags: [Suppliers]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Supplier
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Supplier'
+                  meta:
+                    type: object
+        '401':
+          description: Unauthorized
+        '404':
+          description: Not Found
+    patch:
+      summary: Patch supplier (SUPER_ADMIN)
+      tags: [Suppliers]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                legal_name: { type: string, nullable: true }
+                tax_id: { type: string, nullable: true }
+                email: { type: string, format: email, nullable: true }
+                phone: { type: string, nullable: true }
+                is_active: { type: boolean }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Supplier'
+                  meta:
+                    type: object
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not Found
+        '422':
+          description: Validation error
+    delete:
+      summary: Soft delete supplier (SUPER_ADMIN)
+      tags: [Suppliers]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Deleted
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not Found
+  /api/v1/dispensing-types:
+    get:
+      summary: List dispensing types (STAFF+)
+      tags: [DispensingTypes]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: active
+          required: false
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Dispensing types list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/DispensingType'
+                  meta:
+                    type: object
+        '401':
+          description: Unauthorized
+    post:
+      summary: Create dispensing type (SUPER_ADMIN)
+      tags: [DispensingTypes]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+                description: { type: string, nullable: true }
+                is_active: { type: boolean, default: true }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/DispensingType'
+                  meta:
+                    type: object
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '422':
+          description: Validation error
+  /api/v1/dispensing-types/{id}:
+    get:
+      summary: Get dispensing type (STAFF+)
+      tags: [DispensingTypes]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Dispensing type
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/DispensingType'
+                  meta:
+                    type: object
+        '401':
+          description: Unauthorized
+        '404':
+          description: Not Found
+    patch:
+      summary: Patch dispensing type (SUPER_ADMIN)
+      tags: [DispensingTypes]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                description: { type: string, nullable: true }
+                is_active: { type: boolean }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/DispensingType'
+                  meta:
+                    type: object
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not Found
+        '422':
+          description: Validation error
+    delete:
+      summary: Soft delete dispensing type (SUPER_ADMIN)
+      tags: [DispensingTypes]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Deleted
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not Found
+  /api/v1/dispensing-types/{id}/roles:
+    get:
+      summary: List dispensing type roles (STAFF+)
+      tags: [DispensingTypes]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Role links
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/DispensingTypeRoleLink'
+                  meta:
+                    type: object
+        '401':
+          description: Unauthorized
+        '404':
+          description: Dispensing type not found
+    post:
+      summary: Attach role to dispensing type (SUPER_ADMIN)
+      tags: [DispensingTypes]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [role_id]
+              properties:
+                role_id:
+                  type: string
+                  format: uuid
+      responses:
+        '201':
+          description: Link created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/DispensingTypeRoleLink'
+                  meta:
+                    type: object
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Dispensing type or role not found
+        '422':
+          description: Validation error
+  /api/v1/dispensing-types/{id}/roles/{role_id}:
+    delete:
+      summary: Detach role from dispensing type (SUPER_ADMIN)
+      tags: [DispensingTypes]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - in: path
+          name: role_id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Detached
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not found
+  /api/v1/roles:
+    get:
+      summary: List operational roles (STAFF+)
+      tags: [Roles]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: active
+          required: false
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Roles list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/OperationalRole'
+                  meta:
+                    type: object
+        '401':
+          description: Unauthorized
+    post:
+      summary: Create operational role (SUPER_ADMIN)
+      tags: [Roles]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+                description: { type: string, nullable: true }
+                is_active: { type: boolean, default: true }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/OperationalRole'
+                  meta:
+                    type: object
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '422':
+          description: Validation error
+  /api/v1/roles/{id}:
+    get:
+      summary: Get operational role (STAFF+)
+      tags: [Roles]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Role
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/OperationalRole'
+                  meta:
+                    type: object
+        '401':
+          description: Unauthorized
+        '404':
+          description: Not Found
+    patch:
+      summary: Patch operational role (SUPER_ADMIN)
+      tags: [Roles]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                description: { type: string, nullable: true }
+                is_active: { type: boolean }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/OperationalRole'
+                  meta:
+                    type: object
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not Found
+        '422':
+          description: Validation error
+    delete:
+      summary: Soft delete operational role (SUPER_ADMIN)
+      tags: [Roles]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Deleted
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not Found
   /api/v1/users:
     get:
       summary: List clinic users
@@ -743,9 +2204,34 @@ paths:
                   enum: [SUPER_ADMIN, ADMIN, TECHNICIAN, STAFF]
                 is_active:
                   type: boolean
+                operational_role_id:
+                  type: string
+                  format: uuid
+                  nullable: true
+                  description: Rol operativo de locker (tabla roles); independiente de role de autenticacion
       responses:
         '201':
           description: User created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      id: { type: string, format: uuid }
+                      name: { type: string }
+                      email: { type: string, format: email }
+                      role: { type: string }
+                      operational_role_id: { type: string, format: uuid, nullable: true }
+                      operational_role:
+                        nullable: true
+                        oneOf:
+                          - type: 'null'
+                          - $ref: '#/components/schemas/CatalogRef'
+                  meta:
+                    type: object
         '401':
           description: Unauthorized
         '403':
@@ -800,9 +2286,34 @@ paths:
                   type: boolean
                 password:
                   type: string
+                operational_role_id:
+                  type: string
+                  format: uuid
+                  nullable: true
+                  description: Rol operativo de locker; enviar null para desasignar
       responses:
         '200':
           description: User updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      id: { type: string, format: uuid }
+                      name: { type: string }
+                      email: { type: string, format: email }
+                      role: { type: string }
+                      operational_role_id: { type: string, format: uuid, nullable: true }
+                      operational_role:
+                        nullable: true
+                        oneOf:
+                          - type: 'null'
+                          - $ref: '#/components/schemas/CatalogRef'
+                  meta:
+                    type: object
         '401':
           description: Unauthorized
         '403':
@@ -1626,6 +3137,199 @@ paths:
           description: OK
 components:
   schemas:
+    CatalogRef:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+    MeUser:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        clinic_id: { type: string, format: uuid }
+        name: { type: string }
+        role: { type: string }
+        email: { type: string, format: email }
+        operational_role_id: { type: string, format: uuid, nullable: true }
+    Category:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        slug:
+          type: string
+          description: Server-generated; read-only. Not accepted on create/patch.
+        description: { type: string, nullable: true }
+        is_active: { type: boolean }
+        created_at: { type: string }
+        updated_at: { type: string }
+    Subcategory:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        category_id: { type: string, format: uuid }
+        name: { type: string }
+        slug:
+          type: string
+          description: Server-generated; read-only. Not accepted on create/patch.
+        description: { type: string, nullable: true }
+        is_active: { type: boolean }
+        created_at: { type: string }
+        updated_at: { type: string }
+    Brand:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        slug:
+          type: string
+          description: Server-generated; read-only. Not accepted on create/patch.
+        is_active: { type: boolean }
+        created_at: { type: string }
+        updated_at: { type: string }
+    Supplier:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        slug:
+          type: string
+          description: Server-generated; read-only. Not accepted on create/patch.
+        legal_name: { type: string, nullable: true }
+        tax_id: { type: string, nullable: true }
+        email: { type: string, format: email, nullable: true }
+        phone: { type: string, nullable: true }
+        is_active: { type: boolean }
+        created_at: { type: string }
+        updated_at: { type: string }
+    DispensingType:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        slug:
+          type: string
+          description: Server-generated; read-only. Not accepted on create/patch.
+        description: { type: string, nullable: true }
+        is_active: { type: boolean }
+        created_at: { type: string }
+        updated_at: { type: string }
+    OperationalRole:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        slug:
+          type: string
+          description: Server-generated; read-only. Not accepted on create/patch.
+        description: { type: string, nullable: true }
+        is_active: { type: boolean }
+        created_at: { type: string }
+        updated_at: { type: string }
+    ProductCreateBody:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+        barcode: { type: string, nullable: true }
+        internal_reference: { type: string, nullable: true }
+        category_id: { type: string, format: uuid, nullable: true }
+        subcategory_id: { type: string, format: uuid, nullable: true }
+        brand_id: { type: string, format: uuid, nullable: true }
+        dispensing_type_id: { type: string, format: uuid, nullable: true }
+        is_active: { type: boolean, default: true }
+        unit_of_measure: { type: string, default: Unidades }
+      description: SKU is server-generated; do not send sku on create
+    ProductPatchBody:
+      type: object
+      properties:
+        name: { type: string }
+        barcode: { type: string, nullable: true }
+        internal_reference: { type: string, nullable: true }
+        category_id: { type: string, format: uuid, nullable: true }
+        subcategory_id: { type: string, format: uuid, nullable: true }
+        brand_id: { type: string, format: uuid, nullable: true }
+        dispensing_type_id: { type: string, format: uuid, nullable: true }
+        is_active: { type: boolean }
+        unit_of_measure: { type: string }
+    Product:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        sku: { type: string }
+        name: { type: string }
+        barcode: { type: string, nullable: true }
+        internal_reference: { type: string, nullable: true }
+        category_id: { type: string, format: uuid, nullable: true }
+        subcategory_id: { type: string, format: uuid, nullable: true }
+        brand_id: { type: string, format: uuid, nullable: true }
+        dispensing_type_id: { type: string, format: uuid, nullable: true }
+        is_active: { type: boolean }
+        unit_of_measure: { type: string }
+        category:
+          nullable: true
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/CatalogRef'
+        subcategory:
+          nullable: true
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/CatalogRef'
+        brand:
+          nullable: true
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/CatalogRef'
+        dispensing_type:
+          nullable: true
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/CatalogRef'
+        visible:
+          type: boolean
+          description: Present on clinic-scoped list/get
+        suppliers:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProductSupplierLink'
+          description: Included on GET detail
+        created_at: { type: string }
+        updated_at: { type: string }
+    ProductSupplierLink:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        product_id: { type: string, format: uuid }
+        supplier_id: { type: string, format: uuid }
+        name: { type: string, description: Supplier display name }
+        supplier_reference: { type: string, nullable: true }
+        purchase_price: { type: number, format: float, nullable: true }
+        pvp: { type: number, format: float, nullable: true }
+        net_cost: { type: number, format: float, nullable: true }
+        is_preferred: { type: boolean }
+        created_at: { type: string }
+        updated_at: { type: string }
+    BrandSupplierLink:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        brand_id: { type: string, format: uuid }
+        supplier_id: { type: string, format: uuid }
+        supplier_name: { type: string }
+        is_active: { type: boolean }
+        created_at: { type: string }
+        updated_at: { type: string }
+    DispensingTypeRoleLink:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        dispensing_type_id: { type: string, format: uuid }
+        role_id: { type: string, format: uuid }
+        role_name: { type: string }
+        role_slug: { type: string }
+        created_at: { type: string }
+        updated_at: { type: string }
     AmbienteRef:
       nullable: true
       oneOf:

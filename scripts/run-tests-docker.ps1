@@ -12,8 +12,8 @@ if ($PhpUnitArgs.Count -gt 0 -and $PhpUnitArgs[0] -eq '--') {
     $PhpUnitArgs = @($PhpUnitArgs | Select-Object -Skip 1)
 }
 
-$ComposeBase = @('-f', 'docker-compose.yml')
-$ComposeTest = @('-f', 'docker-compose.yml', '-f', 'docker-compose.test.yml')
+$ComposeBase = @('-f', 'docker-compose.yml', '-f', 'docker-compose.dev.yml', '--env-file', '.env')
+$ComposeTest = @('-f', 'docker-compose.yml', '-f', 'docker-compose.dev.yml', '-f', 'docker-compose.test.yml', '--env-file', '.env')
 
 function Invoke-Compose {
     param([string[]]$Extra)

@@ -5,11 +5,11 @@ set -e
 cd "$(dirname "$0")/.."
 
 compose() {
-  docker compose -f docker-compose.yml "$@"
+  docker compose --env-file .env -f docker-compose.yml -f docker-compose.dev.yml "$@"
 }
 
 compose_test() {
-  docker compose -f docker-compose.yml -f docker-compose.test.yml "$@"
+  docker compose --env-file .env -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.test.yml "$@"
 }
 
 echo "==> Comprobando servicios (postgres, redis, nginx)"

@@ -17,7 +17,8 @@ final class CreateUserDTO
         public readonly bool $isActive,
         public readonly ?string $pin,
         public readonly ?string $clinicId,
-        public readonly array $clinicIds = []
+        public readonly array $clinicIds = [],
+        public readonly ?string $operationalRoleId = null,
     ) {
     }
 }

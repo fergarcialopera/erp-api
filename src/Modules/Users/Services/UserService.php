@@ -33,7 +33,7 @@ final class UserService
     {
         if ($clinicId !== null && $clinicId !== '') {
             $stmt = $this->pdo->prepare(
-                'SELECT DISTINCT u.id, u.clinic_id, u.name, u.email, u.role, u.is_active, u.is_locked, u.image_path, u.created_at, u.updated_at
+                'SELECT DISTINCT u.id, u.clinic_id, u.name, u.email, u.role, u.operational_role_id, u.is_active, u.is_locked, u.image_path, u.created_at, u.updated_at
                  FROM users u
                  LEFT JOIN user_clinics uc ON uc.user_id = u.id
                  WHERE u.clinic_id::text = :clinic_id OR uc.clinic_id::text = :clinic_id
@@ -42,7 +42,7 @@ final class UserService
             $stmt->execute(['clinic_id' => $clinicId]);
         } else {
             $stmt = $this->pdo->query(
-                'SELECT id, clinic_id, name, email, role, is_active, is_locked, image_path, created_at, updated_at
+                'SELECT id, clinic_id, name, email, role, operational_role_id, is_active, is_locked, image_path, created_at, updated_at
                  FROM users
                  WHERE role <> \'SUPER_ADMIN\'
                  ORDER BY created_at DESC'
@@ -57,7 +57,7 @@ final class UserService
     public function get(string $userId): ?array
     {
         $stmt = $this->pdo->prepare(
-            'SELECT id, clinic_id, name, email, role, is_active, is_locked, image_path, created_at, updated_at
+            'SELECT id, clinic_id, name, email, role, operational_role_id, is_active, is_locked, image_path, created_at, updated_at
              FROM users WHERE id::text = :id AND role <> \'SUPER_ADMIN\' LIMIT 1'
         );
         $stmt->execute(['id' => $userId]);
@@ -74,6 +74,10 @@ final class UserService
             throw new RuntimeException('Email already exists');
         }
 
+        if ($dto->operationalRoleId !== null && !$this->operationalRoleExists($dto->operationalRoleId)) {
+            throw new RuntimeException('Operational role not found');
+        }
+
         $id = Uuid::v4()->toRfc4122();
         $hash = password_hash($dto->password, PASSWORD_BCRYPT);
         $pinHash = $dto->pin !== null ? password_hash($dto->pin, PASSWORD_BCRYPT) : null;
@@ -81,9 +85,9 @@ final class UserService
         $this->pdo->beginTransaction();
         try {
             $stmt = $this->pdo->prepare(
-                'INSERT INTO users (id, clinic_id, name, email, password_hash, pin_hash, role, is_active, created_at, updated_at)
-                 VALUES (:id, :clinic_id, :name, :email, :password_hash, :pin_hash, :role, :is_active, NOW(), NOW())
-                 RETURNING id, clinic_id, name, email, role, is_active, is_locked, image_path, created_at, updated_at'
+                'INSERT INTO users (id, clinic_id, name, email, password_hash, pin_hash, role, operational_role_id, is_active, created_at, updated_at)
+                 VALUES (:id, :clinic_id, :name, :email, :password_hash, :pin_hash, :role, :operational_role_id, :is_active, NOW(), NOW())
+                 RETURNING id, clinic_id, name, email, role, operational_role_id, is_active, is_locked, image_path, created_at, updated_at'
             );
             $stmt->execute([
                 'id' => $id,
@@ -93,6 +97,7 @@ final class UserService
                 'password_hash' => $hash,
                 'pin_hash' => $pinHash,
                 'role' => $dto->role,
+                'operational_role_id' => $dto->operationalRoleId,
                 'is_active' => $dto->isActive,
             ]);
 
@@ -154,14 +159,23 @@ final class UserService
             $clinicId = $dto->clinicIds[0] ?? null;
         }
 
+        $operationalRoleId = $current['operational_role_id'] !== null ? (string) $current['operational_role_id'] : null;
+        if ($dto->operationalRoleIdTouched) {
+            $operationalRoleId = $dto->operationalRoleId;
+            if ($operationalRoleId !== null && !$this->operationalRoleExists($operationalRoleId)) {
+                throw new RuntimeException('Operational role not found');
+            }
+        }
+
         $this->pdo->beginTransaction();
         try {
             $stmt = $this->pdo->prepare(
                 'UPDATE users
-                 SET name = :name, role = :role, clinic_id = :clinic_id, is_active = :is_active, password_hash = :password_hash,
+                 SET name = :name, role = :role, clinic_id = :clinic_id, operational_role_id = :operational_role_id,
+                     is_active = :is_active, password_hash = :password_hash,
                      pin_hash = :pin_hash, is_locked = :is_locked, locked_at = :locked_at, updated_at = NOW()
                  WHERE id::text = :id
-                 RETURNING id, clinic_id, name, email, role, is_active, is_locked, image_path, created_at, updated_at'
+                 RETURNING id, clinic_id, name, email, role, operational_role_id, is_active, is_locked, image_path, created_at, updated_at'
             );
             $stmt->bindValue(':id', $userId);
             $stmt->bindValue(':name', $name);
@@ -171,6 +185,7 @@ final class UserService
             } else {
                 $stmt->bindValue(':clinic_id', $clinicId);
             }
+            $stmt->bindValue(':operational_role_id', $operationalRoleId);
             $stmt->bindValue(':is_active', $isActive, PDO::PARAM_BOOL);
             $stmt->bindValue(':password_hash', $passwordHash);
             if ($pinHash === null) {
@@ -227,7 +242,7 @@ final class UserService
         $stmt = $this->pdo->prepare(
             'UPDATE users SET image_path = :image_path, updated_at = NOW()
              WHERE id::text = :id
-             RETURNING id, clinic_id, name, email, role, is_active, is_locked, image_path, created_at, updated_at'
+             RETURNING id, clinic_id, name, email, role, operational_role_id, is_active, is_locked, image_path, created_at, updated_at'
         );
         $stmt->execute([
             'id' => $userId,
@@ -267,7 +282,7 @@ final class UserService
     private function getRaw(string $userId): ?array
     {
         $stmt = $this->pdo->prepare(
-            'SELECT id, clinic_id, name, email, password_hash, pin_hash, role, is_active, is_locked, locked_at
+            'SELECT id, clinic_id, name, email, password_hash, pin_hash, role, operational_role_id, is_active, is_locked, locked_at
              FROM users WHERE id::text = :id AND role <> \'SUPER_ADMIN\' LIMIT 1'
         );
         $stmt->execute(['id' => $userId]);
@@ -329,6 +344,14 @@ final class UserService
             'name' => $name,
             'email' => (string) $row['email'],
             'role' => (string) $row['role'],
+            'operational_role_id' => isset($row['operational_role_id']) && $row['operational_role_id'] !== null
+                ? (string) $row['operational_role_id']
+                : null,
+            'operational_role' => $this->fetchOperationalRole(
+                isset($row['operational_role_id']) && $row['operational_role_id'] !== null
+                    ? (string) $row['operational_role_id']
+                    : null
+            ),
             'is_active' => (bool) $row['is_active'],
             'is_locked' => (bool) ($row['is_locked'] ?? false),
             'image_path' => $imagePath !== '' ? $imagePath : null,
@@ -337,6 +360,38 @@ final class UserService
             'created_at' => (string) ($row['created_at'] ?? ''),
             'updated_at' => (string) ($row['updated_at'] ?? ''),
         ];
+    }
+
+    /**
+     * @return array{id: string, name: string, slug: string}|null
+     */
+    private function fetchOperationalRole(?string $operationalRoleId): ?array
+    {
+        if ($operationalRoleId === null || $operationalRoleId === '') {
+            return null;
+        }
+        $stmt = $this->pdo->prepare(
+            'SELECT id, name, slug FROM roles WHERE id::text = :id LIMIT 1'
+        );
+        $stmt->execute(['id' => $operationalRoleId]);
+        $row = $stmt->fetch();
+        if (!is_array($row)) {
+            return null;
+        }
+
+        return [
+            'id' => (string) $row['id'],
+            'name' => (string) $row['name'],
+            'slug' => (string) $row['slug'],
+        ];
+    }
+
+    private function operationalRoleExists(string $roleId): bool
+    {
+        $stmt = $this->pdo->prepare('SELECT 1 FROM roles WHERE id::text = :id AND is_active = TRUE LIMIT 1');
+        $stmt->execute(['id' => $roleId]);
+
+        return (bool) $stmt->fetch();
     }
 
     /**

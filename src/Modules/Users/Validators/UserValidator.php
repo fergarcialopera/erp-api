@@ -67,7 +67,8 @@ final class UserValidator
             (bool) $isActive,
             $pin !== '' ? $pin : null,
             $clinicId !== '' ? $clinicId : null,
-            $clinicIds
+            $clinicIds,
+            $this->parseOperationalRoleId($payload, false)
         );
     }
 
@@ -111,9 +112,14 @@ final class UserValidator
             throw new InvalidArgumentException('Invalid unlock');
         }
 
-        if ($name === null && $role === null && $isActive === null && $password === null && ($pin === null || $pin === '') && $unlock === null && $clinicIds === null) {
+        if ($name === null && $role === null && $isActive === null && $password === null && ($pin === null || $pin === '') && $unlock === null && $clinicIds === null && !array_key_exists('operational_role_id', $payload)) {
             throw new InvalidArgumentException('No fields to update');
         }
+
+        $operationalRoleIdTouched = array_key_exists('operational_role_id', $payload);
+        $operationalRoleId = $operationalRoleIdTouched
+            ? $this->parseOperationalRoleId($payload, true)
+            : null;
 
         return new PatchUserDTO(
             $name,
@@ -122,7 +128,9 @@ final class UserValidator
             $password !== '' ? $password : null,
             $pin !== '' ? $pin : null,
             $unlock,
-            $clinicIds
+            $clinicIds,
+            $operationalRoleIdTouched,
+            $operationalRoleId
         );
     }
 
@@ -160,5 +168,24 @@ final class UserValidator
         }
 
         return array_values($ids);
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     */
+    private function parseOperationalRoleId(array $payload, bool $allowNullExplicit): ?string
+    {
+        if (!array_key_exists('operational_role_id', $payload)) {
+            return null;
+        }
+        if ($payload['operational_role_id'] === null || $payload['operational_role_id'] === '') {
+            return $allowNullExplicit ? null : null;
+        }
+        $id = trim((string) $payload['operational_role_id']);
+        if ($id === '') {
+            return null;
+        }
+
+        return $id;
     }
 }

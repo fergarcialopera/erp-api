@@ -95,15 +95,68 @@ use App\Modules\Ambientes\Handlers\PatchAmbienteHandler;
 use App\Modules\Ambientes\Handlers\PatchClinicAmbienteVisibilityHandler;
 use App\Modules\Ambientes\Services\AmbienteService;
 use App\Modules\Ambientes\Validators\AmbienteValidator;
+use App\Modules\Brands\Handlers\AttachBrandSupplierHandler;
+use App\Modules\Brands\Handlers\CreateBrandHandler;
+use App\Modules\Brands\Handlers\DeleteBrandHandler;
+use App\Modules\Brands\Handlers\DetachBrandSupplierHandler;
+use App\Modules\Brands\Handlers\GetBrandHandler;
+use App\Modules\Brands\Handlers\ListBrandSuppliersHandler;
+use App\Modules\Brands\Handlers\ListBrandsHandler;
+use App\Modules\Brands\Handlers\PatchBrandHandler;
+use App\Modules\Brands\Services\BrandService;
+use App\Modules\Brands\Validators\BrandValidator;
+use App\Modules\Categories\Handlers\CreateCategoryHandler;
+use App\Modules\Categories\Handlers\DeleteCategoryHandler;
+use App\Modules\Categories\Handlers\GetCategoryHandler;
+use App\Modules\Categories\Handlers\ListCategoriesHandler;
+use App\Modules\Categories\Handlers\PatchCategoryHandler;
+use App\Modules\Categories\Services\CategoryService;
+use App\Modules\Categories\Validators\CategoryValidator;
+use App\Modules\DispensingTypes\Handlers\AttachDispensingTypeRoleHandler;
+use App\Modules\DispensingTypes\Handlers\CreateDispensingTypeHandler;
+use App\Modules\DispensingTypes\Handlers\DeleteDispensingTypeHandler;
+use App\Modules\DispensingTypes\Handlers\DetachDispensingTypeRoleHandler;
+use App\Modules\DispensingTypes\Handlers\GetDispensingTypeHandler;
+use App\Modules\DispensingTypes\Handlers\ListDispensingTypeRolesHandler;
+use App\Modules\DispensingTypes\Handlers\ListDispensingTypesHandler;
+use App\Modules\DispensingTypes\Handlers\PatchDispensingTypeHandler;
+use App\Modules\DispensingTypes\Services\DispensingTypeService;
+use App\Modules\DispensingTypes\Validators\DispensingTypeValidator;
 use App\Modules\Products\Handlers\CreateProductHandler;
+use App\Modules\Products\Handlers\CreateProductSupplierHandler;
 use App\Modules\Products\Handlers\DeleteProductHandler;
+use App\Modules\Products\Handlers\DeleteProductSupplierHandler;
 use App\Modules\Products\Handlers\GetProductHandler;
 use App\Modules\Products\Handlers\GetProductStockLocationsHandler;
+use App\Modules\Products\Handlers\ListProductSuppliersHandler;
 use App\Modules\Products\Handlers\ListProductsHandler;
 use App\Modules\Products\Handlers\PatchClinicProductVisibilityHandler;
 use App\Modules\Products\Handlers\PatchProductHandler;
+use App\Modules\Products\Handlers\PatchProductSupplierHandler;
+use App\Modules\Products\Handlers\SetPreferredProductSupplierHandler;
 use App\Modules\Products\Services\ProductService;
 use App\Modules\Products\Validators\ProductValidator;
+use App\Modules\Roles\Handlers\CreateRoleHandler;
+use App\Modules\Roles\Handlers\DeleteRoleHandler;
+use App\Modules\Roles\Handlers\GetRoleHandler;
+use App\Modules\Roles\Handlers\ListRolesHandler;
+use App\Modules\Roles\Handlers\PatchRoleHandler;
+use App\Modules\Roles\Services\RoleService;
+use App\Modules\Roles\Validators\RoleValidator;
+use App\Modules\Subcategories\Handlers\CreateSubcategoryHandler;
+use App\Modules\Subcategories\Handlers\DeleteSubcategoryHandler;
+use App\Modules\Subcategories\Handlers\GetSubcategoryHandler;
+use App\Modules\Subcategories\Handlers\ListSubcategoriesHandler;
+use App\Modules\Subcategories\Handlers\PatchSubcategoryHandler;
+use App\Modules\Subcategories\Services\SubcategoryService;
+use App\Modules\Subcategories\Validators\SubcategoryValidator;
+use App\Modules\Suppliers\Handlers\CreateSupplierHandler;
+use App\Modules\Suppliers\Handlers\DeleteSupplierHandler;
+use App\Modules\Suppliers\Handlers\GetSupplierHandler;
+use App\Modules\Suppliers\Handlers\ListSuppliersHandler;
+use App\Modules\Suppliers\Handlers\PatchSupplierHandler;
+use App\Modules\Suppliers\Services\SupplierService;
+use App\Modules\Suppliers\Validators\SupplierValidator;
 use App\Modules\Settings\Handlers\ListSettingsHandler;
 use App\Modules\Settings\Handlers\UpsertSettingHandler;
 use App\Modules\Settings\Services\SettingService;
@@ -200,13 +253,26 @@ return static function (ApplicationConfig $appConfig): array {
         $auditActivityService,
     );
 
-    $incidentService = new IncidentService($pdo, $auditActivityService);
-    $settingService = new SettingService($pdo, $auditActivityService);
-    $clinicService = new ClinicService($pdo, $publicUrls, $auditActivityService);
-    $productService = new ProductService($pdo, $auditActivityService);
-    $userService = new UserService($pdo, $publicUrls, $loginAttempts, $auditActivityService);
-    $ambienteService = new AmbienteService($pdo, $auditActivityService);
-    $zoneService = new ZoneService($pdo, $auditActivityService);
+    $incidentService = new IncidentService($pdo);
+    $settingService = new SettingService($pdo);
+    $clinicService = new ClinicService($pdo, $publicUrls);
+    $productService = new ProductService($pdo);
+    $productValidator = new ProductValidator();
+    $categoryService = new CategoryService($pdo);
+    $categoryValidator = new CategoryValidator();
+    $subcategoryService = new SubcategoryService($pdo);
+    $subcategoryValidator = new SubcategoryValidator();
+    $brandService = new BrandService($pdo);
+    $brandValidator = new BrandValidator();
+    $supplierService = new SupplierService($pdo);
+    $supplierValidator = new SupplierValidator();
+    $dispensingTypeService = new DispensingTypeService($pdo);
+    $dispensingTypeValidator = new DispensingTypeValidator();
+    $roleService = new RoleService($pdo);
+    $roleValidator = new RoleValidator();
+    $userService = new UserService($pdo, $publicUrls, $loginAttempts);
+    $ambienteService = new AmbienteService($pdo);
+    $zoneService = new ZoneService($pdo);
     $clinicAccess = new ClinicAccessService($pdo);
     $clinicResolver = new RequestClinicResolver($clinicAccess);
 
@@ -256,9 +322,50 @@ return static function (ApplicationConfig $appConfig): array {
             'listProducts' => new ListProductsHandler($clinicAccess, $clinicResolver, $productService),
             'getProduct' => new GetProductHandler($clinicAccess, $clinicResolver, $productService),
             'getProductStockLocations' => new GetProductStockLocationsHandler($inventoryService),
-            'createProduct' => new CreateProductHandler($clinicAccess, new ProductValidator(), $productService),
-            'patchProduct' => new PatchProductHandler($clinicAccess, new ProductValidator(), $productService),
+            'listProductSuppliers' => new ListProductSuppliersHandler($productService),
+            'createProductSupplier' => new CreateProductSupplierHandler($clinicAccess, $productValidator, $productService),
+            'patchProductSupplier' => new PatchProductSupplierHandler($clinicAccess, $productValidator, $productService),
+            'deleteProductSupplier' => new DeleteProductSupplierHandler($clinicAccess, $productService),
+            'setPreferredProductSupplier' => new SetPreferredProductSupplierHandler($clinicAccess, $productService),
+            'createProduct' => new CreateProductHandler($clinicAccess, $productValidator, $productService),
+            'patchProduct' => new PatchProductHandler($clinicAccess, $productValidator, $productService),
             'deleteProduct' => new DeleteProductHandler($clinicAccess, $productService),
+            'listCategories' => new ListCategoriesHandler($categoryService),
+            'getCategory' => new GetCategoryHandler($categoryService),
+            'createCategory' => new CreateCategoryHandler($clinicAccess, $categoryValidator, $categoryService),
+            'patchCategory' => new PatchCategoryHandler($clinicAccess, $categoryValidator, $categoryService),
+            'deleteCategory' => new DeleteCategoryHandler($clinicAccess, $categoryService),
+            'listSubcategories' => new ListSubcategoriesHandler($subcategoryService),
+            'getSubcategory' => new GetSubcategoryHandler($subcategoryService),
+            'createSubcategory' => new CreateSubcategoryHandler($clinicAccess, $subcategoryValidator, $subcategoryService),
+            'patchSubcategory' => new PatchSubcategoryHandler($clinicAccess, $subcategoryValidator, $subcategoryService),
+            'deleteSubcategory' => new DeleteSubcategoryHandler($clinicAccess, $subcategoryService),
+            'listBrands' => new ListBrandsHandler($brandService),
+            'getBrand' => new GetBrandHandler($brandService),
+            'createBrand' => new CreateBrandHandler($clinicAccess, $brandValidator, $brandService),
+            'patchBrand' => new PatchBrandHandler($clinicAccess, $brandValidator, $brandService),
+            'deleteBrand' => new DeleteBrandHandler($clinicAccess, $brandService),
+            'listBrandSuppliers' => new ListBrandSuppliersHandler($brandService),
+            'attachBrandSupplier' => new AttachBrandSupplierHandler($clinicAccess, $brandService),
+            'detachBrandSupplier' => new DetachBrandSupplierHandler($clinicAccess, $brandService),
+            'listSuppliers' => new ListSuppliersHandler($supplierService),
+            'getSupplier' => new GetSupplierHandler($supplierService),
+            'createSupplier' => new CreateSupplierHandler($clinicAccess, $supplierValidator, $supplierService),
+            'patchSupplier' => new PatchSupplierHandler($clinicAccess, $supplierValidator, $supplierService),
+            'deleteSupplier' => new DeleteSupplierHandler($clinicAccess, $supplierService),
+            'listDispensingTypes' => new ListDispensingTypesHandler($dispensingTypeService),
+            'getDispensingType' => new GetDispensingTypeHandler($dispensingTypeService),
+            'createDispensingType' => new CreateDispensingTypeHandler($clinicAccess, $dispensingTypeValidator, $dispensingTypeService),
+            'patchDispensingType' => new PatchDispensingTypeHandler($clinicAccess, $dispensingTypeValidator, $dispensingTypeService),
+            'deleteDispensingType' => new DeleteDispensingTypeHandler($clinicAccess, $dispensingTypeService),
+            'listDispensingTypeRoles' => new ListDispensingTypeRolesHandler($dispensingTypeService),
+            'attachDispensingTypeRole' => new AttachDispensingTypeRoleHandler($clinicAccess, $dispensingTypeService),
+            'detachDispensingTypeRole' => new DetachDispensingTypeRoleHandler($clinicAccess, $dispensingTypeService),
+            'listRoles' => new ListRolesHandler($roleService),
+            'getRole' => new GetRoleHandler($roleService),
+            'createRole' => new CreateRoleHandler($clinicAccess, $roleValidator, $roleService),
+            'patchRole' => new PatchRoleHandler($clinicAccess, $roleValidator, $roleService),
+            'deleteRole' => new DeleteRoleHandler($clinicAccess, $roleService),
             'listUsers' => new ListUsersHandler($clinicAccess, $userService),
             'getUser' => new GetUserHandler($clinicAccess, $userService),
             'createUser' => new CreateUserHandler($clinicAccess, new UserValidator(), $userService),
