@@ -78,7 +78,8 @@ final class AuditLogService
         $where = implode(' AND ', $conditions);
 
         $countStmt = $this->pdo->prepare('SELECT COUNT(*)::int AS total FROM audit_logs al WHERE ' . $where);
-        $countStmt->execute($params);
+        $this->bindFilterParams($countStmt, $params);
+        $countStmt->execute();
         $total = (int) (($countStmt->fetch()['total'] ?? 0));
 
         $sql = 'SELECT al.id, al.registered_at, al.event, al.success, al.error,
@@ -93,9 +94,7 @@ final class AuditLogService
                 LIMIT :limit OFFSET :offset';
 
         $stmt = $this->pdo->prepare($sql);
-        foreach ($params as $key => $value) {
-            $stmt->bindValue(':' . $key, $value);
-        }
+        $this->bindFilterParams($stmt, $params);
         $stmt->bindValue(':limit', $pagination['per_page'], PDO::PARAM_INT);
         $stmt->bindValue(':offset', $pagination['offset'], PDO::PARAM_INT);
         $stmt->execute();
@@ -217,5 +216,19 @@ final class AuditLogService
             'user_agent' => $row['user_agent'] !== null ? (string) $row['user_agent'] : null,
             'request_id' => $row['request_id'] !== null ? (string) $row['request_id'] : null,
         ];
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     */
+    private function bindFilterParams(\PDOStatement $stmt, array $params): void
+    {
+        foreach ($params as $key => $value) {
+            if (is_bool($value)) {
+                $stmt->bindValue(':' . $key, $value, PDO::PARAM_BOOL);
+                continue;
+            }
+            $stmt->bindValue(':' . $key, $value);
+        }
     }
 }

@@ -198,7 +198,7 @@ final class AuthService
         $userId = trim((string) ($payload['user_id'] ?? ''));
 
         $this->auditLogs->recordSuccess(
-            'user_logout',
+            'logout',
             $context,
             $clinicId !== '' ? $clinicId : null,
             $userId !== '' ? $userId : null,

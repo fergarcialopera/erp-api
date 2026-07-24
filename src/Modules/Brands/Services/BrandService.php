@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Modules\Brands\Services;
 
+use App\Application\Audit\AuditActor;
 use App\Application\Support\Slug;
+use App\Modules\Audit\Services\AuditActivityService;
 use App\Modules\Brands\DTOs\CreateBrandDTO;
 use App\Modules\Brands\DTOs\PatchBrandDTO;
 use PDO;
@@ -13,8 +15,10 @@ use Symfony\Component\Uid\Uuid;
 
 final class BrandService
 {
-    public function __construct(private readonly PDO $pdo)
-    {
+    public function __construct(
+        private readonly PDO $pdo,
+        private readonly AuditActivityService $audit,
+    ) {
     }
 
     /**
@@ -48,7 +52,7 @@ final class BrandService
         return is_array($row) ? $this->present($row) : null;
     }
 
-    public function create(CreateBrandDTO $dto): array
+    public function create(CreateBrandDTO $dto, AuditActor $actor): array
     {
         $id = Uuid::v4()->toRfc4122();
         $slug = Slug::from($dto->name);
@@ -63,22 +67,21 @@ final class BrandService
         $stmt->bindValue(':is_active', $dto->isActive, PDO::PARAM_BOOL);
         $stmt->execute();
 
-        return $this->present((array) $stmt->fetch());
+        $presented = $this->present((array) $stmt->fetch());
+        $this->audit->recordAdd('brand', $presented['id'], $actor->userId, $actor->clinicId, $presented);
+
+        return $presented;
     }
 
-    public function patch(string $brandId, PatchBrandDTO $dto): ?array
+    public function patch(string $brandId, PatchBrandDTO $dto, AuditActor $actor): ?array
     {
-        $currentStmt = $this->pdo->prepare(
-            'SELECT name, slug, is_active FROM brands WHERE id::text = :id LIMIT 1'
-        );
-        $currentStmt->execute(['id' => $brandId]);
-        $current = $currentStmt->fetch();
-        if (!is_array($current)) {
+        $before = $this->get($brandId);
+        if ($before === null) {
             return null;
         }
 
-        $name = $dto->name ?? (string) $current['name'];
-        $slug = $dto->name !== null ? Slug::from($name) : (string) $current['slug'];
+        $name = $dto->name ?? (string) $before['name'];
+        $slug = $dto->name !== null ? Slug::from($name) : (string) $before['slug'];
 
         $stmt = $this->pdo->prepare(
             'UPDATE brands
@@ -89,19 +92,29 @@ final class BrandService
         $stmt->bindValue(':id', $brandId);
         $stmt->bindValue(':name', $name);
         $stmt->bindValue(':slug', $slug);
-        $stmt->bindValue(':is_active', $dto->isActive ?? (bool) $current['is_active'], PDO::PARAM_BOOL);
+        $stmt->bindValue(':is_active', $dto->isActive ?? (bool) $before['is_active'], PDO::PARAM_BOOL);
         $stmt->execute();
         $row = $stmt->fetch();
+        if (!is_array($row)) {
+            return null;
+        }
 
-        return is_array($row) ? $this->present($row) : null;
+        $after = $this->present($row);
+        $this->audit->recordEdit('brand', $brandId, $actor->userId, $actor->clinicId, $before, $after);
+
+        return $after;
     }
 
-    public function softDelete(string $brandId): bool
+    public function softDelete(string $brandId, AuditActor $actor): bool
     {
         $stmt = $this->pdo->prepare(
             'UPDATE brands SET is_active = FALSE, updated_at = NOW() WHERE id::text = :id'
         );
         $stmt->execute(['id' => $brandId]);
+
+        if ($stmt->rowCount() > 0) {
+            $this->audit->recordDelete('brand', $brandId, $actor->userId, $actor->clinicId);
+        }
 
         return $stmt->rowCount() > 0;
     }

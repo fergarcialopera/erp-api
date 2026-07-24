@@ -29,8 +29,10 @@ final class ProductService
          LEFT JOIN brands b ON b.id = p.brand_id
          LEFT JOIN dispensing_types dt ON dt.id = p.dispensing_type_id';
 
-    public function __construct(private readonly PDO $pdo)
-    {
+    public function __construct(
+        private readonly PDO $pdo,
+        private readonly AuditActivityService $audit,
+    ) {
     }
 
     /**
@@ -349,10 +351,6 @@ final class ProductService
         $stmt->bindValue(':product_id', $productId);
         $stmt->bindValue(':visible', $visible, PDO::PARAM_BOOL);
         $stmt->execute();
-        if (!$stmt->fetch()) {
-            return null;
-        }
-
         if (!$stmt->fetch()) {
             return null;
         }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Subcategories\Handlers;
 
+use App\Application\Audit\AuditActor;
 use App\Application\Auth\AccessDeniedException;
 use App\Application\Auth\ClinicAccessService;
 use App\Application\Http\ApiResponse;
@@ -31,7 +32,7 @@ final class DeleteSubcategoryHandler
                 return ApiResponse::error($request, 404, 'Not Found', 'Subcategory not found');
             }
 
-            if (!$this->service->softDelete($id)) {
+            if (!$this->service->softDelete($id, AuditActor::fromUser($user))) {
                 return ApiResponse::error($request, 404, 'Not Found', 'Subcategory not found');
             }
 

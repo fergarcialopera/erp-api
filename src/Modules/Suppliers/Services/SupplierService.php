@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Modules\Suppliers\Services;
 
+use App\Application\Audit\AuditActor;
 use App\Application\Support\Slug;
+use App\Modules\Audit\Services\AuditActivityService;
 use App\Modules\Suppliers\DTOs\CreateSupplierDTO;
 use App\Modules\Suppliers\DTOs\PatchSupplierDTO;
 use PDO;
@@ -12,8 +14,10 @@ use Symfony\Component\Uid\Uuid;
 
 final class SupplierService
 {
-    public function __construct(private readonly PDO $pdo)
-    {
+    public function __construct(
+        private readonly PDO $pdo,
+        private readonly AuditActivityService $audit,
+    ) {
     }
 
     /**
@@ -48,7 +52,7 @@ final class SupplierService
         return is_array($row) ? $this->present($row) : null;
     }
 
-    public function create(CreateSupplierDTO $dto): array
+    public function create(CreateSupplierDTO $dto, AuditActor $actor): array
     {
         $id = Uuid::v4()->toRfc4122();
         $slug = Slug::from($dto->name);
@@ -67,37 +71,35 @@ final class SupplierService
         $stmt->bindValue(':is_active', $dto->isActive, PDO::PARAM_BOOL);
         $stmt->execute();
 
-        return $this->present((array) $stmt->fetch());
+        $presented = $this->present((array) $stmt->fetch());
+        $this->audit->recordAdd('supplier', $presented['id'], $actor->userId, $actor->clinicId, $presented);
+
+        return $presented;
     }
 
-    public function patch(string $supplierId, PatchSupplierDTO $dto): ?array
+    public function patch(string $supplierId, PatchSupplierDTO $dto, AuditActor $actor): ?array
     {
-        $currentStmt = $this->pdo->prepare(
-            'SELECT name, slug, legal_name, tax_id, email, phone, is_active
-             FROM suppliers WHERE id::text = :id LIMIT 1'
-        );
-        $currentStmt->execute(['id' => $supplierId]);
-        $current = $currentStmt->fetch();
-        if (!is_array($current)) {
+        $before = $this->get($supplierId);
+        if ($before === null) {
             return null;
         }
 
-        $name = $dto->name ?? (string) $current['name'];
-        $slug = $dto->name !== null ? Slug::from($name) : (string) $current['slug'];
+        $name = $dto->name ?? (string) $before['name'];
+        $slug = $dto->name !== null ? Slug::from($name) : (string) $before['slug'];
 
-        $legalName = $current['legal_name'];
+        $legalName = $before['legal_name'];
         if ($dto->legalNameTouched) {
             $legalName = $dto->legalName;
         }
-        $taxId = $current['tax_id'];
+        $taxId = $before['tax_id'];
         if ($dto->taxIdTouched) {
             $taxId = $dto->taxId;
         }
-        $email = $current['email'];
+        $email = $before['email'];
         if ($dto->emailTouched) {
             $email = $dto->email;
         }
-        $phone = $current['phone'];
+        $phone = $before['phone'];
         if ($dto->phoneTouched) {
             $phone = $dto->phone;
         }
@@ -116,19 +118,29 @@ final class SupplierService
         $stmt->bindValue(':tax_id', $taxId);
         $stmt->bindValue(':email', $email);
         $stmt->bindValue(':phone', $phone);
-        $stmt->bindValue(':is_active', $dto->isActive ?? (bool) $current['is_active'], PDO::PARAM_BOOL);
+        $stmt->bindValue(':is_active', $dto->isActive ?? (bool) $before['is_active'], PDO::PARAM_BOOL);
         $stmt->execute();
         $row = $stmt->fetch();
+        if (!is_array($row)) {
+            return null;
+        }
 
-        return is_array($row) ? $this->present($row) : null;
+        $after = $this->present($row);
+        $this->audit->recordEdit('supplier', $supplierId, $actor->userId, $actor->clinicId, $before, $after);
+
+        return $after;
     }
 
-    public function softDelete(string $supplierId): bool
+    public function softDelete(string $supplierId, AuditActor $actor): bool
     {
         $stmt = $this->pdo->prepare(
             'UPDATE suppliers SET is_active = FALSE, updated_at = NOW() WHERE id::text = :id'
         );
         $stmt->execute(['id' => $supplierId]);
+
+        if ($stmt->rowCount() > 0) {
+            $this->audit->recordDelete('supplier', $supplierId, $actor->userId, $actor->clinicId);
+        }
 
         return $stmt->rowCount() > 0;
     }

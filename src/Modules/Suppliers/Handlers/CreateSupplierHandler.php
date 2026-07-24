@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Suppliers\Handlers;
 
+use App\Application\Audit\AuditActor;
 use App\Application\Auth\AccessDeniedException;
 use App\Application\Auth\ClinicAccessService;
 use App\Application\Http\ApiResponse;
@@ -30,7 +31,7 @@ final class CreateSupplierHandler
 
             $dto = $this->validator->validateCreate($request->getParsedBody());
 
-            return ApiResponse::success($request, $this->service->create($dto), status: 201);
+            return ApiResponse::success($request, $this->service->create($dto, AuditActor::fromUser($user)), status: 201);
         } catch (AccessDeniedException $e) {
             return ApiResponse::error($request, 403, 'Forbidden', $e->getMessage());
         } catch (Throwable $throwable) {

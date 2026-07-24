@@ -253,26 +253,26 @@ return static function (ApplicationConfig $appConfig): array {
         $auditActivityService,
     );
 
-    $incidentService = new IncidentService($pdo);
-    $settingService = new SettingService($pdo);
-    $clinicService = new ClinicService($pdo, $publicUrls);
-    $productService = new ProductService($pdo);
+    $incidentService = new IncidentService($pdo, $auditActivityService);
+    $settingService = new SettingService($pdo, $auditActivityService);
+    $clinicService = new ClinicService($pdo, $publicUrls, $auditActivityService);
+    $productService = new ProductService($pdo, $auditActivityService);
     $productValidator = new ProductValidator();
-    $categoryService = new CategoryService($pdo);
+    $categoryService = new CategoryService($pdo, $auditActivityService);
     $categoryValidator = new CategoryValidator();
-    $subcategoryService = new SubcategoryService($pdo);
+    $subcategoryService = new SubcategoryService($pdo, $auditActivityService);
     $subcategoryValidator = new SubcategoryValidator();
-    $brandService = new BrandService($pdo);
+    $brandService = new BrandService($pdo, $auditActivityService);
     $brandValidator = new BrandValidator();
-    $supplierService = new SupplierService($pdo);
+    $supplierService = new SupplierService($pdo, $auditActivityService);
     $supplierValidator = new SupplierValidator();
-    $dispensingTypeService = new DispensingTypeService($pdo);
+    $dispensingTypeService = new DispensingTypeService($pdo, $auditActivityService);
     $dispensingTypeValidator = new DispensingTypeValidator();
-    $roleService = new RoleService($pdo);
+    $roleService = new RoleService($pdo, $auditActivityService);
     $roleValidator = new RoleValidator();
-    $userService = new UserService($pdo, $publicUrls, $loginAttempts);
-    $ambienteService = new AmbienteService($pdo);
-    $zoneService = new ZoneService($pdo);
+    $userService = new UserService($pdo, $publicUrls, $loginAttempts, $auditActivityService);
+    $ambienteService = new AmbienteService($pdo, $auditActivityService);
+    $zoneService = new ZoneService($pdo, $auditActivityService);
     $clinicAccess = new ClinicAccessService($pdo);
     $clinicResolver = new RequestClinicResolver($clinicAccess);
 

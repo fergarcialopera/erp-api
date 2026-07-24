@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Modules\Subcategories\Services;
 
+use App\Application\Audit\AuditActor;
 use App\Application\Support\Slug;
+use App\Modules\Audit\Services\AuditActivityService;
 use App\Modules\Subcategories\DTOs\CreateSubcategoryDTO;
 use App\Modules\Subcategories\DTOs\PatchSubcategoryDTO;
 use PDO;
@@ -13,8 +15,10 @@ use Symfony\Component\Uid\Uuid;
 
 final class SubcategoryService
 {
-    public function __construct(private readonly PDO $pdo)
-    {
+    public function __construct(
+        private readonly PDO $pdo,
+        private readonly AuditActivityService $audit,
+    ) {
     }
 
     /**
@@ -53,7 +57,7 @@ final class SubcategoryService
         return is_array($row) ? $this->present($row) : null;
     }
 
-    public function create(CreateSubcategoryDTO $dto): array
+    public function create(CreateSubcategoryDTO $dto, AuditActor $actor): array
     {
         if (!$this->categoryExists($dto->categoryId)) {
             throw new RuntimeException('Category not found');
@@ -74,21 +78,20 @@ final class SubcategoryService
         $stmt->bindValue(':is_active', $dto->isActive, PDO::PARAM_BOOL);
         $stmt->execute();
 
-        return $this->present((array) $stmt->fetch());
+        $presented = $this->present((array) $stmt->fetch());
+        $this->audit->recordAdd('subcategory', $presented['id'], $actor->userId, $actor->clinicId, $presented);
+
+        return $presented;
     }
 
-    public function patch(string $subcategoryId, PatchSubcategoryDTO $dto): ?array
+    public function patch(string $subcategoryId, PatchSubcategoryDTO $dto, AuditActor $actor): ?array
     {
-        $currentStmt = $this->pdo->prepare(
-            'SELECT category_id, name, slug, description, is_active FROM subcategories WHERE id::text = :id LIMIT 1'
-        );
-        $currentStmt->execute(['id' => $subcategoryId]);
-        $current = $currentStmt->fetch();
-        if (!is_array($current)) {
+        $before = $this->get($subcategoryId);
+        if ($before === null) {
             return null;
         }
 
-        $categoryId = (string) $current['category_id'];
+        $categoryId = (string) $before['category_id'];
         if ($dto->categoryIdTouched) {
             $categoryId = (string) $dto->categoryId;
             if (!$this->categoryExists($categoryId)) {
@@ -96,10 +99,10 @@ final class SubcategoryService
             }
         }
 
-        $name = $dto->name ?? (string) $current['name'];
-        $slug = $dto->name !== null ? Slug::from($name) : (string) $current['slug'];
+        $name = $dto->name ?? (string) $before['name'];
+        $slug = $dto->name !== null ? Slug::from($name) : (string) $before['slug'];
 
-        $description = $current['description'];
+        $description = $before['description'];
         if ($dto->descriptionTouched) {
             $description = $dto->description;
         }
@@ -116,19 +119,29 @@ final class SubcategoryService
         $stmt->bindValue(':name', $name);
         $stmt->bindValue(':slug', $slug);
         $stmt->bindValue(':description', $description);
-        $stmt->bindValue(':is_active', $dto->isActive ?? (bool) $current['is_active'], PDO::PARAM_BOOL);
+        $stmt->bindValue(':is_active', $dto->isActive ?? (bool) $before['is_active'], PDO::PARAM_BOOL);
         $stmt->execute();
         $row = $stmt->fetch();
+        if (!is_array($row)) {
+            return null;
+        }
 
-        return is_array($row) ? $this->present($row) : null;
+        $after = $this->present($row);
+        $this->audit->recordEdit('subcategory', $subcategoryId, $actor->userId, $actor->clinicId, $before, $after);
+
+        return $after;
     }
 
-    public function softDelete(string $subcategoryId): bool
+    public function softDelete(string $subcategoryId, AuditActor $actor): bool
     {
         $stmt = $this->pdo->prepare(
             'UPDATE subcategories SET is_active = FALSE, updated_at = NOW() WHERE id::text = :id'
         );
         $stmt->execute(['id' => $subcategoryId]);
+
+        if ($stmt->rowCount() > 0) {
+            $this->audit->recordDelete('subcategory', $subcategoryId, $actor->userId, $actor->clinicId);
+        }
 
         return $stmt->rowCount() > 0;
     }

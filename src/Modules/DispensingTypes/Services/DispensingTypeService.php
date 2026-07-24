@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Modules\DispensingTypes\Services;
 
+use App\Application\Audit\AuditActor;
 use App\Application\Support\Slug;
+use App\Modules\Audit\Services\AuditActivityService;
 use App\Modules\DispensingTypes\DTOs\CreateDispensingTypeDTO;
 use App\Modules\DispensingTypes\DTOs\PatchDispensingTypeDTO;
 use PDO;
@@ -13,8 +15,10 @@ use Symfony\Component\Uid\Uuid;
 
 final class DispensingTypeService
 {
-    public function __construct(private readonly PDO $pdo)
-    {
+    public function __construct(
+        private readonly PDO $pdo,
+        private readonly AuditActivityService $audit,
+    ) {
     }
 
     /**
@@ -49,7 +53,7 @@ final class DispensingTypeService
         return is_array($row) ? $this->present($row) : null;
     }
 
-    public function create(CreateDispensingTypeDTO $dto): array
+    public function create(CreateDispensingTypeDTO $dto, AuditActor $actor): array
     {
         $id = Uuid::v4()->toRfc4122();
         $slug = Slug::from($dto->name);
@@ -65,24 +69,23 @@ final class DispensingTypeService
         $stmt->bindValue(':is_active', $dto->isActive, PDO::PARAM_BOOL);
         $stmt->execute();
 
-        return $this->present((array) $stmt->fetch());
+        $presented = $this->present((array) $stmt->fetch());
+        $this->audit->recordAdd('dispensing-type', $presented['id'], $actor->userId, $actor->clinicId, $presented);
+
+        return $presented;
     }
 
-    public function patch(string $dispensingTypeId, PatchDispensingTypeDTO $dto): ?array
+    public function patch(string $dispensingTypeId, PatchDispensingTypeDTO $dto, AuditActor $actor): ?array
     {
-        $currentStmt = $this->pdo->prepare(
-            'SELECT name, slug, description, is_active FROM dispensing_types WHERE id::text = :id LIMIT 1'
-        );
-        $currentStmt->execute(['id' => $dispensingTypeId]);
-        $current = $currentStmt->fetch();
-        if (!is_array($current)) {
+        $before = $this->get($dispensingTypeId);
+        if ($before === null) {
             return null;
         }
 
-        $name = $dto->name ?? (string) $current['name'];
-        $slug = $dto->name !== null ? Slug::from($name) : (string) $current['slug'];
+        $name = $dto->name ?? (string) $before['name'];
+        $slug = $dto->name !== null ? Slug::from($name) : (string) $before['slug'];
 
-        $description = $current['description'];
+        $description = $before['description'];
         if ($dto->descriptionTouched) {
             $description = $dto->description;
         }
@@ -97,19 +100,29 @@ final class DispensingTypeService
         $stmt->bindValue(':name', $name);
         $stmt->bindValue(':slug', $slug);
         $stmt->bindValue(':description', $description);
-        $stmt->bindValue(':is_active', $dto->isActive ?? (bool) $current['is_active'], PDO::PARAM_BOOL);
+        $stmt->bindValue(':is_active', $dto->isActive ?? (bool) $before['is_active'], PDO::PARAM_BOOL);
         $stmt->execute();
         $row = $stmt->fetch();
+        if (!is_array($row)) {
+            return null;
+        }
 
-        return is_array($row) ? $this->present($row) : null;
+        $after = $this->present($row);
+        $this->audit->recordEdit('dispensing-type', $dispensingTypeId, $actor->userId, $actor->clinicId, $before, $after);
+
+        return $after;
     }
 
-    public function softDelete(string $dispensingTypeId): bool
+    public function softDelete(string $dispensingTypeId, AuditActor $actor): bool
     {
         $stmt = $this->pdo->prepare(
             'UPDATE dispensing_types SET is_active = FALSE, updated_at = NOW() WHERE id::text = :id'
         );
         $stmt->execute(['id' => $dispensingTypeId]);
+
+        if ($stmt->rowCount() > 0) {
+            $this->audit->recordDelete('dispensing-type', $dispensingTypeId, $actor->userId, $actor->clinicId);
+        }
 
         return $stmt->rowCount() > 0;
     }

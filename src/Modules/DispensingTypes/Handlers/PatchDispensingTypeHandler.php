@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\DispensingTypes\Handlers;
 
+use App\Application\Audit\AuditActor;
 use App\Application\Auth\AccessDeniedException;
 use App\Application\Auth\ClinicAccessService;
 use App\Application\Http\ApiResponse;
@@ -34,7 +35,7 @@ final class PatchDispensingTypeHandler
             }
 
             $dto = $this->validator->validatePatch($request->getParsedBody());
-            $updated = $this->service->patch($id, $dto);
+            $updated = $this->service->patch($id, $dto, AuditActor::fromUser($user));
             if ($updated === null) {
                 return ApiResponse::error($request, 404, 'Not Found', 'Dispensing type not found');
             }
