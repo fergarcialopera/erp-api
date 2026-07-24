@@ -1,10 +1,13 @@
+# Desarrollo: plantilla procesada por envsubst en el arranque del contenedor nginx.
+# La variable de entorno FRONTEND_URL (definida en .env) se sustituye en el origen CORS;
+# el resto de variables ($uri, $cors_allow_origin, ...) son de nginx y no se tocan.
 server {
     listen 80;
     server_name localhost;
     root /var/www/html/public;
     index index.php;
 
-    set $cors_allow_origin "http://localhost:3000";
+    set $cors_allow_origin "${FRONTEND_URL}";
 
     location /uploads/ {
         alias /var/www/html/storage/uploads/;
