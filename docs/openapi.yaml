@@ -29,6 +29,16 @@ tags:
     description: Subcategorias del catalogo de productos.
   - name: Brands
     description: Marcas del catalogo de productos.
+  - name: SubBrands
+    description: Submarcas del catalogo de productos, dependientes de una marca.
+  - name: Species
+    description: Especies animales del catalogo de productos.
+  - name: Specialties
+    description: Especialidades del catalogo de productos.
+  - name: ProductTags
+    description: Etiquetas de producto (N:M con products).
+  - name: ProductImports
+    description: Importacion CSV de productos (analisis dry-run y preview).
   - name: Suppliers
     description: Proveedores del catalogo de productos.
   - name: DispensingTypes
@@ -568,6 +578,308 @@ paths:
           description: Product not found
         '422':
           description: Validation error
+  /api/v1/product-imports:
+    get:
+      summary: List product import sessions (SUPER_ADMIN)
+      tags: [ProductImports]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: page
+          schema: { type: integer, minimum: 1, default: 1 }
+        - in: query
+          name: per_page
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+      responses:
+        '200':
+          description: Import sessions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ProductImport'
+                  meta:
+                    type: object
+                    properties:
+                      page: { type: integer }
+                      per_page: { type: integer }
+                      total: { type: integer }
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+    post:
+      summary: Upload CSV and run dry-run analysis (SUPER_ADMIN)
+      description: >
+        Accepts an Odoo product export CSV delimited by semicolon (`;`).
+        Comma-delimited files are rejected with structural error `wrong_delimiter`
+        (usually an export misconfiguration). Decimal values use Spanish format (`10,49`).
+        Field name in multipart: `file`. Max size 10MB.
+      tags: [ProductImports]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: Semicolon-delimited CSV export from Odoo (max 10MB)
+      responses:
+        '201':
+          description: Analysis completed and persisted (status may be ready_for_review or invalid)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ProductImportDetail'
+                  meta:
+                    type: object
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '422':
+          description: Validation or upload error (missing file, wrong type, size)
+  /api/v1/product-imports/{id}:
+    get:
+      summary: Get product import session detail (SUPER_ADMIN)
+      tags: [ProductImports]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Import detail with catalog preview
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ProductImportDetail'
+                  meta:
+                    type: object
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not Found
+  /api/v1/product-imports/{id}/rows:
+    get:
+      summary: List analyzed rows for an import (SUPER_ADMIN)
+      tags: [ProductImports]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [ready, conflict, invalid, created, updated, failed, skipped]
+        - in: query
+          name: page
+          schema: { type: integer, minimum: 1, default: 1 }
+        - in: query
+          name: per_page
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+      responses:
+        '200':
+          description: Import rows
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ProductImportRow'
+                  meta:
+                    type: object
+                    properties:
+                      page: { type: integer }
+                      per_page: { type: integer }
+                      total: { type: integer }
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not Found
+    patch:
+      summary: Bulk set decision on conflict rows (SUPER_ADMIN)
+      tags: [ProductImports]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [decision]
+              properties:
+                decision:
+                  type: string
+                  enum: [create_new, update_existing, skip]
+                status:
+                  type: string
+                  enum: [conflict]
+                  default: conflict
+      responses:
+        '200':
+          description: Bulk decision applied
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not Found
+        '422':
+          description: Validation error
+  /api/v1/product-imports/{id}/rows/{row_id}:
+    patch:
+      summary: Set decision on a conflict row (SUPER_ADMIN)
+      tags: [ProductImports]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - in: path
+          name: row_id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [decision]
+              properties:
+                decision:
+                  type: string
+                  enum: [create_new, update_existing, skip]
+      responses:
+        '200':
+          description: Row updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ProductImportRow'
+                  meta:
+                    type: object
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not Found
+        '422':
+          description: Validation error
+  /api/v1/product-imports/{id}/confirm:
+    post:
+      summary: Confirm import and apply changes (SUPER_ADMIN)
+      description: >
+        Requires all conflict rows to have a decision. Creates catalog entities as needed,
+        then creates/updates products per row. Invalid rows are left untouched.
+      tags: [ProductImports]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Import completed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ProductImportDetail'
+                  meta:
+                    type: object
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not Found
+        '422':
+          description: Undecided conflicts or invalid state
+  /api/v1/product-imports/{id}/cancel:
+    post:
+      summary: Cancel an import session in review (SUPER_ADMIN)
+      tags: [ProductImports]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Import cancelled
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not Found
+        '422':
+          description: Import is not ready for review
   /api/v1/products:
     get:
       summary: List products (STAFF+)
@@ -1596,6 +1908,622 @@ paths:
           description: Forbidden
         '404':
           description: Not found
+  /api/v1/sub-brands:
+    get:
+      summary: List sub-brands (STAFF+)
+      tags: [SubBrands]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: active
+          required: false
+          schema:
+            type: boolean
+        - in: query
+          name: brand_id
+          required: false
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Sub-brands list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SubBrand'
+                  meta:
+                    type: object
+        '401':
+          description: Unauthorized
+    post:
+      summary: Create sub-brand (SUPER_ADMIN)
+      tags: [SubBrands]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [brand_id, name]
+              properties:
+                brand_id: { type: string, format: uuid }
+                name: { type: string }
+                is_active: { type: boolean, default: true }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/SubBrand'
+                  meta:
+                    type: object
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '422':
+          description: Validation error
+  /api/v1/sub-brands/{id}:
+    get:
+      summary: Get sub-brand (STAFF+)
+      tags: [SubBrands]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Sub-brand
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/SubBrand'
+                  meta:
+                    type: object
+        '401':
+          description: Unauthorized
+        '404':
+          description: Not Found
+    patch:
+      summary: Patch sub-brand (SUPER_ADMIN)
+      tags: [SubBrands]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                brand_id: { type: string, format: uuid }
+                name: { type: string }
+                is_active: { type: boolean }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/SubBrand'
+                  meta:
+                    type: object
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not Found
+        '422':
+          description: Validation error
+    delete:
+      summary: Soft delete sub-brand (SUPER_ADMIN)
+      tags: [SubBrands]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Deleted
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not Found
+  /api/v1/species:
+    get:
+      summary: List species (STAFF+)
+      tags: [Species]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: active
+          required: false
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Species list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Species'
+                  meta:
+                    type: object
+        '401':
+          description: Unauthorized
+    post:
+      summary: Create species (SUPER_ADMIN)
+      tags: [Species]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+                is_active: { type: boolean, default: true }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Species'
+                  meta:
+                    type: object
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '422':
+          description: Validation error
+  /api/v1/species/{id}:
+    get:
+      summary: Get species (STAFF+)
+      tags: [Species]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Species
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Species'
+                  meta:
+                    type: object
+        '401':
+          description: Unauthorized
+        '404':
+          description: Not Found
+    patch:
+      summary: Patch species (SUPER_ADMIN)
+      tags: [Species]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                is_active: { type: boolean }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Species'
+                  meta:
+                    type: object
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not Found
+        '422':
+          description: Validation error
+    delete:
+      summary: Soft delete species (SUPER_ADMIN)
+      tags: [Species]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Deleted
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not Found
+  /api/v1/specialties:
+    get:
+      summary: List specialties (STAFF+)
+      tags: [Specialties]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: active
+          required: false
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Specialties list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Specialty'
+                  meta:
+                    type: object
+        '401':
+          description: Unauthorized
+    post:
+      summary: Create specialty (SUPER_ADMIN)
+      tags: [Specialties]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+                is_active: { type: boolean, default: true }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Specialty'
+                  meta:
+                    type: object
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '422':
+          description: Validation error
+  /api/v1/specialties/{id}:
+    get:
+      summary: Get specialty (STAFF+)
+      tags: [Specialties]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Specialty
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Specialty'
+                  meta:
+                    type: object
+        '401':
+          description: Unauthorized
+        '404':
+          description: Not Found
+    patch:
+      summary: Patch specialty (SUPER_ADMIN)
+      tags: [Specialties]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                is_active: { type: boolean }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Specialty'
+                  meta:
+                    type: object
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not Found
+        '422':
+          description: Validation error
+    delete:
+      summary: Soft delete specialty (SUPER_ADMIN)
+      tags: [Specialties]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Deleted
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not Found
+  /api/v1/product-tags:
+    get:
+      summary: List product tags (STAFF+)
+      tags: [ProductTags]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: active
+          required: false
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Product tags list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ProductTag'
+                  meta:
+                    type: object
+        '401':
+          description: Unauthorized
+    post:
+      summary: Create product tag (SUPER_ADMIN)
+      tags: [ProductTags]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+                is_active: { type: boolean, default: true }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ProductTag'
+                  meta:
+                    type: object
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '422':
+          description: Validation error
+  /api/v1/product-tags/{id}:
+    get:
+      summary: Get product tag (STAFF+)
+      tags: [ProductTags]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Product tag
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ProductTag'
+                  meta:
+                    type: object
+        '401':
+          description: Unauthorized
+        '404':
+          description: Not Found
+    patch:
+      summary: Patch product tag (SUPER_ADMIN)
+      tags: [ProductTags]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                is_active: { type: boolean }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ProductTag'
+                  meta:
+                    type: object
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not Found
+        '422':
+          description: Validation error
+    delete:
+      summary: Soft delete product tag (SUPER_ADMIN)
+      tags: [ProductTags]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Deleted
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not Found
   /api/v1/suppliers:
     get:
       summary: List suppliers (STAFF+)
@@ -3226,6 +4154,189 @@ components:
         is_active: { type: boolean }
         created_at: { type: string }
         updated_at: { type: string }
+    SubBrand:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        brand_id: { type: string, format: uuid }
+        name: { type: string }
+        slug:
+          type: string
+          description: Server-generated; read-only. Not accepted on create/patch.
+        is_active: { type: boolean }
+        created_at: { type: string }
+        updated_at: { type: string }
+    Species:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        slug:
+          type: string
+          description: Server-generated; read-only. Not accepted on create/patch.
+        is_active: { type: boolean }
+        created_at: { type: string }
+        updated_at: { type: string }
+    Specialty:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        slug:
+          type: string
+          description: Server-generated; read-only. Not accepted on create/patch.
+        is_active: { type: boolean }
+        created_at: { type: string }
+        updated_at: { type: string }
+    ProductTag:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        slug:
+          type: string
+          description: Server-generated; read-only. Not accepted on create/patch.
+        is_active: { type: boolean }
+        created_at: { type: string }
+        updated_at: { type: string }
+    ProductImport:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        filename: { type: string }
+        status:
+          type: string
+          enum: [analyzing, ready_for_review, invalid, processing, completed, completed_with_errors, cancelled]
+        created_by: { type: string, format: uuid }
+        created_by_email: { type: string, format: email, nullable: true }
+        created_by_name: { type: string, nullable: true }
+        total_rows: { type: integer }
+        ready_count: { type: integer }
+        conflict_count: { type: integer }
+        invalid_count: { type: integer }
+        created_count: { type: integer }
+        updated_count: { type: integer }
+        failed_count: { type: integer }
+        skipped_count: { type: integer }
+        created_at: { type: string }
+        updated_at: { type: string }
+    ProductImportDetail:
+      allOf:
+        - $ref: '#/components/schemas/ProductImport'
+        - type: object
+          properties:
+            structural_errors:
+              type: array
+              description: File-level errors (no product rows persisted when present)
+              items:
+                $ref: '#/components/schemas/ProductImportIssue'
+            catalog_preview:
+              type: object
+              description: Catalog entities that would be created on confirm
+              additionalProperties:
+                type: array
+                items: { type: string }
+    ProductImportIssue:
+      type: object
+      description: >
+        Machine-readable issue for frontend i18n. Prefer `code` over parsing `message`.
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          description: Stable error/warning code (see ProductImportIssueCode)
+          enum:
+            - empty_file
+            - wrong_delimiter
+            - missing_headers
+            - unknown_headers
+            - orphan_continuation_row
+            - no_product_rows
+            - missing_name
+            - unexpected_product_type
+            - duplicate_internal_reference_in_file
+            - missing_supplier_vendor
+            - barcode_already_exists
+            - national_code_already_exists
+            - subcategory_without_category
+            - sub_brand_without_brand
+            - missing_resolved_payload
+            - import_failed
+          x-codes-doc: |
+            Structural (session invalid): empty_file, wrong_delimiter, missing_headers,
+            unknown_headers, orphan_continuation_row, no_product_rows.
+            Row invalid: missing_name, duplicate_internal_reference_in_file,
+            missing_supplier_vendor, barcode_already_exists, national_code_already_exists,
+            subcategory_without_category, sub_brand_without_brand.
+            Row warning: unexpected_product_type.
+            Confirm failure: missing_resolved_payload, import_failed.
+        message:
+          type: string
+          description: English technical message (fallback; UI should translate by code)
+        column:
+          type: string
+          nullable: true
+          description: CSV header name when the issue is column-specific
+    ProductImportIssueCode:
+      type: string
+      description: Vocabulary of ProductImport issue codes for frontend translation maps
+      enum:
+        - empty_file
+        - wrong_delimiter
+        - missing_headers
+        - unknown_headers
+        - orphan_continuation_row
+        - no_product_rows
+        - missing_name
+        - unexpected_product_type
+        - duplicate_internal_reference_in_file
+        - missing_supplier_vendor
+        - barcode_already_exists
+        - national_code_already_exists
+        - subcategory_without_category
+        - sub_brand_without_brand
+        - missing_resolved_payload
+        - import_failed
+    ProductImportRow:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        import_id: { type: string, format: uuid }
+        row_number: { type: integer }
+        status:
+          type: string
+          enum: [ready, conflict, invalid, created, updated, failed, skipped]
+        decision:
+          type: string
+          nullable: true
+          enum: [create_new, update_existing, skip]
+        existing_product_id: { type: string, format: uuid, nullable: true }
+        result_product_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: Set after confirm; links product to this import for audit trail
+        normalized: { type: object, nullable: true }
+        resolved: { type: object, nullable: true }
+        warnings:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProductImportIssue'
+        diff:
+          type: object
+          nullable: true
+          description: Field-level diff when status is conflict (current vs incoming)
+          additionalProperties:
+            type: object
+            properties:
+              current: {}
+              incoming: {}
+        errors:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProductImportIssue'
+        created_at: { type: string }
+        updated_at: { type: string }
     ProductCreateBody:
       type: object
       required: [name]
@@ -3233,10 +4344,19 @@ components:
         name: { type: string }
         barcode: { type: string, nullable: true }
         internal_reference: { type: string, nullable: true }
+        national_code: { type: string, nullable: true }
+        packaging: { type: string, nullable: true }
         category_id: { type: string, format: uuid, nullable: true }
         subcategory_id: { type: string, format: uuid, nullable: true }
         brand_id: { type: string, format: uuid, nullable: true }
+        sub_brand_id: { type: string, format: uuid, nullable: true }
         dispensing_type_id: { type: string, format: uuid, nullable: true }
+        species_id: { type: string, format: uuid, nullable: true }
+        specialty_id: { type: string, format: uuid, nullable: true }
+        tag_ids:
+          type: array
+          items: { type: string, format: uuid }
+          nullable: true
         is_active: { type: boolean, default: true }
         unit_of_measure: { type: string, default: Unidades }
       description: SKU is server-generated; do not send sku on create
@@ -3246,10 +4366,20 @@ components:
         name: { type: string }
         barcode: { type: string, nullable: true }
         internal_reference: { type: string, nullable: true }
+        national_code: { type: string, nullable: true }
+        packaging: { type: string, nullable: true }
         category_id: { type: string, format: uuid, nullable: true }
         subcategory_id: { type: string, format: uuid, nullable: true }
         brand_id: { type: string, format: uuid, nullable: true }
+        sub_brand_id: { type: string, format: uuid, nullable: true }
         dispensing_type_id: { type: string, format: uuid, nullable: true }
+        species_id: { type: string, format: uuid, nullable: true }
+        specialty_id: { type: string, format: uuid, nullable: true }
+        tag_ids:
+          type: array
+          items: { type: string, format: uuid }
+          nullable: true
+          description: Replaces the full tag set when present
         is_active: { type: boolean }
         unit_of_measure: { type: string }
     Product:
@@ -3260,10 +4390,15 @@ components:
         name: { type: string }
         barcode: { type: string, nullable: true }
         internal_reference: { type: string, nullable: true }
+        national_code: { type: string, nullable: true }
+        packaging: { type: string, nullable: true }
         category_id: { type: string, format: uuid, nullable: true }
         subcategory_id: { type: string, format: uuid, nullable: true }
         brand_id: { type: string, format: uuid, nullable: true }
+        sub_brand_id: { type: string, format: uuid, nullable: true }
         dispensing_type_id: { type: string, format: uuid, nullable: true }
+        species_id: { type: string, format: uuid, nullable: true }
+        specialty_id: { type: string, format: uuid, nullable: true }
         is_active: { type: boolean }
         unit_of_measure: { type: string }
         category:
@@ -3286,6 +4421,21 @@ components:
           oneOf:
             - type: 'null'
             - $ref: '#/components/schemas/CatalogRef'
+        sub_brand:
+          nullable: true
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/CatalogRef'
+        species:
+          nullable: true
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/CatalogRef'
+        specialty:
+          nullable: true
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/CatalogRef'
         visible:
           type: boolean
           description: Present on clinic-scoped list/get
@@ -3293,6 +4443,11 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ProductSupplierLink'
+          description: Included on GET detail
+        tags:
+          type: array
+          items:
+            $ref: '#/components/schemas/CatalogRef'
           description: Included on GET detail
         created_at: { type: string }
         updated_at: { type: string }

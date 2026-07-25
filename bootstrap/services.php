@@ -136,6 +136,22 @@ use App\Modules\Products\Handlers\PatchProductSupplierHandler;
 use App\Modules\Products\Handlers\SetPreferredProductSupplierHandler;
 use App\Modules\Products\Services\ProductService;
 use App\Modules\Products\Validators\ProductValidator;
+use App\Modules\ProductImports\Handlers\CancelProductImportHandler;
+use App\Modules\ProductImports\Handlers\ConfirmProductImportHandler;
+use App\Modules\ProductImports\Handlers\CreateProductImportHandler;
+use App\Modules\ProductImports\Handlers\GetProductImportHandler;
+use App\Modules\ProductImports\Handlers\ListProductImportRowsHandler;
+use App\Modules\ProductImports\Handlers\ListProductImportsHandler;
+use App\Modules\ProductImports\Handlers\PatchProductImportRowHandler;
+use App\Modules\ProductImports\Handlers\PatchProductImportRowsHandler;
+use App\Modules\ProductImports\Services\ProductImportService;
+use App\Modules\ProductTags\Handlers\CreateProductTagHandler;
+use App\Modules\ProductTags\Handlers\DeleteProductTagHandler;
+use App\Modules\ProductTags\Handlers\GetProductTagHandler;
+use App\Modules\ProductTags\Handlers\ListProductTagsHandler;
+use App\Modules\ProductTags\Handlers\PatchProductTagHandler;
+use App\Modules\ProductTags\Services\ProductTagService;
+use App\Modules\ProductTags\Validators\ProductTagValidator;
 use App\Modules\Roles\Handlers\CreateRoleHandler;
 use App\Modules\Roles\Handlers\DeleteRoleHandler;
 use App\Modules\Roles\Handlers\GetRoleHandler;
@@ -143,6 +159,13 @@ use App\Modules\Roles\Handlers\ListRolesHandler;
 use App\Modules\Roles\Handlers\PatchRoleHandler;
 use App\Modules\Roles\Services\RoleService;
 use App\Modules\Roles\Validators\RoleValidator;
+use App\Modules\SubBrands\Handlers\CreateSubBrandHandler;
+use App\Modules\SubBrands\Handlers\DeleteSubBrandHandler;
+use App\Modules\SubBrands\Handlers\GetSubBrandHandler;
+use App\Modules\SubBrands\Handlers\ListSubBrandsHandler;
+use App\Modules\SubBrands\Handlers\PatchSubBrandHandler;
+use App\Modules\SubBrands\Services\SubBrandService;
+use App\Modules\SubBrands\Validators\SubBrandValidator;
 use App\Modules\Subcategories\Handlers\CreateSubcategoryHandler;
 use App\Modules\Subcategories\Handlers\DeleteSubcategoryHandler;
 use App\Modules\Subcategories\Handlers\GetSubcategoryHandler;
@@ -150,6 +173,20 @@ use App\Modules\Subcategories\Handlers\ListSubcategoriesHandler;
 use App\Modules\Subcategories\Handlers\PatchSubcategoryHandler;
 use App\Modules\Subcategories\Services\SubcategoryService;
 use App\Modules\Subcategories\Validators\SubcategoryValidator;
+use App\Modules\Specialties\Handlers\CreateSpecialtyHandler;
+use App\Modules\Specialties\Handlers\DeleteSpecialtyHandler;
+use App\Modules\Specialties\Handlers\GetSpecialtyHandler;
+use App\Modules\Specialties\Handlers\ListSpecialtiesHandler;
+use App\Modules\Specialties\Handlers\PatchSpecialtyHandler;
+use App\Modules\Specialties\Services\SpecialtyService;
+use App\Modules\Specialties\Validators\SpecialtyValidator;
+use App\Modules\Species\Handlers\CreateSpeciesHandler;
+use App\Modules\Species\Handlers\DeleteSpeciesHandler;
+use App\Modules\Species\Handlers\GetSpeciesHandler;
+use App\Modules\Species\Handlers\ListSpeciesHandler;
+use App\Modules\Species\Handlers\PatchSpeciesHandler;
+use App\Modules\Species\Services\SpeciesService;
+use App\Modules\Species\Validators\SpeciesValidator;
 use App\Modules\Suppliers\Handlers\CreateSupplierHandler;
 use App\Modules\Suppliers\Handlers\DeleteSupplierHandler;
 use App\Modules\Suppliers\Handlers\GetSupplierHandler;
@@ -264,6 +301,15 @@ return static function (ApplicationConfig $appConfig): array {
     $subcategoryValidator = new SubcategoryValidator();
     $brandService = new BrandService($pdo, $auditActivityService);
     $brandValidator = new BrandValidator();
+    $subBrandService = new SubBrandService($pdo, $auditActivityService);
+    $subBrandValidator = new SubBrandValidator();
+    $speciesService = new SpeciesService($pdo, $auditActivityService);
+    $speciesValidator = new SpeciesValidator();
+    $specialtyService = new SpecialtyService($pdo, $auditActivityService);
+    $specialtyValidator = new SpecialtyValidator();
+    $productTagService = new ProductTagService($pdo, $auditActivityService);
+    $productTagValidator = new ProductTagValidator();
+    $productImportService = new ProductImportService($pdo);
     $supplierService = new SupplierService($pdo, $auditActivityService);
     $supplierValidator = new SupplierValidator();
     $dispensingTypeService = new DispensingTypeService($pdo, $auditActivityService);
@@ -348,6 +394,34 @@ return static function (ApplicationConfig $appConfig): array {
             'listBrandSuppliers' => new ListBrandSuppliersHandler($brandService),
             'attachBrandSupplier' => new AttachBrandSupplierHandler($clinicAccess, $brandService),
             'detachBrandSupplier' => new DetachBrandSupplierHandler($clinicAccess, $brandService),
+            'listSubBrands' => new ListSubBrandsHandler($subBrandService),
+            'getSubBrand' => new GetSubBrandHandler($subBrandService),
+            'createSubBrand' => new CreateSubBrandHandler($clinicAccess, $subBrandValidator, $subBrandService),
+            'patchSubBrand' => new PatchSubBrandHandler($clinicAccess, $subBrandValidator, $subBrandService),
+            'deleteSubBrand' => new DeleteSubBrandHandler($clinicAccess, $subBrandService),
+            'listSpecies' => new ListSpeciesHandler($speciesService),
+            'getSpecies' => new GetSpeciesHandler($speciesService),
+            'createSpecies' => new CreateSpeciesHandler($clinicAccess, $speciesValidator, $speciesService),
+            'patchSpecies' => new PatchSpeciesHandler($clinicAccess, $speciesValidator, $speciesService),
+            'deleteSpecies' => new DeleteSpeciesHandler($clinicAccess, $speciesService),
+            'listSpecialties' => new ListSpecialtiesHandler($specialtyService),
+            'getSpecialty' => new GetSpecialtyHandler($specialtyService),
+            'createSpecialty' => new CreateSpecialtyHandler($clinicAccess, $specialtyValidator, $specialtyService),
+            'patchSpecialty' => new PatchSpecialtyHandler($clinicAccess, $specialtyValidator, $specialtyService),
+            'deleteSpecialty' => new DeleteSpecialtyHandler($clinicAccess, $specialtyService),
+            'listProductTags' => new ListProductTagsHandler($productTagService),
+            'getProductTag' => new GetProductTagHandler($productTagService),
+            'createProductTag' => new CreateProductTagHandler($clinicAccess, $productTagValidator, $productTagService),
+            'patchProductTag' => new PatchProductTagHandler($clinicAccess, $productTagValidator, $productTagService),
+            'deleteProductTag' => new DeleteProductTagHandler($clinicAccess, $productTagService),
+            'listProductImports' => new ListProductImportsHandler($clinicAccess, $productImportService),
+            'createProductImport' => new CreateProductImportHandler($clinicAccess, $productImportService),
+            'getProductImport' => new GetProductImportHandler($clinicAccess, $productImportService),
+            'listProductImportRows' => new ListProductImportRowsHandler($clinicAccess, $productImportService),
+            'patchProductImportRow' => new PatchProductImportRowHandler($clinicAccess, $productImportService),
+            'patchProductImportRows' => new PatchProductImportRowsHandler($clinicAccess, $productImportService),
+            'confirmProductImport' => new ConfirmProductImportHandler($clinicAccess, $productImportService),
+            'cancelProductImport' => new CancelProductImportHandler($clinicAccess, $productImportService),
             'listSuppliers' => new ListSuppliersHandler($supplierService),
             'getSupplier' => new GetSupplierHandler($supplierService),
             'createSupplier' => new CreateSupplierHandler($clinicAccess, $supplierValidator, $supplierService),

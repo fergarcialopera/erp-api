@@ -14,16 +14,9 @@ final class EntryLogsEndpointTest extends BaseApiTestCase
 
     private function createProductSkuForClinicA(): string
     {
-        $created = $this->request(
-            'POST',
-            '/api/v1/products',
-            ['name' => 'Producto ' . bin2hex(random_bytes(2))],
-            $this->authHeaderFor('tech@clinic-erp.com')
-        );
-        $this->assertSame(201, $created['status']);
-        $sku = (string) ($created['json']['data']['sku'] ?? '');
-        $this->assertNotSame('', $sku);
-        return $sku;
+        $product = $this->createProductVisibleInClinicA('Producto ' . bin2hex(random_bytes(2)));
+
+        return $product['sku'];
     }
 
     public function testCreateEntryLogWithoutTokenReturns401(): void

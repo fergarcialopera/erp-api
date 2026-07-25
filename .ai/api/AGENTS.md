@@ -43,6 +43,18 @@ Para autenticación, roles y aislamiento por clínica, ver [auth/AGENTS.md](../a
   - `POST /entry-logs`
   - `POST /exit-logs`
 
+### ProductImports (SUPER_ADMIN)
+
+Importación CSV de productos (export Odoo) con preview, resolución de conflictos y confirmación.
+
+- Endpoints bajo `/api/v1/product-imports` (ver OpenAPI tag `ProductImports`).
+- CSV **delimitado por punto y coma (`;`)**. Si llega delimitado por coma → error estructural `wrong_delimiter` (fallo de exportación).
+- Decimales en formato español (`10,49`). Barcode `0`/vacío → sin barcode.
+- Clave de conflicto: `Referencia interna` (permite `create_new` duplicando).
+- Productos nuevos: `clinic_products.visible = FALSE`.
+- Update: merge no destructivo (vacíos del CSV no borran).
+- Códigos de error/warning por fila y estructurales: schema `ProductImportIssue` / `ProductImportIssueCode` en `docs/openapi.yaml` (el frontend traduce por `code`).
+
 ---
 
 ## Respuestas y errores

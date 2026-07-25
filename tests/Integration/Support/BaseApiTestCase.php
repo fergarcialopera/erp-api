@@ -549,6 +549,59 @@ abstract class BaseApiTestCase extends TestCase
         return self::staticRequest($method, $path, $body, $headers);
     }
 
+    /**
+     * @param array<string, scalar> $fields
+     * @param array<string, array{path:string,filename?:string,mime?:string}> $files
+     * @param array<string, string> $headers
+     * @return array{status:int,headers:array<string,string>,json:array<string,mixed>|null,raw:string}
+     */
+    protected function requestMultipart(string $method, string $path, array $fields, array $files, array $headers = []): array
+    {
+        $ch = curl_init(self::$baseUrl . $path);
+        $postFields = $fields;
+        foreach ($files as $name => $file) {
+            $postFields[$name] = new \CURLFile(
+                $file['path'],
+                $file['mime'] ?? 'text/csv',
+                $file['filename'] ?? basename($file['path'])
+            );
+        }
+
+        $normalizedHeaders = ['Accept: application/json'];
+        foreach ($headers as $key => $value) {
+            $normalizedHeaders[] = sprintf('%s: %s', $key, $value);
+        }
+
+        $responseHeaders = [];
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_CUSTOMREQUEST => strtoupper($method),
+            CURLOPT_POSTFIELDS => $postFields,
+            CURLOPT_HTTPHEADER => $normalizedHeaders,
+            CURLOPT_HEADERFUNCTION => static function ($curl, string $headerLine) use (&$responseHeaders): int {
+                $parts = explode(':', $headerLine, 2);
+                if (count($parts) === 2) {
+                    $responseHeaders[strtolower(trim($parts[0]))] = trim($parts[1]);
+                }
+
+                return strlen($headerLine);
+            },
+        ]);
+
+        $raw = (string) curl_exec($ch);
+        $status = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+        curl_close($ch);
+
+        $json = json_decode($raw, true);
+
+        return [
+            'status' => $status,
+            'headers' => $responseHeaders,
+            'json' => is_array($json) ? $json : null,
+            'raw' => $raw,
+        ];
+    }
+
     protected function login(string $email, string $password = 'admin123'): array
     {
         return $this->request('POST', '/api/v1/auth/login', [

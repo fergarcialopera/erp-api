@@ -53,20 +53,14 @@ final class AmbientesTreeEndpointTest extends BaseApiTestCase
 
     public function testListAmbientesTreeActiveFilter(): void
     {
-        $ambiente = $this->request(
-            'POST',
-            '/api/v1/ambientes',
-            ['name' => 'Inactive-' . bin2hex(random_bytes(2))],
-            $this->authHeaderFor('tech@clinic-erp.com')
-        );
-        $this->assertSame(201, $ambiente['status']);
-        $ambienteId = (string) ($ambiente['json']['data']['id'] ?? '');
+        $super = $this->authHeaderForSuperAdmin();
+        $ambienteId = $this->createAmbienteLinkedToClinicA('Inactive-' . bin2hex(random_bytes(2)));
 
         $deactivate = $this->request(
             'DELETE',
             '/api/v1/ambientes/' . $ambienteId,
             null,
-            $this->authHeaderFor('admin@clinic-erp.com')
+            $super
         );
         $this->assertSame(200, $deactivate['status']);
 
@@ -74,11 +68,13 @@ final class AmbientesTreeEndpointTest extends BaseApiTestCase
             'POST',
             '/api/v1/zones',
             ['ambiente_id' => $ambienteId, 'code' => 'X-' . bin2hex(random_bytes(2))],
-            $this->authHeaderFor('tech@clinic-erp.com')
+            $super
         );
         $this->assertSame(201, $comp['status']);
 
-        $all = $this->request('GET', '/api/v1/ambientes/tree', null, $this->authHeaderFor('staff@clinic-erp.com'));
+        // Vista admin: sin filtro incluye inactivos; STAFF siempre filtra is_active=TRUE.
+        $admin = $this->authHeaderFor('admin@clinic-erp.com');
+        $all = $this->request('GET', '/api/v1/ambientes/tree', null, $admin);
         $this->assertSame(200, $all['status']);
         $allIds = array_map(
             static fn (array $row): string => (string) ($row['id'] ?? ''),
@@ -90,7 +86,7 @@ final class AmbientesTreeEndpointTest extends BaseApiTestCase
             'GET',
             '/api/v1/ambientes/tree?active=true',
             null,
-            $this->authHeaderFor('staff@clinic-erp.com')
+            $admin
         );
         $this->assertSame(200, $activeOnly['status']);
         $activeIds = array_map(
