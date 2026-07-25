@@ -184,19 +184,51 @@ No uses `vendor/bin/phpunit` a pelo para integración: dejaría la API apuntando
    composer test:docker
    ```
 
-## Producción (VPS)
+## 10) Producción (VPS) y HTTPS
 
-En producción, `erp-nginx` escucha en el **puerto 80** y sirve:
+En producción, `erp-nginx` termina TLS en el **puerto 443** y sirve:
 
 - el SPA desde `../erp-frontend/dist` (repo hermano de `erp-api`, montado como volumen);
 - el API en `/api/v1`, `/up`, `/docs` y `/uploads`.
 
+El **puerto 80** queda solo para el challenge ACME (renovación de certificados), el health check local (`/up`) y la redirección `301` a HTTPS.
+
 El frontend llama al API con rutas relativas (`/api/v1/...`) en el mismo origen; no hace falta exponer el puerto 8080.
 
-Despliegue (en el servidor):
+### HTTPS: primera puesta en marcha
+
+Los certificados los emite **certbot en el host** (sin contenedores adicionales) y nginx los lee de `/etc/letsencrypt` montado como volumen. Requiere un dominio apuntando al VPS (Let's Encrypt no emite para IPs).
 
 ```bash
-# .env.production: APP_PUBLIC_URL y FRONTEND_URL sin puerto (ej. http://212.227.145.0)
+# 1. Instalar certbot en el host y crear el webroot para renovaciones
+apt install certbot
+mkdir -p /var/www/certbot
+
+# 2. Emisión inicial en modo standalone (necesita el puerto 80 libre: stack parado)
+make down
+certbot certonly --standalone -d erp.midominio.com
+
+# 3. En .env.production:
+#    SERVER_NAME=erp.midominio.com
+#    APP_PUBLIC_URL=https://erp.midominio.com
+#    FRONTEND_URL=https://erp.midominio.com
+
+# 4. Levantar el stack (nginx ya encuentra el certificado)
+make up
+
+# 5. Cambiar la renovación a modo webroot (sin cortes; el timer de systemd
+#    del paquete certbot renueva automáticamente a partir de aquí)
+certbot certonly --webroot -w /var/www/certbot -d erp.midominio.com --force-renewal
+
+# 6. Hook para que nginx recargue el certificado tras cada renovación
+printf '#!/bin/sh\ndocker exec erp-nginx nginx -s reload\n' > /etc/letsencrypt/renewal-hooks/deploy/reload-erp-nginx.sh
+chmod +x /etc/letsencrypt/renewal-hooks/deploy/reload-erp-nginx.sh
+```
+
+### Despliegue (en el servidor)
+
+```bash
+# .env.production: SERVER_NAME (dominio) y APP_PUBLIC_URL/FRONTEND_URL con https (ej. https://erp.midominio.com)
 # El deploy detecta el build en FRONTEND_DIR/dist o FRONTEND_DIR (por defecto /root/erp-frontend).
 # Si falta index.html: cd /root/erp-frontend && npm ci && npm run build
 docker compose --env-file .env.production -f docker-compose.yml -f docker-compose.prod.yml up -d --build
@@ -207,11 +239,12 @@ O vía CI/script: `bash scripts/deploy-remote.sh`.
 Comprobaciones:
 
 ```bash
-curl http://127.0.0.1/up
-curl -I http://127.0.0.1/
+curl http://127.0.0.1/up          # health check por :80 (excepción a la redirección)
+curl -kI https://127.0.0.1/       # SPA por :443 (-k: el certificado es del dominio)
+curl -I https://erp.midominio.com/
 ```
 
-En local el API sigue en `http://localhost:8080` (`docker-compose.dev.yml`).
+En local el API sigue en `http://localhost:8080` sin TLS (`docker-compose.dev.yml`).
 
 ## 11) Problemas comunes (y solucion)
 

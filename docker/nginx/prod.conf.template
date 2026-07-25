@@ -1,0 +1,65 @@
+# Producción: Nginx unificado — API (PHP) + SPA (dist de erp-frontend montado en /var/www/frontend).
+# TLS terminado aquí con certificados Let's Encrypt emitidos por certbot en el host
+# y montados en /etc/letsencrypt (ver docker-compose.prod.yml y README §10).
+#
+# Plantilla procesada por envsubst en el arranque del contenedor (igual que default.conf.template
+# en dev): solo se sustituye ${SERVER_NAME} (.env.production); el resto ($host, $uri, ...) es de nginx.
+
+# Puerto 80: challenge ACME (renovación de certificados), health check local y redirección a HTTPS.
+server {
+    listen 80;
+    server_name ${SERVER_NAME};
+
+    # certbot (host) escribe el challenge en /var/www/certbot (montado :ro).
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+
+    # Health check desde el propio VPS: Makefile y deploy-remote.sh usan http://127.0.0.1/up.
+    location = /up {
+        include fastcgi_params;
+        fastcgi_param SCRIPT_FILENAME /var/www/html/public/index.php;
+        fastcgi_pass php:9000;
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+# Puerto 443: API + SPA, igual que el antiguo prod.conf pero con TLS.
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name ${SERVER_NAME};
+
+    ssl_certificate     /etc/letsencrypt/live/${SERVER_NAME}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/${SERVER_NAME}/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_session_cache shared:SSL:10m;
+    ssl_session_timeout 1d;
+
+    # HSTS: los navegadores recordarán usar HTTPS durante un año.
+    add_header Strict-Transport-Security "max-age=31536000" always;
+
+    location /uploads/ {
+        alias /var/www/html/storage/uploads/;
+    }
+
+    location ~ ^/(api|docs|up) {
+        root /var/www/html/public;
+        try_files $uri /index.php$is_args$args;
+    }
+
+    location ~ \.php$ {
+        root /var/www/html/public;
+        include fastcgi_params;
+        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+        fastcgi_pass php:9000;
+    }
+
+    location / {
+        root /var/www/frontend;
+        try_files $uri $uri/ /index.html;
+    }
+}

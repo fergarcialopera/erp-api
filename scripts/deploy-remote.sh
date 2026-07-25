@@ -35,13 +35,26 @@ if ! grep -qE '^APP_ENV=prod' .env.production; then
 fi
 
 if ! grep -qE '^APP_PUBLIC_URL=' .env.production; then
-  echo "ERROR: .env.production debe definir APP_PUBLIC_URL (p. ej. http://212.227.145.0)"
+  echo "ERROR: .env.production debe definir APP_PUBLIC_URL (p. ej. https://erp.midominio.com)"
+  exit 1
+fi
+
+if ! grep -qE '^SERVER_NAME=' .env.production; then
+  echo "ERROR: .env.production debe definir SERVER_NAME (dominio con certificado, p. ej. erp.midominio.com)"
+  echo "  Sin él nginx no puede renderizar prod.conf.template. Ver README §10 (HTTPS)."
   exit 1
 fi
 
 strip_env() {
   echo "$1" | tr -d '\r' | sed 's/^["'\'']//;s/["'\'']$//' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'
 }
+
+SERVER_NAME="$(strip_env "$(grep -E '^SERVER_NAME=' .env.production | head -1 | cut -d= -f2-)")"
+if [ ! -f "/etc/letsencrypt/live/${SERVER_NAME}/fullchain.pem" ]; then
+  echo "ERROR: no existe /etc/letsencrypt/live/${SERVER_NAME}/fullchain.pem"
+  echo "  Emite el certificado primero (README §10): certbot certonly --standalone -d ${SERVER_NAME}"
+  exit 1
+fi
 
 FRONTEND_DIR="$(strip_env "$(grep -E '^FRONTEND_DIR=' .env.production 2>/dev/null | head -1 | cut -d= -f2-)")"
 FRONTEND_DIR="${FRONTEND_DIR:-$(dirname "${APP_DIR}")/erp-frontend}"
@@ -89,12 +102,14 @@ export FRONTEND_DIST_PATH
 echo "==> Frontend estático: ${FRONTEND_DIST_PATH}"
 
 # Comprobar en localhost: en muchos VPS falla el curl a la IP pública desde el propio host (hairpin/NAT).
+# /up se sirve por :80 (excepción a la redirección HTTPS); el SPA solo por :443, de ahí el
+# curl -k (el certificado es del dominio, no de 127.0.0.1).
 API_HEALTH_URL="http://127.0.0.1/up"
-SPA_HEALTH_URL="http://127.0.0.1/"
+SPA_HEALTH_URL="https://127.0.0.1/"
 
 COMPOSE=(docker compose --env-file .env.production -f docker-compose.yml -f docker-compose.prod.yml)
 
-echo "==> Levantando contenedores (nginx en :80, frontend en ${FRONTEND_DIST_PATH})"
+echo "==> Levantando contenedores (nginx en :80/:443, frontend en ${FRONTEND_DIST_PATH})"
 "${COMPOSE[@]}" up -d --build --force-recreate nginx
 "${COMPOSE[@]}" up -d --build
 
@@ -126,7 +141,7 @@ if ! curl -fsS "${API_HEALTH_URL}"; then
 fi
 
 echo "==> Health check SPA (${SPA_HEALTH_URL})"
-if ! curl -fsS -o /dev/null "${SPA_HEALTH_URL}"; then
+if ! curl -fsSk -o /dev/null "${SPA_HEALTH_URL}"; then
   echo "ERROR: health check SPA falló; revisar montaje de ${FRONTEND_DIST_PATH}:"
   "${COMPOSE[@]}" ps nginx
   "${COMPOSE[@]}" logs --tail=50 nginx
