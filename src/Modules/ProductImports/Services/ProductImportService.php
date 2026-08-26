@@ -13,7 +13,7 @@ use Symfony\Component\Uid\Uuid;
 
 final class ProductImportService
 {
-    private const MAX_BYTES = 10_485_760; // 10 MiB
+    private const MAX_BYTES = 5_242_880; // 5 MiB
 
     public function __construct(
         private readonly PDO $pdo,
@@ -893,7 +893,7 @@ final class ProductImportService
             throw new RuntimeException('Empty file');
         }
         if ($size > self::MAX_BYTES) {
-            throw new RuntimeException('File exceeds maximum size of 10MB');
+            throw new RuntimeException('File exceeds maximum size of 5MB');
         }
         $tmpName = (string) ($file['tmp_name'] ?? '');
         if ($tmpName === '' || !is_uploaded_file($tmpName)) {

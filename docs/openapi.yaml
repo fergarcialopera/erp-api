@@ -619,7 +619,7 @@ paths:
         Accepts an Odoo product export CSV delimited by semicolon (`;`).
         Comma-delimited files are rejected with structural error `wrong_delimiter`
         (usually an export misconfiguration). Decimal values use Spanish format (`10,49`).
-        Field name in multipart: `file`. Max size 10MB.
+        Field name in multipart: `file`. Max size 5MB.
       tags: [ProductImports]
       security:
         - bearerAuth: []
@@ -634,7 +634,7 @@ paths:
                 file:
                   type: string
                   format: binary
-                  description: Semicolon-delimited CSV export from Odoo (max 10MB)
+                  description: Semicolon-delimited CSV export from Odoo (max 5MB)
       responses:
         '201':
           description: Analysis completed and persisted (status may be ready_for_review or invalid)

@@ -7,6 +7,9 @@ server {
     root /var/www/html/public;
     index index.php;
 
+    # Alineado con product-imports (5 MB) y margen multipart.
+    client_max_body_size 5m;
+
     set $cors_allow_origin "${FRONTEND_URL}";
 
     location /uploads/ {
@@ -23,5 +26,7 @@ server {
         include fastcgi_params;
         fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
         fastcgi_pass php:9000;
+        # Análisis síncrono de CSV grandes (product-imports).
+        fastcgi_read_timeout 300s;
     }
 }
