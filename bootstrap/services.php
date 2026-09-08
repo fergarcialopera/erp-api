@@ -46,6 +46,7 @@ use App\Modules\Auth\Validators\PinLoginValidator;
 use App\Modules\Auth\Validators\RecoveryValidator;
 use App\Modules\Clinic\Handlers\CreateClinicHandler;
 use App\Modules\Clinic\Handlers\DeleteClinicImageHandler;
+use App\Modules\Clinic\Handlers\GetClinicByIdHandler;
 use App\Modules\Clinic\Handlers\GetClinicHandler;
 use App\Modules\Clinic\Handlers\ListClinicsHandler;
 use App\Modules\Clinic\Handlers\PatchClinicByIdHandler;
@@ -90,6 +91,7 @@ use App\Modules\Ambientes\Handlers\DeleteAmbienteHandler;
 use App\Modules\Ambientes\Handlers\DisassociateClinicAmbienteHandler;
 use App\Modules\Ambientes\Handlers\GetAmbienteHandler;
 use App\Modules\Ambientes\Handlers\ListAmbientesHandler;
+use App\Modules\Ambientes\Handlers\ListClinicAmbientesHandler;
 use App\Modules\Ambientes\Handlers\ListAmbientesWithZonesHandler;
 use App\Modules\Ambientes\Handlers\PatchAmbienteHandler;
 use App\Modules\Ambientes\Handlers\PatchClinicAmbienteVisibilityHandler;
@@ -122,15 +124,20 @@ use App\Modules\DispensingTypes\Handlers\ListDispensingTypesHandler;
 use App\Modules\DispensingTypes\Handlers\PatchDispensingTypeHandler;
 use App\Modules\DispensingTypes\Services\DispensingTypeService;
 use App\Modules\DispensingTypes\Validators\DispensingTypeValidator;
+use App\Modules\Products\Handlers\BulkPatchClinicProductsHandler;
+use App\Modules\Products\Handlers\BulkPatchProductClinicsHandler;
 use App\Modules\Products\Handlers\CreateProductHandler;
 use App\Modules\Products\Handlers\CreateProductSupplierHandler;
 use App\Modules\Products\Handlers\DeleteProductHandler;
 use App\Modules\Products\Handlers\DeleteProductSupplierHandler;
 use App\Modules\Products\Handlers\GetProductHandler;
 use App\Modules\Products\Handlers\GetProductStockLocationsHandler;
+use App\Modules\Products\Handlers\ListClinicProductsHandler;
+use App\Modules\Products\Handlers\ListProductClinicsHandler;
 use App\Modules\Products\Handlers\ListProductSuppliersHandler;
 use App\Modules\Products\Handlers\ListProductsHandler;
 use App\Modules\Products\Handlers\PatchClinicProductVisibilityHandler;
+use App\Modules\Products\Handlers\PatchProductClinicVisibilityHandler;
 use App\Modules\Products\Handlers\PatchProductHandler;
 use App\Modules\Products\Handlers\PatchProductSupplierHandler;
 use App\Modules\Products\Handlers\SetPreferredProductSupplierHandler;
@@ -198,11 +205,15 @@ use App\Modules\Settings\Handlers\ListSettingsHandler;
 use App\Modules\Settings\Handlers\UpsertSettingHandler;
 use App\Modules\Settings\Services\SettingService;
 use App\Modules\Settings\Validators\SettingValidator;
+use App\Modules\Users\Handlers\AssignClinicUserHandler;
 use App\Modules\Users\Handlers\CreateUserHandler;
 use App\Modules\Users\Handlers\DeleteUserHandler;
 use App\Modules\Users\Handlers\DeleteUserImageHandler;
 use App\Modules\Users\Handlers\GetUserHandler;
+use App\Modules\Users\Handlers\ListAvailableClinicUsersHandler;
+use App\Modules\Users\Handlers\ListClinicUsersHandler;
 use App\Modules\Users\Handlers\ListUsersHandler;
+use App\Modules\Users\Handlers\PatchClinicUserHandler;
 use App\Modules\Users\Handlers\PatchUserHandler;
 use App\Modules\Users\Handlers\SendUserRecoveryHandler;
 use App\Modules\Users\Handlers\UploadUserImageHandler;
@@ -354,6 +365,7 @@ return static function (ApplicationConfig $appConfig): array {
             'upsertSetting' => new UpsertSettingHandler(new SettingValidator(), $settingService),
             'listSettings' => new ListSettingsHandler($settingService),
             'getClinic' => new GetClinicHandler($clinicResolver, $clinicService),
+            'getClinicById' => new GetClinicByIdHandler($clinicAccess, $clinicService),
             'listClinics' => new ListClinicsHandler($clinicAccess, $clinicService),
             'createClinic' => new CreateClinicHandler($clinicAccess, new ClinicValidator(), $clinicService),
             'patchClinicById' => new PatchClinicByIdHandler($clinicAccess, new ClinicValidator(), $clinicService),
@@ -362,9 +374,19 @@ return static function (ApplicationConfig $appConfig): array {
             'requestClinicRecovery' => new RequestClinicRecoveryHandler(new RecoveryValidator(), $recoveryService),
             'patchClinicSettings' => new PatchClinicSettingsHandler(new ClinicSettingsValidator(), $settingService),
             'patchClinicProductVisibility' => new PatchClinicProductVisibilityHandler($clinicResolver, $productService),
+            'bulkPatchClinicProducts' => new BulkPatchClinicProductsHandler($clinicAccess, $clinicService, $productValidator, $productService),
+            'listProductClinics' => new ListProductClinicsHandler($clinicAccess, $productService),
+            'patchProductClinicVisibility' => new PatchProductClinicVisibilityHandler($clinicAccess, $clinicService, $productValidator, $productService),
+            'bulkPatchProductClinics' => new BulkPatchProductClinicsHandler($clinicAccess, $productValidator, $productService),
             'patchClinicAmbienteVisibility' => new PatchClinicAmbienteVisibilityHandler($clinicResolver, $ambienteService),
             'associateClinicAmbiente' => new AssociateClinicAmbienteHandler($clinicAccess, $ambienteService),
             'disassociateClinicAmbiente' => new DisassociateClinicAmbienteHandler($clinicAccess, $ambienteService),
+            'listClinicAmbientes' => new ListClinicAmbientesHandler($clinicAccess, $clinicService, $ambienteService),
+            'listClinicProducts' => new ListClinicProductsHandler($clinicAccess, $clinicService, $productService),
+            'listClinicUsers' => new ListClinicUsersHandler($clinicAccess, $clinicService, $userService),
+            'listAvailableClinicUsers' => new ListAvailableClinicUsersHandler($clinicAccess, $clinicService, $userService),
+            'assignClinicUser' => new AssignClinicUserHandler($clinicAccess, $clinicService, $userService),
+            'patchClinicUser' => new PatchClinicUserHandler($clinicAccess, $clinicService, $userService),
             'listProducts' => new ListProductsHandler($clinicAccess, $clinicResolver, $productService),
             'getProduct' => new GetProductHandler($clinicAccess, $clinicResolver, $productService),
             'getProductStockLocations' => new GetProductStockLocationsHandler($inventoryService),

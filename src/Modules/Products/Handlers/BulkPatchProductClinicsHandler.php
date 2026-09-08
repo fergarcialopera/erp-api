@@ -1,23 +1,25 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Modules\Products\Handlers;
 
+use App\Application\Audit\AuditActor;
 use App\Application\Auth\AccessDeniedException;
 use App\Application\Auth\ClinicAccessService;
-use App\Application\Auth\RequestClinicResolver;
 use App\Application\Http\ApiResponse;
 use App\Application\Http\Request;
 use App\Application\Http\Response;
 use App\Modules\Products\Services\ProductService;
-use App\Modules\Products\Support\ProductListQuery;
+use App\Modules\Products\Validators\ProductValidator;
 use InvalidArgumentException;
 use Throwable;
 
-final class ListProductsHandler
+final class BulkPatchProductClinicsHandler
 {
     public function __construct(
         private readonly ClinicAccessService $access,
-        private readonly RequestClinicResolver $clinicResolver,
+        private readonly ProductValidator $validator,
         private readonly ProductService $service
     ) {
     }
@@ -26,27 +28,32 @@ final class ListProductsHandler
     {
         try {
             $user = (array) $request->getAttribute('user', []);
-            $qp = $request->getQueryParams();
-            $active = ProductListQuery::parseActive($qp);
-            $filters = ProductListQuery::parseFilters($qp);
+            $this->access->assertSuperAdmin($user);
 
-            if ($this->access->isSuperAdmin($user) && $this->access->clinicIdFromToken($user) === '') {
-                return ApiResponse::success($request, $this->service->listGlobal($active, $filters));
+            $productId = (string) $request->getAttribute('product_id', '');
+            if ($productId === '' || $this->service->getGlobal($productId) === null) {
+                return ApiResponse::error($request, 404, 'Not Found', 'Product not found');
             }
 
-            $clinicId = $this->clinicResolver->requireClinicId($request, $user);
-            $adminView = $this->clinicResolver->isAdminView($user);
+            $body = $request->getParsedBody();
+            $visible = $this->validator->parseRequiredVisible($body);
+            $clinicIds = $this->validator->parseOptionalIdList($body, 'clinic_ids');
 
             return ApiResponse::success(
                 $request,
-                $this->service->listForClinic($clinicId, $active, $adminView, $filters)
+                $this->service->bulkSetVisibilityForProduct(
+                    $productId,
+                    $visible,
+                    $clinicIds,
+                    AuditActor::fromUser($user)
+                )
             );
         } catch (AccessDeniedException $e) {
             return ApiResponse::error($request, 403, 'Forbidden', $e->getMessage());
         } catch (InvalidArgumentException $e) {
             return ApiResponse::error($request, 422, 'Unprocessable Entity', $e->getMessage());
         } catch (Throwable $throwable) {
-            return ApiResponse::error($request, 500, 'Internal Server Error', $throwable->getMessage());
+            return ApiResponse::error($request, 422, 'Unprocessable Entity', $throwable->getMessage());
         }
     }
 }

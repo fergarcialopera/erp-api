@@ -330,6 +330,17 @@ paths:
       responses:
         '200':
           description: Clinics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Clinic'
+                  meta:
+                    type: object
         '403':
           description: Forbidden
     post:
@@ -337,66 +348,539 @@ paths:
       tags: [Clinic]
       security:
         - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClinicCreateBody'
       responses:
         '201':
           description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Clinic'
+                  meta:
+                    type: object
         '403':
           description: Forbidden
+        '422':
+          description: Validation error
   /api/v1/clinics/{clinic_id}:
-    patch:
-      summary: Update clinic (SUPER_ADMIN)
+    get:
+      summary: Get clinic by id (SUPER_ADMIN). Does not require clinic in token.
       tags: [Clinic]
       security:
         - bearerAuth: []
+      parameters:
+        - in: path
+          name: clinic_id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Clinic
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Clinic'
+                  meta:
+                    type: object
+        '403':
+          description: Forbidden
+        '404':
+          description: Not Found
+    patch:
+      summary: Update clinic (SUPER_ADMIN). Does not require clinic in token.
+      tags: [Clinic]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: clinic_id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClinicPatchBody'
       responses:
         '200':
           description: Updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Clinic'
+                  meta:
+                    type: object
         '403':
           description: Forbidden
-  /api/v1/clinics/{clinic_id}/ambientes:
+        '404':
+          description: Not Found
+        '422':
+          description: Validation error
+  /api/v1/clinics/{clinic_id}/users:
+    get:
+      summary: List users of a clinic (SUPER_ADMIN, or ADMIN of that clinic). Excludes SUPER_ADMIN.
+      tags: [Users]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: clinic_id
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - in: query
+          name: is_active
+          required: false
+          schema:
+            type: boolean
+        - in: query
+          name: search
+          required: false
+          schema:
+            type: string
+            maxLength: 100
+          description: Case-insensitive match on name or email
+      responses:
+        '200':
+          description: Users of the clinic
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ClinicUser'
+                  meta:
+                    type: object
+        '403':
+          description: Forbidden
+        '404':
+          description: Clinic not found
+        '422':
+          description: Invalid query
+    post:
+      summary: Assign an existing user to this clinic (SUPER_ADMIN). One clinic per user; no silent reassignment.
+      tags: [Users]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: clinic_id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [user_id]
+              properties:
+                user_id:
+                  type: string
+                  format: uuid
+      responses:
+        '201':
+          description: User assigned
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ClinicUser'
+                  meta:
+                    type: object
+        '403':
+          description: Forbidden
+        '404':
+          description: User or clinic not found
+        '409':
+          description: Already assigned to this clinic
+        '422':
+          description: SUPER_ADMIN not assignable, or user already assigned to another clinic
+  /api/v1/clinics/{clinic_id}/users/available:
+    get:
+      summary: Users that can be assigned to this clinic (SUPER_ADMIN). Unassigned STAFF/TECHNICIAN/ADMIN only.
+      tags: [Users]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: clinic_id
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - in: query
+          name: search
+          required: false
+          schema:
+            type: string
+            maxLength: 100
+      responses:
+        '200':
+          description: Available users
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ClinicUser'
+                  meta:
+                    type: object
+        '403':
+          description: Forbidden
+        '404':
+          description: Clinic not found
+  /api/v1/clinics/{clinic_id}/users/{user_id}:
+    patch:
+      summary: Enable or disable clinic access via is_active. Does not unassign the user. SUPER_ADMIN.
+      tags: [Users]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: clinic_id
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - in: path
+          name: user_id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [is_active]
+              properties:
+                is_active:
+                  type: boolean
+                  description: false disables access to the clinic; assignment is kept
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ClinicUser'
+                  meta:
+                    type: object
+        '403':
+          description: Forbidden
+        '404':
+          description: Clinic not found, or user not assigned to this clinic
+        '422':
+          description: Validation error
+  /api/v1/clinics/{clinic_id}/products:
+    get:
+      summary: Catalog with visibility flag for this clinic (SUPER_ADMIN, or ADMIN of that clinic). No clinic required in token.
+      tags: [Products]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: clinic_id
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - in: query
+          name: active
+          required: false
+          schema:
+            type: boolean
+          description: Filter products.is_active. Omit to include active and inactive.
+        - in: query
+          name: category_id
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - in: query
+          name: subcategory_id
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - in: query
+          name: brand_id
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - in: query
+          name: dispensing_type_id
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - in: query
+          name: supplier_id
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - in: query
+          name: search
+          required: false
+          schema:
+            type: string
+            maxLength: 100
+      responses:
+        '200':
+          description: Products with clinic-scoped visible
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Product'
+                  meta:
+                    type: object
+        '403':
+          description: Forbidden
+        '404':
+          description: Clinic not found
+        '422':
+          description: Invalid query
+    patch:
+      summary: Bulk set product availability for this clinic (SUPER_ADMIN, or ADMIN of that clinic). Opt-in; independent of products.is_active.
+      tags: [Products]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: clinic_id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClinicProductVisibilityBulkBody'
+      responses:
+        '200':
+          description: Bulk result (idempotent)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ClinicProductVisibilityBulkResult'
+                  meta:
+                    type: object
+        '403':
+          description: Forbidden
+        '404':
+          description: Clinic not found
+        '422':
+          description: Validation error or unknown product_ids
+    get:
+      summary: List ambientes associated to this clinic, with clinic visibility (SUPER_ADMIN, or ADMIN of that clinic)
+      tags: [Ambientes]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: clinic_id
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - in: query
+          name: active
+          required: false
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Associated ambientes
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ClinicAmbiente'
+                  meta:
+                    type: object
+        '403':
+          description: Forbidden
+        '404':
+          description: Clinic not found
     post:
       summary: Associate ambiente to clinic (SUPER_ADMIN)
       tags: [Ambientes]
       security:
         - bearerAuth: []
+      parameters:
+        - in: path
+          name: clinic_id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ambiente_id]
+              properties:
+                ambiente_id:
+                  type: string
+                  format: uuid
       responses:
         '201':
           description: Associated
         '403':
           description: Forbidden
+        '404':
+          description: Ambiente not found
   /api/v1/clinics/{clinic_id}/ambientes/{ambiente_id}:
     delete:
       summary: Disassociate ambiente from clinic (SUPER_ADMIN)
       tags: [Ambientes]
       security:
         - bearerAuth: []
+      parameters:
+        - in: path
+          name: clinic_id
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - in: path
+          name: ambiente_id
+          required: true
+          schema:
+            type: string
+            format: uuid
       responses:
         '200':
           description: Deleted
         '403':
           description: Forbidden
-  /api/v1/clinics/{clinic_id}/products/{product_id}:
+        '404':
+          description: Not Found
     patch:
-      summary: Toggle product visibility in a specific clinic (ADMIN or SUPER_ADMIN)
-      tags: [Products]
-      security:
-        - bearerAuth: []
-      responses:
-        '200':
-          description: Updated
-        '403':
-          description: Forbidden
-  /api/v1/clinics/{clinic_id}/ambientes/{ambiente_id}:
-    patch:
-      summary: Toggle ambiente visibility in a specific clinic (ADMIN or SUPER_ADMIN)
+      summary: Toggle ambiente visibility in a specific clinic (ADMIN of clinic or SUPER_ADMIN). Does not require clinic in token.
       tags: [Ambientes]
       security:
         - bearerAuth: []
+      parameters:
+        - in: path
+          name: clinic_id
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - in: path
+          name: ambiente_id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [visible]
+              properties:
+                visible:
+                  type: boolean
       responses:
         '200':
           description: Updated
         '403':
           description: Forbidden
+        '404':
+          description: Not Found
+  /api/v1/clinics/{clinic_id}/products/{product_id}:
+    patch:
+      summary: Toggle product visibility in a specific clinic (ADMIN of clinic or SUPER_ADMIN). Does not require clinic in token.
+      tags: [Products]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: clinic_id
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - in: path
+          name: product_id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [visible]
+              properties:
+                visible:
+                  type: boolean
+      responses:
+        '200':
+          description: Updated
+        '403':
+          description: Forbidden
+        '404':
+          description: Product not found
   /api/v1/clinic/image:
     post:
       summary: Upload clinic image
@@ -1072,6 +1556,135 @@ paths:
           description: Forbidden
         '404':
           description: Not Found
+  /api/v1/products/{id}/clinics:
+    get:
+      summary: List all clinics with this product's availability flag (SUPER_ADMIN). Missing clinic_products row => visible false.
+      tags: [Products]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - in: query
+          name: visible
+          required: false
+          schema:
+            type: boolean
+          description: Filter by product availability in the clinic
+        - in: query
+          name: search
+          required: false
+          schema:
+            type: string
+            maxLength: 100
+          description: Case-insensitive clinic name
+      responses:
+        '200':
+          description: All clinics with visible flag for this product
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ProductClinic'
+                  meta:
+                    type: object
+        '403':
+          description: Forbidden
+        '404':
+          description: Product not found
+        '422':
+          description: Invalid query
+    patch:
+      summary: Bulk set this product's availability across clinics (SUPER_ADMIN)
+      tags: [Products]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductClinicVisibilityBulkBody'
+      responses:
+        '200':
+          description: Bulk result (idempotent)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ProductClinicVisibilityBulkResult'
+                  meta:
+                    type: object
+        '403':
+          description: Forbidden
+        '404':
+          description: Product not found
+        '422':
+          description: Validation error or unknown clinic_ids
+  /api/v1/products/{id}/clinics/{clinic_id}:
+    patch:
+      summary: Set this product's availability in one clinic (SUPER_ADMIN). Equivalent to PATCH /clinics/{clinic_id}/products/{product_id}.
+      tags: [Products]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - in: path
+          name: clinic_id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [visible]
+              properties:
+                visible:
+                  type: boolean
+      responses:
+        '200':
+          description: Updated link
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ProductClinicVisibility'
+                  meta:
+                    type: object
+        '403':
+          description: Forbidden
+        '404':
+          description: Product or clinic not found
+        '422':
+          description: Validation error
   /api/v1/products/{id}/stock-locations:
     get:
       summary: Stock locations for a product (for entry/exit zone pickers)
@@ -3100,6 +3713,25 @@ paths:
       tags: [Users]
       security:
         - bearerAuth: []
+      parameters:
+        - in: query
+          name: clinic_id
+          required: false
+          schema:
+            type: string
+            format: uuid
+          description: Filter users assigned to this clinic (clinic_id or user_clinics). SUPER_ADMIN excluded.
+        - in: query
+          name: is_active
+          required: false
+          schema:
+            type: boolean
+        - in: query
+          name: search
+          required: false
+          schema:
+            type: string
+            maxLength: 100
       responses:
         '200':
           description: Users list
@@ -3188,7 +3820,7 @@ paths:
         '404':
           description: Not Found
     patch:
-      summary: Patch user
+      summary: Patch user (SUPER_ADMIN). is_active disables/enables clinic access without unassigning.
       tags: [Users]
       security:
         - bearerAuth: []
@@ -3212,6 +3844,7 @@ paths:
                   enum: [SUPER_ADMIN, ADMIN, TECHNICIAN, STAFF]
                 is_active:
                   type: boolean
+                  description: Controls clinic access. false disables access; does not remove clinic assignment.
                 password:
                   type: string
                 operational_role_id:
@@ -4070,6 +4703,57 @@ components:
       properties:
         id: { type: string, format: uuid }
         name: { type: string }
+    Clinic:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        visible: { type: boolean, description: Kiosk visibility }
+        has_password: { type: boolean }
+        image_path: { type: string, nullable: true }
+        image_url: { type: string, nullable: true }
+        display_initial: { type: string }
+        created_at: { type: string }
+    ClinicCreateBody:
+      type: object
+      required: [name, password]
+      properties:
+        name: { type: string }
+        password: { type: string, minLength: 6 }
+        visible: { type: boolean, default: true, description: Kiosk visibility }
+    ClinicPatchBody:
+      type: object
+      properties:
+        name: { type: string }
+        password: { type: string, minLength: 6 }
+        visible: { type: boolean, description: Kiosk visibility }
+    ClinicUser:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        clinic_id: { type: string, format: uuid, nullable: true }
+        clinic_ids:
+          type: array
+          items: { type: string, format: uuid }
+          description: Extra clinic links for ADMIN (platform assignment is still 1 clinic)
+        name: { type: string }
+        email: { type: string, format: email }
+        role: { type: string, enum: [ADMIN, TECHNICIAN, STAFF] }
+        is_active:
+          type: boolean
+          description: Controls clinic access; false does not unassign the user
+        operational_role_id: { type: string, format: uuid, nullable: true }
+    ClinicAmbiente:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        location: { type: string, nullable: true }
+        device_id: { type: string, nullable: true }
+        is_active: { type: boolean }
+        visible: { type: boolean, description: Visibility in this clinic }
+        created_at: { type: string }
+        updated_at: { type: string }
     MeUser:
       type: object
       properties:
@@ -4359,7 +5043,10 @@ components:
           nullable: true
         is_active: { type: boolean, default: true }
         unit_of_measure: { type: string, default: Unidades }
-      description: SKU is server-generated; do not send sku on create
+      description: |
+        SKU is server-generated; do not send sku on create.
+        New products are created with visible=false for all existing clinics (opt-in).
+        Creating a clinic does not insert clinic_products rows; missing row reads as visible=false.
     ProductPatchBody:
       type: object
       properties:
@@ -4438,7 +5125,12 @@ components:
             - $ref: '#/components/schemas/CatalogRef'
         visible:
           type: boolean
-          description: Present on clinic-scoped list/get
+          description: |
+            Present on clinic-scoped list/get (GET /clinics/{clinic_id}/products).
+            Availability in that clinic (opt-in). Independent of products.is_active.
+            If no clinic_products row exists, defaults to false.
+            New products are created with visible=false for all existing clinics.
+            New clinics leave existing products unavailable until activated.
         suppliers:
           type: array
           items:
@@ -4451,6 +5143,62 @@ components:
           description: Included on GET detail
         created_at: { type: string }
         updated_at: { type: string }
+    ClinicProductVisibilityBulkBody:
+      type: object
+      required: [visible]
+      properties:
+        visible: { type: boolean }
+        only_active_catalog:
+          type: boolean
+          default: true
+          description: When true, only products.is_active=true. Independent of clinic visible.
+        product_ids:
+          type: array
+          nullable: true
+          items: { type: string, format: uuid }
+          description: If omitted or null, all catalog products matching only_active_catalog
+    ClinicProductVisibilityBulkResult:
+      type: object
+      properties:
+        clinic_id: { type: string, format: uuid }
+        visible: { type: boolean }
+        matched: { type: integer }
+        updated: { type: integer }
+        unchanged: { type: integer }
+    ProductClinic:
+      type: object
+      properties:
+        clinic_id: { type: string, format: uuid }
+        name: { type: string }
+        visible:
+          type: boolean
+          description: Product availability in this clinic. Default false if no clinic_products row.
+        visible_in_kiosk:
+          type: boolean
+          description: Clinic kiosk visibility (clinics.visible); not product availability
+    ProductClinicVisibility:
+      type: object
+      properties:
+        product_id: { type: string, format: uuid }
+        clinic_id: { type: string, format: uuid }
+        visible: { type: boolean }
+    ProductClinicVisibilityBulkBody:
+      type: object
+      required: [visible]
+      properties:
+        visible: { type: boolean }
+        clinic_ids:
+          type: array
+          items: { type: string, format: uuid }
+          description: If omitted, all clinics. If present, 422 when any id does not exist.
+    ProductClinicVisibilityBulkResult:
+      type: object
+      properties:
+        product_id: { type: string, format: uuid }
+        visible: { type: boolean }
+        matched: { type: integer }
+        updated: { type: integer }
+        unchanged: { type: integer }
     ProductSupplierLink:
       type: object
       properties:

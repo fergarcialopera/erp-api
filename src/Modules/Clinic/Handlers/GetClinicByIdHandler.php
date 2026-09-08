@@ -4,21 +4,18 @@ declare(strict_types=1);
 
 namespace App\Modules\Clinic\Handlers;
 
-use App\Application\Audit\AuditActor;
 use App\Application\Auth\AccessDeniedException;
 use App\Application\Auth\ClinicAccessService;
 use App\Application\Http\ApiResponse;
 use App\Application\Http\Request;
 use App\Application\Http\Response;
 use App\Modules\Clinic\Services\ClinicService;
-use App\Modules\Clinic\Validators\ClinicValidator;
 use Throwable;
 
-final class CreateClinicHandler
+final class GetClinicByIdHandler
 {
     public function __construct(
         private readonly ClinicAccessService $access,
-        private readonly ClinicValidator $validator,
         private readonly ClinicService $service
     ) {
     }
@@ -29,17 +26,21 @@ final class CreateClinicHandler
             $user = (array) $request->getAttribute('user', []);
             $this->access->assertSuperAdmin($user);
 
-            $dto = $this->validator->validateCreate($request->getParsedBody());
+            $clinicId = (string) $request->getAttribute('clinic_id', '');
+            if ($clinicId === '') {
+                return ApiResponse::error($request, 404, 'Not Found', 'Clinic not found');
+            }
 
-            return ApiResponse::success(
-                $request,
-                $this->service->create($dto->name, $dto->password, AuditActor::fromUser($user), $dto->visible),
-                status: 201
-            );
+            $clinic = $this->service->getById($clinicId);
+            if ($clinic === null) {
+                return ApiResponse::error($request, 404, 'Not Found', 'Clinic not found');
+            }
+
+            return ApiResponse::success($request, $clinic);
         } catch (AccessDeniedException $e) {
             return ApiResponse::error($request, 403, 'Forbidden', $e->getMessage());
         } catch (Throwable $throwable) {
-            return ApiResponse::error($request, 422, 'Unprocessable Entity', $throwable->getMessage());
+            return ApiResponse::error($request, 500, 'Internal Server Error', $throwable->getMessage());
         }
     }
 }
