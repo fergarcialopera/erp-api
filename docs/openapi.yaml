@@ -365,10 +365,9 @@ paths:
           description: Deleted
         '403':
           description: Forbidden
-  /api/v1/clinics/{clinic_id}/products/{product_id}:
     patch:
-      summary: Toggle product visibility in a specific clinic (ADMIN or SUPER_ADMIN)
-      tags: [Products]
+      summary: Toggle ambiente visibility in a specific clinic (ADMIN or SUPER_ADMIN)
+      tags: [Ambientes]
       security:
         - bearerAuth: []
       responses:
@@ -376,10 +375,10 @@ paths:
           description: Updated
         '403':
           description: Forbidden
-  /api/v1/clinics/{clinic_id}/ambientes/{ambiente_id}:
+  /api/v1/clinics/{clinic_id}/products/{product_id}:
     patch:
-      summary: Toggle ambiente visibility in a specific clinic (ADMIN or SUPER_ADMIN)
-      tags: [Ambientes]
+      summary: Toggle product visibility in a specific clinic (ADMIN or SUPER_ADMIN)
+      tags: [Products]
       security:
         - bearerAuth: []
       responses:
