@@ -18,16 +18,23 @@ final class ProductService
 {
     private const SELECT_COLUMNS = 'p.id, p.sku, p.name, p.barcode, p.internal_reference,
             p.category_id, p.subcategory_id, p.brand_id, p.dispensing_type_id,
+            p.national_code, p.packaging, p.sub_brand_id, p.species_id, p.specialty_id,
             p.is_active, p.unit_of_measure, p.created_at, p.updated_at,
             c.id AS category_rel_id, c.name AS category_name,
             sc.id AS subcategory_rel_id, sc.name AS subcategory_name,
             b.id AS brand_rel_id, b.name AS brand_name,
-            dt.id AS dispensing_type_rel_id, dt.name AS dispensing_type_name';
+            dt.id AS dispensing_type_rel_id, dt.name AS dispensing_type_name,
+            sb.id AS sub_brand_rel_id, sb.name AS sub_brand_name,
+            sp.id AS species_rel_id, sp.name AS species_name,
+            spt.id AS specialty_rel_id, spt.name AS specialty_name';
 
     private const JOINS = 'LEFT JOIN categories c ON c.id = p.category_id
          LEFT JOIN subcategories sc ON sc.id = p.subcategory_id
          LEFT JOIN brands b ON b.id = p.brand_id
-         LEFT JOIN dispensing_types dt ON dt.id = p.dispensing_type_id';
+         LEFT JOIN dispensing_types dt ON dt.id = p.dispensing_type_id
+         LEFT JOIN sub_brands sb ON sb.id = p.sub_brand_id
+         LEFT JOIN species sp ON sp.id = p.species_id
+         LEFT JOIN specialties spt ON spt.id = p.specialty_id';
 
     public function __construct(
         private readonly PDO $pdo,
@@ -134,6 +141,7 @@ final class ProductService
                 p.name ILIKE :filter_search
                 OR COALESCE(p.barcode, \'\') ILIKE :filter_search
                 OR COALESCE(p.internal_reference, \'\') ILIKE :filter_search
+                OR COALESCE(p.national_code, \'\') ILIKE :filter_search
                 OR p.sku ILIKE :filter_search
             )';
             $params['filter_search'] = '%' . $filters['search'] . '%';
@@ -182,7 +190,13 @@ final class ProductService
             $dto->subcategoryId,
             $dto->brandId,
             $dto->dispensingTypeId,
+            $dto->subBrandId,
+            $dto->speciesId,
+            $dto->specialtyId,
         );
+        if ($dto->tagIds !== null) {
+            $this->assertTagsExist($dto->tagIds);
+        }
 
         $id = Uuid::v4()->toRfc4122();
         $sku = strtoupper(substr(bin2hex(random_bytes(4)), 0, 8));
@@ -193,10 +207,12 @@ final class ProductService
                 'INSERT INTO products (
                     id, sku, name, barcode, internal_reference,
                     category_id, subcategory_id, brand_id, dispensing_type_id,
+                    national_code, packaging, sub_brand_id, species_id, specialty_id,
                     is_active, unit_of_measure, updated_at
                  ) VALUES (
                     :id, :sku, :name, :barcode, :internal_reference,
                     :category_id, :subcategory_id, :brand_id, :dispensing_type_id,
+                    :national_code, :packaging, :sub_brand_id, :species_id, :specialty_id,
                     :is_active, :unit_of_measure, NOW()
                  )'
             );
@@ -209,9 +225,18 @@ final class ProductService
             $stmt->bindValue(':subcategory_id', $dto->subcategoryId);
             $stmt->bindValue(':brand_id', $dto->brandId);
             $stmt->bindValue(':dispensing_type_id', $dto->dispensingTypeId);
+            $stmt->bindValue(':national_code', $dto->nationalCode);
+            $stmt->bindValue(':packaging', $dto->packaging);
+            $stmt->bindValue(':sub_brand_id', $dto->subBrandId);
+            $stmt->bindValue(':species_id', $dto->speciesId);
+            $stmt->bindValue(':specialty_id', $dto->specialtyId);
             $stmt->bindValue(':is_active', $dto->isActive, PDO::PARAM_BOOL);
             $stmt->bindValue(':unit_of_measure', $dto->unitOfMeasure);
             $stmt->execute();
+
+            if ($dto->tagIds !== null && $dto->tagIds !== []) {
+                $this->insertTags($id, $dto->tagIds);
+            }
 
             $clinicStmt = $this->pdo->query('SELECT id FROM clinics');
             $clinics = $clinicStmt->fetchAll() ?: [];
@@ -276,37 +301,91 @@ final class ProductService
             ? $dto->dispensingTypeId
             : ($current['dispensing_type_id'] !== null ? (string) $current['dispensing_type_id'] : null);
         $unitOfMeasure = $dto->unitOfMeasure ?? (string) ($current['unit_of_measure'] ?? 'Unidades');
+        $nationalCode = $dto->nationalCodeTouched
+            ? $dto->nationalCode
+            : ($current['national_code'] !== null ? (string) $current['national_code'] : null);
+        $packaging = $dto->packagingTouched
+            ? $dto->packaging
+            : ($current['packaging'] !== null ? (string) $current['packaging'] : null);
+        $subBrandId = $dto->subBrandIdTouched
+            ? $dto->subBrandId
+            : ($current['sub_brand_id'] !== null ? (string) $current['sub_brand_id'] : null);
+        $speciesId = $dto->speciesIdTouched
+            ? $dto->speciesId
+            : ($current['species_id'] !== null ? (string) $current['species_id'] : null);
+        $specialtyId = $dto->specialtyIdTouched
+            ? $dto->specialtyId
+            : ($current['specialty_id'] !== null ? (string) $current['specialty_id'] : null);
 
-        $this->assertCatalogRelations($categoryId, $subcategoryId, $brandId, $dispensingTypeId);
-
-        $stmt = $this->pdo->prepare(
-            'UPDATE products SET
-                name = :name,
-                barcode = :barcode,
-                internal_reference = :internal_reference,
-                category_id = :category_id,
-                subcategory_id = :subcategory_id,
-                brand_id = :brand_id,
-                dispensing_type_id = :dispensing_type_id,
-                is_active = :is_active,
-                unit_of_measure = :unit_of_measure,
-                updated_at = NOW()
-             WHERE id::text = :id'
+        $this->assertCatalogRelations(
+            $categoryId,
+            $subcategoryId,
+            $brandId,
+            $dispensingTypeId,
+            $subBrandId,
+            $speciesId,
+            $specialtyId,
         );
-        $stmt->bindValue(':id', $productId);
-        $stmt->bindValue(':name', $name);
-        $stmt->bindValue(':barcode', $barcode);
-        $stmt->bindValue(':internal_reference', $internalReference);
-        $stmt->bindValue(':category_id', $categoryId);
-        $stmt->bindValue(':subcategory_id', $subcategoryId);
-        $stmt->bindValue(':brand_id', $brandId);
-        $stmt->bindValue(':dispensing_type_id', $dispensingTypeId);
-        $stmt->bindValue(':is_active', $isActive, PDO::PARAM_BOOL);
-        $stmt->bindValue(':unit_of_measure', $unitOfMeasure);
-        $stmt->execute();
+        if ($dto->tagIdsTouched) {
+            $this->assertTagsExist($dto->tagIds ?? []);
+        }
+
+        $this->pdo->beginTransaction();
+        try {
+            $stmt = $this->pdo->prepare(
+                'UPDATE products SET
+                    name = :name,
+                    barcode = :barcode,
+                    internal_reference = :internal_reference,
+                    category_id = :category_id,
+                    subcategory_id = :subcategory_id,
+                    brand_id = :brand_id,
+                    dispensing_type_id = :dispensing_type_id,
+                    national_code = :national_code,
+                    packaging = :packaging,
+                    sub_brand_id = :sub_brand_id,
+                    species_id = :species_id,
+                    specialty_id = :specialty_id,
+                    is_active = :is_active,
+                    unit_of_measure = :unit_of_measure,
+                    updated_at = NOW()
+                 WHERE id::text = :id'
+            );
+            $stmt->bindValue(':id', $productId);
+            $stmt->bindValue(':name', $name);
+            $stmt->bindValue(':barcode', $barcode);
+            $stmt->bindValue(':internal_reference', $internalReference);
+            $stmt->bindValue(':category_id', $categoryId);
+            $stmt->bindValue(':subcategory_id', $subcategoryId);
+            $stmt->bindValue(':brand_id', $brandId);
+            $stmt->bindValue(':dispensing_type_id', $dispensingTypeId);
+            $stmt->bindValue(':national_code', $nationalCode);
+            $stmt->bindValue(':packaging', $packaging);
+            $stmt->bindValue(':sub_brand_id', $subBrandId);
+            $stmt->bindValue(':species_id', $speciesId);
+            $stmt->bindValue(':specialty_id', $specialtyId);
+            $stmt->bindValue(':is_active', $isActive, PDO::PARAM_BOOL);
+            $stmt->bindValue(':unit_of_measure', $unitOfMeasure);
+            $stmt->execute();
+
+            if ($dto->tagIdsTouched) {
+                $delete = $this->pdo->prepare('DELETE FROM product_product_tags WHERE product_id::text = :product_id');
+                $delete->execute(['product_id' => $productId]);
+                if ($dto->tagIds !== null && $dto->tagIds !== []) {
+                    $this->insertTags($productId, $dto->tagIds);
+                }
+            }
+
+            $this->pdo->commit();
+        } catch (\Throwable $e) {
+            if ($this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
+            throw $e;
+        }
 
         $row = $this->getGlobal($productId);
-      
+
         if (!is_array($row)) {
             return null;
         }
@@ -568,7 +647,8 @@ final class ProductService
     {
         $stmt = $this->pdo->prepare(
             'SELECT id, sku, name, barcode, internal_reference, category_id, subcategory_id,
-                    brand_id, dispensing_type_id, is_active, unit_of_measure
+                    brand_id, dispensing_type_id, national_code, packaging,
+                    sub_brand_id, species_id, specialty_id, is_active, unit_of_measure
              FROM products WHERE id::text = :id LIMIT 1'
         );
         $stmt->execute(['id' => $productId]);
@@ -582,6 +662,9 @@ final class ProductService
         ?string $subcategoryId,
         ?string $brandId,
         ?string $dispensingTypeId,
+        ?string $subBrandId = null,
+        ?string $speciesId = null,
+        ?string $specialtyId = null,
     ): void {
         if ($categoryId !== null && !$this->exists('categories', $categoryId)) {
             throw new RuntimeException('Category not found');
@@ -591,6 +674,12 @@ final class ProductService
         }
         if ($dispensingTypeId !== null && !$this->exists('dispensing_types', $dispensingTypeId)) {
             throw new RuntimeException('Dispensing type not found');
+        }
+        if ($speciesId !== null && !$this->exists('species', $speciesId)) {
+            throw new RuntimeException('Species not found');
+        }
+        if ($specialtyId !== null && !$this->exists('specialties', $specialtyId)) {
+            throw new RuntimeException('Specialty not found');
         }
         if ($subcategoryId !== null) {
             $stmt = $this->pdo->prepare(
@@ -605,11 +694,73 @@ final class ProductService
                 throw new RuntimeException('Subcategory does not belong to the given category');
             }
         }
+        if ($subBrandId !== null) {
+            $stmt = $this->pdo->prepare(
+                'SELECT brand_id::text AS brand_id FROM sub_brands WHERE id::text = :id LIMIT 1'
+            );
+            $stmt->execute(['id' => $subBrandId]);
+            $row = $stmt->fetch();
+            if (!is_array($row)) {
+                throw new RuntimeException('Sub-brand not found');
+            }
+            if ($brandId !== null && (string) $row['brand_id'] !== $brandId) {
+                throw new RuntimeException('Sub-brand does not belong to the given brand');
+            }
+        }
+    }
+
+    /**
+     * @param list<string> $tagIds
+     */
+    private function assertTagsExist(array $tagIds): void
+    {
+        foreach ($tagIds as $tagId) {
+            if (!$this->exists('product_tags', $tagId)) {
+                throw new RuntimeException('Product tag not found');
+            }
+        }
+    }
+
+    /**
+     * @param list<string> $tagIds
+     */
+    private function insertTags(string $productId, array $tagIds): void
+    {
+        $stmt = $this->pdo->prepare(
+            'INSERT INTO product_product_tags (product_id, product_tag_id)
+             VALUES (:product_id, :product_tag_id)
+             ON CONFLICT DO NOTHING'
+        );
+        foreach ($tagIds as $tagId) {
+            $stmt->execute(['product_id' => $productId, 'product_tag_id' => $tagId]);
+        }
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function loadTagsForProduct(string $productId): array
+    {
+        $stmt = $this->pdo->prepare(
+            'SELECT pt.id, pt.name, pt.slug
+             FROM product_product_tags ppt
+             INNER JOIN product_tags pt ON pt.id = ppt.product_tag_id
+             WHERE ppt.product_id::text = :product_id
+             ORDER BY pt.name ASC'
+        );
+        $stmt->execute(['product_id' => $productId]);
+        $rows = $stmt->fetchAll() ?: [];
+
+        return array_map(static fn (array $row): array => [
+            'id' => (string) $row['id'],
+            'name' => (string) $row['name'],
+            'slug' => (string) $row['slug'],
+        ], $rows);
     }
 
     private function exists(string $table, string $id): bool
     {
-        $allowed = ['categories', 'brands', 'dispensing_types', 'suppliers'];
+        $allowed = ['categories', 'brands', 'dispensing_types', 'suppliers', 'species', 'specialties', 'product_tags'];
         if (!in_array($table, $allowed, true)) {
             return false;
         }
@@ -700,10 +851,15 @@ final class ProductService
             'name' => (string) $row['name'],
             'barcode' => $row['barcode'] !== null ? (string) $row['barcode'] : null,
             'internal_reference' => $row['internal_reference'] !== null ? (string) $row['internal_reference'] : null,
+            'national_code' => $row['national_code'] !== null ? (string) $row['national_code'] : null,
+            'packaging' => $row['packaging'] !== null ? (string) $row['packaging'] : null,
             'category_id' => $row['category_id'] !== null ? (string) $row['category_id'] : null,
             'subcategory_id' => $row['subcategory_id'] !== null ? (string) $row['subcategory_id'] : null,
             'brand_id' => $row['brand_id'] !== null ? (string) $row['brand_id'] : null,
+            'sub_brand_id' => $row['sub_brand_id'] !== null ? (string) $row['sub_brand_id'] : null,
             'dispensing_type_id' => $row['dispensing_type_id'] !== null ? (string) $row['dispensing_type_id'] : null,
+            'species_id' => $row['species_id'] !== null ? (string) $row['species_id'] : null,
+            'specialty_id' => $row['specialty_id'] !== null ? (string) $row['specialty_id'] : null,
             'is_active' => (bool) $row['is_active'],
             'unit_of_measure' => (string) ($row['unit_of_measure'] ?? 'Unidades'),
             'category' => $row['category_rel_id'] !== null
@@ -718,12 +874,22 @@ final class ProductService
             'dispensing_type' => $row['dispensing_type_rel_id'] !== null
                 ? ['id' => (string) $row['dispensing_type_rel_id'], 'name' => (string) $row['dispensing_type_name']]
                 : null,
+            'sub_brand' => $row['sub_brand_rel_id'] !== null
+                ? ['id' => (string) $row['sub_brand_rel_id'], 'name' => (string) $row['sub_brand_name']]
+                : null,
+            'species' => $row['species_rel_id'] !== null
+                ? ['id' => (string) $row['species_rel_id'], 'name' => (string) $row['species_name']]
+                : null,
+            'specialty' => $row['specialty_rel_id'] !== null
+                ? ['id' => (string) $row['specialty_rel_id'], 'name' => (string) $row['specialty_name']]
+                : null,
             'created_at' => (string) ($row['created_at'] ?? ''),
             'updated_at' => (string) ($row['updated_at'] ?? ''),
         ];
 
         if ($withSuppliers) {
             $data['suppliers'] = $this->loadSuppliersForProduct($productId);
+            $data['tags'] = $this->loadTagsForProduct($productId);
         }
 
         if ($includeVisible) {

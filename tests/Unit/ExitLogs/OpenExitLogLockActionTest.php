@@ -4,12 +4,18 @@ declare(strict_types=1);
 
 namespace Tests\Unit\ExitLogs;
 
+use App\Application\Audit\AuditActivitySanitizer;
 use App\Application\ExitLogs\OpenExitLogLockAction;
 use App\Application\ExitLogs\Ports\ExitLogLockPort;
+use App\Application\Stock\LocationValidator;
 use App\Domain\ExitLogs\Exception\ExitLogLockDeniedException;
 use App\Domain\ExitLogs\Exception\ExitLogNotFoundException;
 use App\Domain\Mqtt\Exception\MqttPublishFailedException;
 use App\Domain\Mqtt\LockCommandPublisher;
+use App\Modules\Audit\Services\AuditActivityService;
+use App\Modules\ExitLogs\Services\ExitLogService;
+use PDO;
+use PDOStatement;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
@@ -32,15 +38,45 @@ final class OpenExitLogLockActionTest extends TestCase
         ];
     }
 
-    public function testPublishesAndRecordsOnSuccess(): void
+    /**
+     * ExitLogService y AuditActivityService son final: se construyen con PDO stub
+     * que hace que getDetail() devuelva null (sin auditoría en estos tests).
+     *
+     * @return array{0: ExitLogLockPort&MockObject, 1: LockCommandPublisher&MockObject, 2: OpenExitLogLockAction}
+     */
+    private function makeAction(): array
     {
         /** @var ExitLogLockPort&MockObject $port */
         $port = $this->createMock(ExitLogLockPort::class);
         /** @var LockCommandPublisher&MockObject $publisher */
         $publisher = $this->createMock(LockCommandPublisher::class);
-        $logger = $this->createStub(LoggerInterface::class);
 
-        $port->expects($this->once())->method('findContextForOpenLock')->with(self::CLINIC, '42')->willReturn($this->validContext());
+        $stmt = $this->createMock(PDOStatement::class);
+        $stmt->method('execute')->willReturn(true);
+        $stmt->method('fetch')->willReturn(false);
+
+        $pdo = $this->createMock(PDO::class);
+        $pdo->method('prepare')->willReturn($stmt);
+
+        $audit = new AuditActivityService($pdo, new AuditActivitySanitizer());
+        $exitLogService = new ExitLogService($pdo, new LocationValidator($pdo), $audit);
+
+        $action = new OpenExitLogLockAction(
+            $port,
+            $publisher,
+            $this->createStub(LoggerInterface::class),
+            $exitLogService,
+            $audit,
+        );
+
+        return [$port, $publisher, $action];
+    }
+
+    public function testPublishesAndRecordsOnSuccess(): void
+    {
+        [$port, $publisher, $action] = $this->makeAction();
+
+        $port->expects($this->once())->method('findContextForOpenLock')->with(self::CLINIC, '42', null)->willReturn($this->validContext());
 
         $publisher->expects($this->once())->method('publishOpenCommand')->with('DEVICE-UNIT-TEST');
 
@@ -55,7 +91,6 @@ final class OpenExitLogLockActionTest extends TestCase
             null
         );
 
-        $action = new OpenExitLogLockAction($port, $publisher, $logger);
         $result = $action->execute(self::CLINIC, '42', 'user-1');
 
         $this->assertSame('Lock open command sent successfully.', $result->message);
@@ -67,12 +102,9 @@ final class OpenExitLogLockActionTest extends TestCase
 
     public function testThrowsWhenExitLogMissing(): void
     {
-        $port = $this->createMock(ExitLogLockPort::class);
+        [$port, $publisher, $action] = $this->makeAction();
         $port->method('findContextForOpenLock')->willReturn(null);
-        $publisher = $this->createMock(LockCommandPublisher::class);
         $publisher->expects($this->never())->method('publishOpenCommand');
-
-        $action = new OpenExitLogLockAction($port, $publisher, $this->createStub(LoggerInterface::class));
 
         $this->expectException(ExitLogNotFoundException::class);
         $action->execute(self::CLINIC, '99', 'user-1');
@@ -80,12 +112,9 @@ final class OpenExitLogLockActionTest extends TestCase
 
     public function testThrowsWhenExitLogNotConfirmed(): void
     {
-        $port = $this->createMock(ExitLogLockPort::class);
+        [$port, $publisher, $action] = $this->makeAction();
         $port->method('findContextForOpenLock')->willReturn(array_merge($this->validContext(), ['status' => 'DRAFT']));
-        $publisher = $this->createMock(LockCommandPublisher::class);
         $publisher->expects($this->never())->method('publishOpenCommand');
-
-        $action = new OpenExitLogLockAction($port, $publisher, $this->createStub(LoggerInterface::class));
 
         $this->expectException(ExitLogLockDeniedException::class);
         $action->execute(self::CLINIC, '1', 'user-1');
@@ -93,7 +122,7 @@ final class OpenExitLogLockActionTest extends TestCase
 
     public function testThrowsWhenZoneMissing(): void
     {
-        $port = $this->createMock(ExitLogLockPort::class);
+        [$port, $publisher, $action] = $this->makeAction();
         $port->method('findContextForOpenLock')->willReturn([
             'status' => 'CONFIRMED',
             'zone_id' => null,
@@ -103,10 +132,7 @@ final class OpenExitLogLockActionTest extends TestCase
             'ambiente_is_active' => false,
             'device_id' => null,
         ]);
-        $publisher = $this->createMock(LockCommandPublisher::class);
         $publisher->expects($this->never())->method('publishOpenCommand');
-
-        $action = new OpenExitLogLockAction($port, $publisher, $this->createStub(LoggerInterface::class));
 
         $this->expectException(ExitLogLockDeniedException::class);
         $action->execute(self::CLINIC, '1', 'user-1');
@@ -114,10 +140,7 @@ final class OpenExitLogLockActionTest extends TestCase
 
     public function testRecordsFailureAndRethrowsWhenMqttFails(): void
     {
-        /** @var ExitLogLockPort&MockObject $port */
-        $port = $this->createMock(ExitLogLockPort::class);
-        /** @var LockCommandPublisher&MockObject $publisher */
-        $publisher = $this->createMock(LockCommandPublisher::class);
+        [$port, $publisher, $action] = $this->makeAction();
 
         $port->method('findContextForOpenLock')->willReturn($this->validContext());
         $publisher->method('publishOpenCommand')->willThrowException(new MqttPublishFailedException('broker down'));
@@ -132,8 +155,6 @@ final class OpenExitLogLockActionTest extends TestCase
             false,
             'broker down'
         );
-
-        $action = new OpenExitLogLockAction($port, $publisher, $this->createStub(LoggerInterface::class));
 
         $this->expectException(MqttPublishFailedException::class);
         $action->execute(self::CLINIC, '7', 'user-1');

@@ -33,6 +33,13 @@ final class ProductValidator
             throw new InvalidArgumentException('Invalid unit_of_measure');
         }
 
+        $nationalCode = $this->optionalString($payload, 'national_code');
+        $packaging = $this->optionalString($payload, 'packaging');
+        $subBrandId = $this->optionalUuid($payload, 'sub_brand_id');
+        $speciesId = $this->optionalUuid($payload, 'species_id');
+        $specialtyId = $this->optionalUuid($payload, 'specialty_id');
+        $tagIds = array_key_exists('tag_ids', $payload) ? $this->parseTagIds($payload['tag_ids']) : null;
+
         $this->assertSubcategoryBelongsToCategory($categoryId, $subcategoryId, $payload);
 
         return new CreateProductDTO(
@@ -45,6 +52,12 @@ final class ProductValidator
             $brandId,
             $dispensingTypeId,
             $unitOfMeasure,
+            $nationalCode,
+            $packaging,
+            $subBrandId,
+            $speciesId,
+            $specialtyId,
+            $tagIds,
         );
     }
 
@@ -82,6 +95,19 @@ final class ProductValidator
             throw new InvalidArgumentException('Invalid unit_of_measure');
         }
 
+        $nationalCodeTouched = array_key_exists('national_code', $payload);
+        $nationalCode = $nationalCodeTouched ? $this->optionalString($payload, 'national_code') : null;
+        $packagingTouched = array_key_exists('packaging', $payload);
+        $packaging = $packagingTouched ? $this->optionalString($payload, 'packaging') : null;
+        $subBrandIdTouched = array_key_exists('sub_brand_id', $payload);
+        $subBrandId = $subBrandIdTouched ? $this->optionalUuid($payload, 'sub_brand_id') : null;
+        $speciesIdTouched = array_key_exists('species_id', $payload);
+        $speciesId = $speciesIdTouched ? $this->optionalUuid($payload, 'species_id') : null;
+        $specialtyIdTouched = array_key_exists('specialty_id', $payload);
+        $specialtyId = $specialtyIdTouched ? $this->optionalUuid($payload, 'specialty_id') : null;
+        $tagIdsTouched = array_key_exists('tag_ids', $payload);
+        $tagIds = $tagIdsTouched ? ($this->parseTagIds($payload['tag_ids']) ?? []) : null;
+
         if (
             $name === null
             && $isActive === null
@@ -92,6 +118,12 @@ final class ProductValidator
             && !$brandIdTouched
             && !$dispensingTypeIdTouched
             && $unitOfMeasure === null
+            && !$nationalCodeTouched
+            && !$packagingTouched
+            && !$subBrandIdTouched
+            && !$speciesIdTouched
+            && !$specialtyIdTouched
+            && !$tagIdsTouched
         ) {
             throw new InvalidArgumentException('No fields to update');
         }
@@ -112,6 +144,18 @@ final class ProductValidator
             $dispensingTypeIdTouched,
             $dispensingTypeId,
             $unitOfMeasure,
+            $nationalCodeTouched,
+            $nationalCode,
+            $packagingTouched,
+            $packaging,
+            $subBrandIdTouched,
+            $subBrandId,
+            $speciesIdTouched,
+            $speciesId,
+            $specialtyIdTouched,
+            $specialtyId,
+            $tagIdsTouched,
+            $tagIds,
         );
     }
 
@@ -235,6 +279,29 @@ final class ProductValidator
         }
 
         return $value;
+    }
+
+    /**
+     * @return list<string>|null Lista de UUIDs deduplicada; null si el valor es null.
+     */
+    private function parseTagIds(mixed $raw): ?array
+    {
+        if ($raw === null) {
+            return null;
+        }
+        if (!is_array($raw)) {
+            throw new InvalidArgumentException('Invalid tag_ids');
+        }
+
+        $ids = [];
+        foreach ($raw as $value) {
+            if (!is_string($value) || trim($value) === '') {
+                throw new InvalidArgumentException('Invalid tag_ids');
+            }
+            $ids[trim($value)] = true;
+        }
+
+        return array_keys($ids);
     }
 
     /**

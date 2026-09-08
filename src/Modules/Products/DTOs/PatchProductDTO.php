@@ -6,6 +6,9 @@ namespace App\Modules\Products\DTOs;
 
 final class PatchProductDTO
 {
+    /**
+     * @param list<string>|null $tagIds
+     */
     public function __construct(
         public readonly ?string $name,
         public readonly ?bool $isActive,
@@ -22,6 +25,18 @@ final class PatchProductDTO
         public readonly bool $dispensingTypeIdTouched = false,
         public readonly ?string $dispensingTypeId = null,
         public readonly ?string $unitOfMeasure = null,
+        public readonly bool $nationalCodeTouched = false,
+        public readonly ?string $nationalCode = null,
+        public readonly bool $packagingTouched = false,
+        public readonly ?string $packaging = null,
+        public readonly bool $subBrandIdTouched = false,
+        public readonly ?string $subBrandId = null,
+        public readonly bool $speciesIdTouched = false,
+        public readonly ?string $speciesId = null,
+        public readonly bool $specialtyIdTouched = false,
+        public readonly ?string $specialtyId = null,
+        public readonly bool $tagIdsTouched = false,
+        public readonly ?array $tagIds = null,
     ) {
     }
 }
