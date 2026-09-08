@@ -251,4 +251,58 @@ final class ProductValidator
 
         return (float) $payload[$key];
     }
+
+    /**
+     * @param array<string, mixed> $payload
+     */
+    public function parseRequiredVisible(array $payload): bool
+    {
+        if (!array_key_exists('visible', $payload)) {
+            throw new InvalidArgumentException('visible is required');
+        }
+        $visible = $this->parseBool($payload, 'visible', null);
+        if ($visible === null) {
+            throw new InvalidArgumentException('Invalid visible');
+        }
+
+        return $visible;
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     */
+    public function parseOnlyActiveCatalog(array $payload): bool
+    {
+        $value = $this->parseBool($payload, 'only_active_catalog', true);
+        if ($value === null) {
+            throw new InvalidArgumentException('Invalid only_active_catalog');
+        }
+
+        return $value;
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     * @return list<string>|null
+     */
+    public function parseOptionalIdList(array $payload, string $key): ?array
+    {
+        if (!array_key_exists($key, $payload) || $payload[$key] === null) {
+            return null;
+        }
+        if (!is_array($payload[$key])) {
+            throw new InvalidArgumentException('Invalid ' . $key);
+        }
+
+        $ids = [];
+        foreach ($payload[$key] as $value) {
+            $id = trim((string) $value);
+            if ($id === '') {
+                throw new InvalidArgumentException('Invalid ' . $key);
+            }
+            $ids[$id] = $id;
+        }
+
+        return array_values($ids);
+    }
 }

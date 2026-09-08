@@ -45,20 +45,20 @@ final class ClinicService
         return array_map(fn (array $row): array => $this->presentClinic($row), $rows);
     }
 
-    public function create(string $name, string $password, AuditActor $actor): array
+    public function create(string $name, string $password, AuditActor $actor, bool $visible = true): array
     {
         $id = \Symfony\Component\Uid\Uuid::v4()->toRfc4122();
         $hash = password_hash($password, PASSWORD_BCRYPT);
         $stmt = $this->pdo->prepare(
             'INSERT INTO clinics (id, name, visible, password_hash, created_at)
-             VALUES (:id, :name, TRUE, :password_hash, NOW())
+             VALUES (:id, :name, :visible, :password_hash, NOW())
              RETURNING id, name, visible, image_path, password_hash IS NOT NULL AS has_password, created_at'
         );
-        $stmt->execute([
-            'id' => $id,
-            'name' => $name,
-            'password_hash' => $hash,
-        ]);
+        $stmt->bindValue(':id', $id);
+        $stmt->bindValue(':name', $name);
+        $stmt->bindValue(':visible', $visible, PDO::PARAM_BOOL);
+        $stmt->bindValue(':password_hash', $hash);
+        $stmt->execute();
 
         $presented = $this->presentClinic((array) $stmt->fetch());
         $this->audit->recordAdd('clinic', $presented['id'], $actor->userId, $presented['id'], $presented);

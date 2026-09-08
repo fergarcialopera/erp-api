@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Users\Services;
 
 use App\Application\Audit\AuditActor;
+use App\Application\Http\Exceptions\ConflictException;
 use App\Application\Support\DisplayName;
 use App\Application\Support\PublicUrlBuilder;
 use App\Domain\Auth\Role;
@@ -12,6 +13,7 @@ use App\Infrastructure\Auth\LoginAttemptService;
 use App\Modules\Audit\Services\AuditActivityService;
 use App\Modules\Users\DTOs\CreateUserDTO;
 use App\Modules\Users\DTOs\PatchUserDTO;
+use InvalidArgumentException;
 use PDO;
 use RuntimeException;
 use Symfony\Component\Uid\Uuid;
@@ -29,29 +31,146 @@ final class UserService
     /**
      * @return list<array<string, mixed>>
      */
-    public function list(?string $clinicId = null): array
+    public function list(?string $clinicId = null, ?bool $isActive = null, ?string $search = null): array
     {
-        if ($clinicId !== null && $clinicId !== '') {
-            $stmt = $this->pdo->prepare(
-                'SELECT DISTINCT u.id, u.clinic_id, u.name, u.email, u.role, u.operational_role_id, u.is_active, u.is_locked, u.image_path, u.created_at, u.updated_at
+        $sql = 'SELECT DISTINCT u.id, u.clinic_id, u.name, u.email, u.role, u.operational_role_id, u.is_active, u.is_locked, u.image_path, u.created_at, u.updated_at
                  FROM users u
                  LEFT JOIN user_clinics uc ON uc.user_id = u.id
-                 WHERE u.clinic_id::text = :clinic_id OR uc.clinic_id::text = :clinic_id
-                 ORDER BY u.created_at DESC'
-            );
-            $stmt->execute(['clinic_id' => $clinicId]);
-        } else {
-            $stmt = $this->pdo->query(
-                'SELECT id, clinic_id, name, email, role, operational_role_id, is_active, is_locked, image_path, created_at, updated_at
-                 FROM users
-                 WHERE role <> \'SUPER_ADMIN\'
-                 ORDER BY created_at DESC'
-            );
+                 WHERE u.role <> \'SUPER_ADMIN\'';
+        $params = [];
+
+        if ($clinicId !== null && $clinicId !== '') {
+            $sql .= ' AND (u.clinic_id::text = :clinic_id OR uc.clinic_id::text = :clinic_id)';
+            $params['clinic_id'] = $clinicId;
         }
 
+        if ($isActive !== null) {
+            $sql .= ' AND u.is_active = :is_active';
+            $params['is_active'] = $isActive;
+        }
+
+        if ($search !== null && $search !== '') {
+            $sql .= ' AND (u.name ILIKE :search OR u.email ILIKE :search)';
+            $params['search'] = '%' . $search . '%';
+        }
+
+        $sql .= ' ORDER BY u.created_at DESC';
+        $stmt = $this->pdo->prepare($sql);
+        foreach ($params as $key => $value) {
+            if ($key === 'is_active') {
+                $stmt->bindValue(':' . $key, $value, PDO::PARAM_BOOL);
+            } else {
+                $stmt->bindValue(':' . $key, $value);
+            }
+        }
+        $stmt->execute();
         $rows = $stmt->fetchAll() ?: [];
 
         return array_map(fn (array $row): array => $this->presentUser($row), $rows);
+    }
+
+    /**
+     * Users with no clinic assignment (1 clinic per user). Excludes SUPER_ADMIN.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function listAvailableForClinic(?string $search = null): array
+    {
+        $sql = 'SELECT u.id, u.clinic_id, u.name, u.email, u.role, u.operational_role_id, u.is_active, u.is_locked, u.image_path, u.created_at, u.updated_at
+                 FROM users u
+                 WHERE u.role <> \'SUPER_ADMIN\'
+                   AND u.clinic_id IS NULL
+                   AND NOT EXISTS (SELECT 1 FROM user_clinics uc WHERE uc.user_id = u.id)';
+        $params = [];
+        if ($search !== null && $search !== '') {
+            $sql .= ' AND (u.name ILIKE :search OR u.email ILIKE :search)';
+            $params['search'] = '%' . $search . '%';
+        }
+        $sql .= ' ORDER BY u.name ASC';
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute($params);
+        $rows = $stmt->fetchAll() ?: [];
+
+        return array_map(fn (array $row): array => $this->presentUser($row), $rows);
+    }
+
+    public function belongsToClinic(string $userId, string $clinicId): bool
+    {
+        $raw = $this->getRaw($userId);
+        if ($raw === null) {
+            return false;
+        }
+
+        if ((string) ($raw['clinic_id'] ?? '') === $clinicId) {
+            return true;
+        }
+
+        return $this->isLinkedToClinic($userId, $clinicId);
+    }
+
+    /**
+     * Assigns an existing user to a clinic (1 clinic per user). Does not reassign.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function assignToClinic(string $clinicId, string $userId, AuditActor $actor): ?array
+    {
+        $raw = $this->findAnyUser($userId);
+        if ($raw === null) {
+            return null;
+        }
+
+        $role = Role::normalize((string) ($raw['role'] ?? ''));
+        if (Role::isSuperAdmin($role)) {
+            throw new InvalidArgumentException('Role not assignable');
+        }
+
+        $assignedClinicIds = $this->allAssignedClinicIds(
+            $userId,
+            $raw['clinic_id'] !== null ? (string) $raw['clinic_id'] : null
+        );
+        if (in_array($clinicId, $assignedClinicIds, true)) {
+            throw new ConflictException('User already assigned to this clinic');
+        }
+        if ($assignedClinicIds !== []) {
+            throw new InvalidArgumentException('User already assigned to another clinic');
+        }
+
+        $before = $this->presentUser($raw);
+
+        $this->pdo->beginTransaction();
+        try {
+            $stmt = $this->pdo->prepare(
+                'UPDATE users SET clinic_id = :clinic_id, updated_at = NOW()
+                 WHERE id::text = :id
+                 RETURNING id, clinic_id, name, email, role, operational_role_id, is_active, is_locked, image_path, created_at, updated_at'
+            );
+            $stmt->execute(['clinic_id' => $clinicId, 'id' => $userId]);
+            $row = $stmt->fetch();
+            if (!is_array($row)) {
+                $this->pdo->rollBack();
+
+                return null;
+            }
+
+            if ($role === Role::ADMIN) {
+                $this->syncClinicLinks($userId, [$clinicId]);
+            } else {
+                $this->clearClinicLinks($userId);
+            }
+
+            $this->pdo->commit();
+
+            $after = $this->presentUser($row);
+            $this->audit->recordEdit('user', $userId, $actor->userId, $clinicId, $before, $after);
+
+            return $after;
+        } catch (\Throwable $e) {
+            if ($this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
+            throw $e;
+        }
     }
 
     public function get(string $userId): ?array
@@ -274,6 +393,48 @@ final class UserService
         }
 
         return $stmt->rowCount() > 0;
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function findAnyUser(string $userId): ?array
+    {
+        $stmt = $this->pdo->prepare(
+            'SELECT id, clinic_id, name, email, role, operational_role_id, is_active, is_locked, image_path, created_at, updated_at
+             FROM users WHERE id::text = :id LIMIT 1'
+        );
+        $stmt->execute(['id' => $userId]);
+        $row = $stmt->fetch();
+
+        return is_array($row) ? $row : null;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function allAssignedClinicIds(string $userId, ?string $primaryClinicId): array
+    {
+        $ids = [];
+        if ($primaryClinicId !== null && $primaryClinicId !== '') {
+            $ids[$primaryClinicId] = true;
+        }
+
+        $stmt = $this->pdo->prepare(
+            'SELECT clinic_id::text AS clinic_id FROM user_clinics WHERE user_id::text = :user_id'
+        );
+        $stmt->execute(['user_id' => $userId]);
+        foreach ($stmt->fetchAll() ?: [] as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $id = (string) ($row['clinic_id'] ?? '');
+            if ($id !== '') {
+                $ids[$id] = true;
+            }
+        }
+
+        return array_keys($ids);
     }
 
     /**

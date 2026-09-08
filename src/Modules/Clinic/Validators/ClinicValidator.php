@@ -22,7 +22,17 @@ final class ClinicValidator
             throw new InvalidArgumentException('Invalid password');
         }
 
-        return new CreateClinicDTO($name, $password);
+        $visible = true;
+        if (array_key_exists('visible', $payload)) {
+            $raw = $payload['visible'];
+            $parsed = is_bool($raw) ? $raw : filter_var($raw, FILTER_VALIDATE_BOOL, FILTER_NULL_ON_FAILURE);
+            if ($parsed === null) {
+                throw new InvalidArgumentException('Invalid visible');
+            }
+            $visible = $parsed;
+        }
+
+        return new CreateClinicDTO($name, $password, $visible);
     }
 
     public function validatePatch(array $payload): PatchClinicDTO

@@ -11,6 +11,7 @@ use App\Modules\Products\DTOs\PatchProductDTO;
 use App\Modules\Products\DTOs\PatchProductSupplierDTO;
 use App\Modules\Products\DTOs\UpsertProductSupplierDTO;
 use PDO;
+use InvalidArgumentException;
 use RuntimeException;
 use Symfony\Component\Uid\Uuid;
 
@@ -55,6 +56,36 @@ final class ProductService
         if (!$adminView) {
             $sql .= ' AND cp.visible = TRUE AND p.is_active = TRUE';
         } elseif ($active !== null) {
+            $sql .= ' AND p.is_active = :is_active';
+            $params['is_active'] = $active ? 'true' : 'false';
+        }
+
+        [$sql, $params] = $this->applyListFilters($sql, $params, $filters);
+
+        $sql .= ' ORDER BY p.created_at DESC';
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute($params);
+        $rows = $stmt->fetchAll() ?: [];
+
+        return array_map(fn (array $row): array => $this->presentProduct($row, true, false), $rows);
+    }
+
+    /**
+     * Full catalog with clinic visibility. Missing clinic_products row => visible false.
+     *
+     * @param array{category_id:?string,subcategory_id:?string,brand_id:?string,dispensing_type_id:?string,supplier_id:?string,search:?string}|null $filters
+     * @return list<array<string, mixed>>
+     */
+    public function listCatalogForClinic(string $clinicId, ?bool $active, ?array $filters = null): array
+    {
+        $sql = 'SELECT ' . self::SELECT_COLUMNS . ', COALESCE(cp.visible, FALSE) AS visible
+                FROM products p
+                LEFT JOIN clinic_products cp ON cp.product_id = p.id AND cp.clinic_id::text = :clinic_id
+                ' . self::JOINS . '
+                WHERE 1=1';
+        $params = ['clinic_id' => $clinicId];
+
+        if ($active !== null) {
             $sql .= ' AND p.is_active = :is_active';
             $params['is_active'] = $active ? 'true' : 'false';
         }
@@ -331,14 +362,38 @@ final class ProductService
         return $stmt->rowCount() > 0;
     }
 
+    /**
+     * Upsert clinic_products. Visibility is independent of products.is_active.
+     * Missing clinic_products row is treated as visible=false.
+     *
+     * @return array<string, mixed>|null
+     */
     public function setClinicVisibility(string $clinicId, string $productId, bool $visible, AuditActor $actor): ?array
     {
-        $product = $this->getGlobal($productId);
-        if ($product === null || !(bool) $product['is_active']) {
+        $link = $this->upsertClinicVisibilityLink($clinicId, $productId, $visible, $actor);
+        if ($link === null) {
             return null;
         }
 
-        $before = $this->getForClinic($clinicId, $productId, true);
+        return $this->getForClinic($clinicId, $productId, true) ?? [
+            'id' => $productId,
+            'visible' => $link['visible'],
+        ];
+    }
+
+    /**
+     * @return array{product_id: string, clinic_id: string, visible: bool}|null
+     */
+    public function upsertClinicVisibilityLink(string $clinicId, string $productId, bool $visible, AuditActor $actor): ?array
+    {
+        if ($this->getRaw($productId) === null) {
+            return null;
+        }
+        if (!$this->clinicExists($clinicId)) {
+            return null;
+        }
+
+        $before = $this->currentClinicVisibility($clinicId, $productId);
 
         $stmt = $this->pdo->prepare(
             'INSERT INTO clinic_products (clinic_id, product_id, visible)
@@ -351,23 +406,171 @@ final class ProductService
         $stmt->bindValue(':product_id', $productId);
         $stmt->bindValue(':visible', $visible, PDO::PARAM_BOOL);
         $stmt->execute();
-        if (!$stmt->fetch()) {
+        $row = $stmt->fetch();
+        if (!is_array($row)) {
             return null;
         }
 
-        $after = $this->getForClinic($clinicId, $productId, true);
-        if ($after !== null) {
-            $this->audit->recordEdit(
-                'clinic-product',
-                $productId,
-                $actor->userId,
-                $clinicId,
-                $before ?? ['product_id' => $productId, 'clinic_id' => $clinicId, 'visible' => !$visible],
-                $after,
-            );
-        }
+        $after = [
+            'product_id' => (string) $row['product_id'],
+            'clinic_id' => (string) $row['clinic_id'],
+            'visible' => (bool) $row['visible'],
+        ];
+        $this->audit->recordEdit(
+            'clinic-product',
+            $productId,
+            $actor->userId,
+            $clinicId,
+            ['product_id' => $productId, 'clinic_id' => $clinicId, 'visible' => $before],
+            $after,
+        );
 
         return $after;
+    }
+
+    /**
+     * @return list<array{clinic_id: string, name: string, visible: bool, visible_in_kiosk: bool}>|null
+     */
+    public function listClinicsForProduct(string $productId, ?bool $visibleFilter, ?string $search): ?array
+    {
+        if ($this->getRaw($productId) === null) {
+            return null;
+        }
+
+        $sql = 'SELECT c.id AS clinic_id, c.name, c.visible AS visible_in_kiosk,
+                       COALESCE(cp.visible, FALSE) AS visible
+                FROM clinics c
+                LEFT JOIN clinic_products cp ON cp.clinic_id = c.id AND cp.product_id::text = :product_id
+                WHERE 1=1';
+        $params = ['product_id' => $productId];
+        if ($visibleFilter !== null) {
+            $sql .= ' AND COALESCE(cp.visible, FALSE) = :visible';
+            $params['visible'] = $visibleFilter;
+        }
+        if ($search !== null && $search !== '') {
+            $sql .= ' AND c.name ILIKE :search';
+            $params['search'] = '%' . $search . '%';
+        }
+        $sql .= ' ORDER BY c.name ASC';
+
+        $stmt = $this->pdo->prepare($sql);
+        foreach ($params as $key => $value) {
+            if ($key === 'visible') {
+                $stmt->bindValue(':' . $key, $value, PDO::PARAM_BOOL);
+            } else {
+                $stmt->bindValue(':' . $key, $value);
+            }
+        }
+        $stmt->execute();
+        $rows = $stmt->fetchAll() ?: [];
+
+        return array_values(array_map(static function (array $row): array {
+            return [
+                'clinic_id' => (string) $row['clinic_id'],
+                'name' => (string) $row['name'],
+                'visible' => (bool) $row['visible'],
+                'visible_in_kiosk' => (bool) $row['visible_in_kiosk'],
+            ];
+        }, $rows));
+    }
+
+    /**
+     * @param list<string>|null $productIds
+     * @return array{clinic_id: string, visible: bool, matched: int, updated: int, unchanged: int}
+     */
+    public function bulkSetVisibilityForClinic(
+        string $clinicId,
+        bool $visible,
+        bool $onlyActiveCatalog,
+        ?array $productIds,
+        AuditActor $actor
+    ): array {
+        if ($productIds !== null) {
+            $this->assertAllExist('products', $productIds, 'product_ids');
+        }
+
+        $filterSql = 'FROM products p
+                LEFT JOIN clinic_products cp ON cp.product_id = p.id AND cp.clinic_id::text = :clinic_id
+                WHERE 1=1';
+        $params = ['clinic_id' => $clinicId];
+        if ($onlyActiveCatalog) {
+            $filterSql .= ' AND p.is_active = TRUE';
+        }
+        [$inSql, $inParams] = $this->idInClause('p.id', $productIds, 'pid');
+        $filterSql .= $inSql;
+        $params = array_merge($params, $inParams);
+
+        $matched = $this->countSql('SELECT COUNT(*) AS n ' . $filterSql, $params);
+        $updated = $this->upsertChangedVisibility(
+            'INSERT INTO clinic_products (clinic_id, product_id, visible)
+             SELECT CAST(:clinic_id_ins AS uuid), p.id, :visible_ins
+             ' . $filterSql . '
+               AND COALESCE(cp.visible, FALSE) IS DISTINCT FROM CAST(:visible_cmp AS boolean)
+             ON CONFLICT (clinic_id, product_id)
+             DO UPDATE SET visible = EXCLUDED.visible',
+            $params,
+            $clinicId,
+            $visible
+        );
+
+        $result = [
+            'clinic_id' => $clinicId,
+            'visible' => $visible,
+            'matched' => $matched,
+            'updated' => $updated,
+            'unchanged' => max(0, $matched - $updated),
+        ];
+        $this->audit->recordEdit('clinic-products-bulk', $clinicId, $actor->userId, $clinicId, [], $result);
+
+        return $result;
+    }
+
+    /**
+     * @param list<string>|null $clinicIds
+     * @return array{product_id: string, visible: bool, matched: int, updated: int, unchanged: int}
+     */
+    public function bulkSetVisibilityForProduct(
+        string $productId,
+        bool $visible,
+        ?array $clinicIds,
+        AuditActor $actor
+    ): array {
+        if ($clinicIds !== null) {
+            $this->assertAllExist('clinics', $clinicIds, 'clinic_ids');
+        }
+
+        $filterSql = 'FROM clinics c
+                LEFT JOIN clinic_products cp ON cp.clinic_id = c.id AND cp.product_id::text = :product_id
+                WHERE 1=1';
+        $params = ['product_id' => $productId];
+        [$inSql, $inParams] = $this->idInClause('c.id', $clinicIds, 'cid');
+        $filterSql .= $inSql;
+        $params = array_merge($params, $inParams);
+
+        $matched = $this->countSql('SELECT COUNT(*) AS n ' . $filterSql, $params);
+        $updated = $this->upsertChangedVisibility(
+            'INSERT INTO clinic_products (clinic_id, product_id, visible)
+             SELECT c.id, CAST(:product_id_ins AS uuid), :visible_ins
+             ' . $filterSql . '
+               AND COALESCE(cp.visible, FALSE) IS DISTINCT FROM CAST(:visible_cmp AS boolean)
+             ON CONFLICT (clinic_id, product_id)
+             DO UPDATE SET visible = EXCLUDED.visible',
+            $params,
+            $productId,
+            $visible,
+            true
+        );
+
+        $result = [
+            'product_id' => $productId,
+            'visible' => $visible,
+            'matched' => $matched,
+            'updated' => $updated,
+            'unchanged' => max(0, $matched - $updated),
+        ];
+        $this->audit->recordEdit('product-clinics-bulk', $productId, $actor->userId, $actor->clinicId, [], $result);
+
+        return $result;
     }
 
     /**
@@ -619,6 +822,110 @@ final class ProductService
         return (bool) $stmt->fetch();
     }
 
+    private function clinicExists(string $clinicId): bool
+    {
+        $stmt = $this->pdo->prepare('SELECT 1 FROM clinics WHERE id::text = :id LIMIT 1');
+        $stmt->execute(['id' => $clinicId]);
+
+        return (bool) $stmt->fetch();
+    }
+
+    private function currentClinicVisibility(string $clinicId, string $productId): bool
+    {
+        $stmt = $this->pdo->prepare(
+            'SELECT visible FROM clinic_products
+             WHERE clinic_id::text = :clinic_id AND product_id::text = :product_id LIMIT 1'
+        );
+        $stmt->execute(['clinic_id' => $clinicId, 'product_id' => $productId]);
+        $row = $stmt->fetch();
+
+        return is_array($row) ? (bool) $row['visible'] : false;
+    }
+
+    /**
+     * @param list<string> $ids
+     */
+    private function assertAllExist(string $table, array $ids, string $fieldName): void
+    {
+        if (!in_array($table, ['products', 'clinics'], true)) {
+            throw new InvalidArgumentException('Invalid ' . $fieldName);
+        }
+        if ($ids === []) {
+            return;
+        }
+
+        [$inSql, $params] = $this->idInClause('id', $ids, 'ex');
+        $stmt = $this->pdo->prepare('SELECT COUNT(*) AS n FROM ' . $table . ' WHERE 1=1' . $inSql);
+        $stmt->execute($params);
+        $row = $stmt->fetch();
+        $n = (int) ($row['n'] ?? 0);
+        if ($n !== count($ids)) {
+            throw new InvalidArgumentException('One or more ' . $fieldName . ' not found');
+        }
+    }
+
+    /**
+     * @param list<string>|null $ids
+     * @return array{0: string, 1: array<string, string>}
+     */
+    private function idInClause(string $column, ?array $ids, string $prefix): array
+    {
+        if ($ids === null) {
+            return ['', []];
+        }
+        if ($ids === []) {
+            return [' AND FALSE', []];
+        }
+
+        $placeholders = [];
+        $params = [];
+        foreach ($ids as $i => $id) {
+            $key = $prefix . $i;
+            $placeholders[] = ':' . $key;
+            $params[$key] = $id;
+        }
+
+        return [' AND ' . $column . '::text IN (' . implode(',', $placeholders) . ')', $params];
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     */
+    private function countSql(string $sql, array $params): int
+    {
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute($params);
+        $row = $stmt->fetch();
+
+        return (int) ($row['n'] ?? 0);
+    }
+
+    /**
+     * @param array<string, mixed> $filterParams
+     */
+    private function upsertChangedVisibility(
+        string $sql,
+        array $filterParams,
+        string $entityId,
+        bool $visible,
+        bool $bindProductId = false
+    ): int {
+        $stmt = $this->pdo->prepare($sql);
+        foreach ($filterParams as $key => $value) {
+            $stmt->bindValue(':' . $key, $value);
+        }
+        if ($bindProductId) {
+            $stmt->bindValue(':product_id_ins', $entityId);
+        } else {
+            $stmt->bindValue(':clinic_id_ins', $entityId);
+        }
+        $stmt->bindValue(':visible_ins', $visible, PDO::PARAM_BOOL);
+        $stmt->bindValue(':visible_cmp', $visible, PDO::PARAM_BOOL);
+        $stmt->execute();
+
+        return $stmt->rowCount();
+    }
+
     private function clearPreferred(string $productId, ?string $exceptId = null): void
     {
         $sql = 'UPDATE product_suppliers SET is_preferred = FALSE, updated_at = NOW()
@@ -727,7 +1034,7 @@ final class ProductService
         }
 
         if ($includeVisible) {
-            $data['visible'] = (bool) ($row['visible'] ?? true);
+            $data['visible'] = (bool) ($row['visible'] ?? false);
         }
 
         return $data;
